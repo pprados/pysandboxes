@@ -4,9 +4,12 @@
 
 from __future__ import annotations
 
+import errno
 import logging
 import os
 import sys
+import threading
+import time
 from ipaddress import IPv4Network, IPv6Network
 from pathlib import Path
 from typing import Iterable
@@ -31,6 +34,10 @@ _SYSTEM_READ_PATHS = (
     "/dev",
 )
 _MAX_PROFILE_PORTS = 4096
+# The unix socket of the system resolver: getaddrinfo asks mDNSResponder, it does not query UDP port 53 itself.
+_MDNS_RESPONDER_SOCKET = "/private/var/run/mDNSResponder"
+# How long the profile writer waits for sandbox-exec to open the pipe before it removes it.
+_PROFILE_PIPE_TIMEOUT = 60.0
 
 
 def _sbpl_string(value: str) -> str:
@@ -171,13 +178,14 @@ def _network_rules(rules: AllRules) -> list[str]:
                     continue
                 proto = "tcp" if kind == Kind.TCP else "udp"
                 if Direction.OUT in rule.directions:
-                    rendered.add(f"(allow network-outbound (remote {proto} {_sbpl_string(f'{scope}:{port}')}))")
                     if kind == Kind.UDP and port == "53":
                         logger.warning(
-                            "Seatbelt needs unrestricted local UDP receive permission for DNS replies; "
-                            "py-sandbox=false leaves inbound UDP sources unfiltered."
+                            "Seatbelt cannot name a resolver: a DNS rule grants the system resolver socket, which "
+                            "resolves any name. A client that sends its own UDP queries gets no answer."
                         )
-                        rendered.add("(allow network-inbound (local udp))")
+                        rendered.add(f"(allow network-outbound (literal {_sbpl_string(_MDNS_RESPONDER_SOCKET)}))")
+                    else:
+                        rendered.add(f"(allow network-outbound (remote {proto} {_sbpl_string(f'{scope}:{port}')}))")
                 if Direction.IN in rule.directions:
                     local_scope = scope
                     rendered.add(f"(allow network-bind (local {proto} {_sbpl_string(f'{local_scope}:{port}')}))")
@@ -189,6 +197,7 @@ def _build_profile(
     all_rules: AllRules,
     *,
     temp_dir: Path,
+    scratch_dir: Path,
     python_executable: str,
     python_paths: tuple[str, ...],
     sse_port: int,
@@ -202,7 +211,8 @@ def _build_profile(
     runtime_paths.update(symlink_directories)
     read_paths = set(runtime_paths)
     read_paths.add(_path(str(temp_dir)))
-    write_paths = {_path(str(temp_dir))}
+    read_paths.add(_path(str(scratch_dir)))
+    write_paths = {_path(str(scratch_dir))}
     executable_paths = runtime_paths | {_path(python_executable)}
     metadata_paths = set(_parent_paths(python_executable)) | set(_parent_paths(_path(python_executable)))
     for path in symlink_directories:
@@ -255,6 +265,34 @@ def _build_profile(
     return "\n".join(lines) + "\n"
 
 
+def _feed_profile(pipe: Path, profile: str, timeout: float = _PROFILE_PIPE_TIMEOUT) -> None:
+    """Hand the profile to ``sandbox-exec`` through ``pipe``, once, and remove the pipe.
+
+    The pipe is never a file: nothing stays on disk to be read back or replaced. When ``sandbox-exec`` never opens
+    it, the pipe is removed after ``timeout`` seconds, so a late start fails on a missing file instead of hanging.
+    """
+    deadline = time.monotonic() + timeout
+    descriptor: int | None = None
+    try:
+        while descriptor is None:
+            try:
+                descriptor = os.open(pipe, os.O_WRONLY | os.O_NONBLOCK)
+            except OSError as error:
+                if error.errno != errno.ENXIO or time.monotonic() >= deadline:
+                    return
+                time.sleep(0.01)
+        os.set_blocking(descriptor, True)
+        data = memoryview(profile.encode("utf-8"))
+        while data:
+            data = data[os.write(descriptor, data) :]
+    except OSError:
+        logger.debug("sandbox-exec closed the profile pipe before reading all of it")
+    finally:
+        if descriptor is not None:
+            os.close(descriptor)
+        pipe.unlink(missing_ok=True)
+
+
 class SandboxExecSSEDaemon(BaseSubProcessDaemon):
     """Launch the existing SSE daemon under a generated macOS Seatbelt profile."""
 
@@ -276,14 +314,16 @@ class SandboxExecSSEDaemon(BaseSubProcessDaemon):
         temp: Path,
     ) -> tuple[list[str], Environ]:
         command, extra_envs = super().subprocess_cmd(all_rules, envs, pipe_path, temp)
+        scratch = self.sandbox_temp()
         profile = _build_profile(
             all_rules,
             temp_dir=temp,
+            scratch_dir=scratch,
             python_executable=sys.executable,
             python_paths=tuple(path for path in sys.path if path),
             sse_port=self.port,
         )
-        profile_path = temp / "seatbelt.sb"
-        profile_path.write_text(profile, encoding="utf-8")
-        profile_path.chmod(0o600)
-        return [_SANDBOX_EXEC, "-f", str(profile_path), *command], {**extra_envs, "TMPDIR": str(temp)}
+        profile_pipe = temp / "seatbelt.sb"
+        os.mkfifo(profile_pipe, 0o600)
+        threading.Thread(target=_feed_profile, args=(profile_pipe, profile), daemon=True).start()
+        return [_SANDBOX_EXEC, "-f", str(profile_pipe), *command], {**extra_envs, "TMPDIR": str(scratch)}

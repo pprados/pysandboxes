@@ -10,12 +10,16 @@ import threading
 from ipaddress import ip_network
 from pathlib import Path
 
-from pysandboxes.all_rules import EmptyRules
+import pytest
+
 from pysandboxes import sandbox, sandboxes
+from pysandboxes.all_rules import EmptyRules
 from pysandboxes.guard_files import FSExposeRule, IgnoreRule
 from pysandboxes.guard_socket import Action, Direction, Kind, SocketMask, SocketRule
 from pysandboxes.remote.sandbox_exec_daemon import _SANDBOX_EXEC, _build_profile
 from pysandboxes.sb_types import ConfigLine
+
+from .._env import NO_PROFILE_DNS_REASON, profile_hosts_resolvable
 
 
 @sandbox
@@ -48,6 +52,8 @@ def _profile(
 ) -> str:
     runtime = tmp_path / "runtime"
     runtime.mkdir(exist_ok=True)
+    scratch = tmp_path / "scratch"
+    scratch.mkdir(exist_ok=True)
     rules = EmptyRules._replace(
         file_rules=file_rules,
         socket_rules=socket_rules,
@@ -56,6 +62,7 @@ def _profile(
     return _build_profile(
         rules,
         temp_dir=runtime,
+        scratch_dir=scratch,
         python_executable=sys.executable,
         python_paths=tuple(path for path in sys.path if path),
         sse_port=1,
@@ -197,11 +204,39 @@ def test_sse_daemon_starts_and_removes_its_private_run_directory(tmp_path: Path)
         encoding="utf-8",
     )
     temp_root = Path(tempfile.gettempdir())
-    before = {path.name for path in temp_root.iterdir() if path.name.startswith("tmp")}
+
+    def leftovers() -> set[str]:
+        return {path.name for path in temp_root.iterdir() if path.name.startswith(("tmp", "pysandboxes-tmp-"))}
+
+    before = leftovers()
 
     with sandboxes(sandboxes_config=str(profile)):
         assert _sse_round_trip() == "sandbox-exec-sse-ok"
 
-    after = {path.name for path in temp_root.iterdir() if path.name.startswith("tmp")}
+    assert leftovers() == before
 
-    assert after == before
+
+@pytest.mark.skipif(not profile_hosts_resolvable(), reason=NO_PROFILE_DNS_REASON)
+def test_a_dns_rule_resolves_names_and_without_it_they_do_not(tmp_path: Path) -> None:
+    dns = SocketRule(
+        Action.ALLOW,
+        SocketMask((Kind.UDP,), ip_network("0.0.0.0/0"), (53,)),
+        (Direction.OUT,),
+        _line("net=ALLOW|UDP|*|53|OUT"),
+    )
+    code = """
+import socket
+try:
+    socket.getaddrinfo('github.com', 443)
+    print('RESOLVED')
+except socket.gaierror:
+    print('UNRESOLVED')
+"""
+
+    with_rule = _run(tmp_path, _profile(tmp_path, socket_rules=(dns,)), code)
+    without_rule = _run(tmp_path, _profile(tmp_path), code)
+
+    assert with_rule.returncode == 0, with_rule.stderr
+    assert with_rule.stdout.strip() == "RESOLVED"
+    assert without_rule.returncode == 0, without_rule.stderr
+    assert without_rule.stdout.strip() == "UNRESOLVED"

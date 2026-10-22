@@ -2,6 +2,10 @@
 # License: Apache V2
 """Tests for macOS Seatbelt profile generation."""
 
+import os
+import stat
+import threading
+import time
 from ipaddress import ip_network
 from pathlib import Path
 from unittest.mock import patch
@@ -11,8 +15,8 @@ import pytest
 from pysandboxes.all_rules import EmptyRules
 from pysandboxes.guard_files import FSExposeRule, IgnoreRule
 from pysandboxes.guard_socket import Action, Direction, Kind, SocketMask, SocketRule
+from pysandboxes.remote.sandbox_exec_daemon import SandboxExecSSEDaemon, _build_profile, _feed_profile
 from pysandboxes.sb_types import ConfigLine
-from pysandboxes.remote.sandbox_exec_daemon import SandboxExecSSEDaemon, _build_profile
 
 
 def _line(rule: str) -> ConfigLine:
@@ -34,6 +38,7 @@ def _profile(
     return _build_profile(
         rules,
         temp_dir=tmp_path / "runtime files-é",
+        scratch_dir=tmp_path / "scratch",
         python_executable="/opt/python/bin/python",
         python_paths=("/opt/python/lib",),
         sse_port=45678,
@@ -44,6 +49,7 @@ def test_profile_denies_by_default_and_quotes_read_write_paths(tmp_path: Path) -
     exposed = tmp_path / 'read "this"-é'
     writable = tmp_path / "writable"
     runtime = (tmp_path / "runtime files-é").resolve()
+    scratch = (tmp_path / "scratch").resolve()
     profile = _profile(
         tmp_path,
         files=(
@@ -54,7 +60,9 @@ def test_profile_denies_by_default_and_quotes_read_write_paths(tmp_path: Path) -
 
     assert "(deny default)" in profile
     assert f'(allow file-read* (subpath "{runtime}")' in profile
-    assert f'(allow file-write* (subpath "{runtime}")' in profile
+    assert f'(allow file-write* (subpath "{runtime}")' not in profile
+    assert f'(allow file-read* (subpath "{scratch}")' in profile
+    assert f'(allow file-write* (subpath "{scratch}")' in profile
     assert 'read \\"this\\"-é' in profile
     assert "(allow file-map-executable" in profile
     assert f'(allow file-map-executable (subpath "{exposed}")' not in profile
@@ -78,6 +86,7 @@ def test_python_symlink_target_directories_are_available_to_seatbelt(tmp_path: P
     profile = _build_profile(
         EmptyRules,
         temp_dir=tmp_path / "runtime",
+        scratch_dir=tmp_path / "scratch",
         python_executable=str(venv_python),
         python_paths=(),
         sse_port=45678,
@@ -142,7 +151,9 @@ def test_remote_host_loss_warns_when_python_guards_are_disabled(
     assert any("remote network hosts" in record.message.lower() for record in caplog.records)
 
 
-def test_dns_permission_warns_about_unrestricted_udp_replies(tmp_path: Path, caplog: pytest.LogCaptureFixture) -> None:
+def test_dns_permission_grants_the_system_resolver_socket_and_no_udp(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
     dns = SocketRule(
         Action.ALLOW,
         SocketMask((Kind.UDP,), ip_network("0.0.0.0/0"), (53,)),
@@ -152,9 +163,66 @@ def test_dns_permission_warns_about_unrestricted_udp_replies(tmp_path: Path, cap
 
     profile = _profile(tmp_path, sockets=(dns,), use_py_sandbox=False)
 
-    assert '(allow network-outbound (remote udp "*:53"))' in profile
-    assert "(allow network-inbound (local udp))" in profile
-    assert any("DNS" in record.message for record in caplog.records)
+    assert '(allow network-outbound (literal "/private/var/run/mDNSResponder"))' in profile
+    assert "remote udp" not in profile
+    assert "network-inbound (local udp" not in profile
+    assert any("resolver" in record.message for record in caplog.records)
+
+
+def test_a_udp_rule_on_another_port_stays_a_port_rule(tmp_path: Path) -> None:
+    ntp = SocketRule(
+        Action.ALLOW,
+        SocketMask((Kind.UDP,), ip_network("0.0.0.0/0"), (123,)),
+        (Direction.OUT,),
+        _line("net=ALLOW|UDP|*|123|OUT"),
+    )
+
+    profile = _profile(tmp_path, sockets=(ntp,))
+
+    assert '(allow network-outbound (remote udp "*:123"))' in profile
+    assert "mDNSResponder" not in profile
+
+
+def test_the_profile_reaches_sandbox_exec_through_a_pipe_read_once(tmp_path: Path) -> None:
+    pipe = tmp_path / "seatbelt.sb"
+    os.mkfifo(pipe, 0o600)
+    profile = "(version 1)\n(deny default)\n" + '(allow file-read* (subpath "/usr"))\n' * 4000
+
+    threading.Thread(target=_feed_profile, args=(pipe, profile), daemon=True).start()
+    with open(pipe, encoding="utf-8") as reader:
+        received = reader.read()
+
+    assert received == profile
+    deadline = time.monotonic() + 5
+    while pipe.exists() and time.monotonic() < deadline:
+        time.sleep(0.01)
+    assert not pipe.exists()
+
+
+def test_a_pipe_nobody_opens_is_removed_after_the_timeout(tmp_path: Path) -> None:
+    pipe = tmp_path / "seatbelt.sb"
+    os.mkfifo(pipe, 0o600)
+
+    _feed_profile(pipe, "(version 1)\n", timeout=0.2)
+
+    assert not pipe.exists()
+
+
+def test_the_daemon_creates_the_profile_pipe_private_to_its_user(tmp_path: Path) -> None:
+    daemon = SandboxExecSSEDaemon("token")
+    daemon.port = 45678
+    run_dir = tmp_path / "run"
+    run_dir.mkdir()
+
+    command, extra_envs = daemon.subprocess_cmd(EmptyRules, {}, run_dir / "pipe", run_dir)
+
+    pipe = Path(command[command.index("-f") + 1])
+    assert stat.S_ISFIFO(pipe.stat().st_mode)
+    assert stat.S_IMODE(pipe.stat().st_mode) == 0o600
+    assert extra_envs["TMPDIR"] == str(daemon.sandbox_temp())
+    with open(pipe, encoding="utf-8") as reader:
+        assert "(deny default)" in reader.read()
+    daemon.release_sandbox_temp()
 
 
 def test_deny_socket_rule_is_not_widened_to_an_allow(tmp_path: Path) -> None:
