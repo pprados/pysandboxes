@@ -15,9 +15,14 @@ filesystem or network namespace. It must not be treated as a VM boundary.
 - Default-deny network access, with supported TCP/UDP direction and port grants. Localhost rules remain scoped to
   localhost. Port 0 (the request for an automatically assigned port) cannot be expressed and stays denied; a warning
   is logged when such a rule is present.
-- The Seatbelt profile is created with mode `0600` in the private daemon run directory. `TMPDIR` is set to that same
-  directory so Python temporary files remain inside the granted writable path. The inherited subprocess cleanup
-  removes the profile and run directory after shutdown.
+- The Seatbelt profile never exists as a file. It reaches `sandbox-exec -f` through a named pipe (mode `0600`) in the
+  private daemon run directory, is written once, and the pipe is removed as soon as it has been read. Nobody can read
+  the profile back or replace it before it is applied. The residual boundary is the same one as the other providers:
+  a process of the same user, or root.
+- `TMPDIR` points to a private scratch directory, the only writable temporary location. It is removed with the daemon.
+- No root privilege is needed: the provider runs as an ordinary user.
+- `ignore=` is a deny rule placed after the allow rules (the last matching rule wins), so a read or write of an
+  ignored path raises `PermissionError`, in the sandboxed process and in its children.
 
 ## Network limitations
 
@@ -26,10 +31,12 @@ Seatbelt's SBPL `remote` address accepts `*` or `localhost`, not a configured re
 layer. The provider logs a warning. With `py-sandbox=true`, the Python socket guard still checks the configured host;
 with `py-sandbox=false`, native code can use any remote host on that protocol and port.
 
-DNS is another limitation. To receive DNS replies under the deny-default profile, the provider adds
-`(allow network-inbound (local udp))` when UDP port 53 is granted outbound. That permission is not restricted to a
-source or destination port. The provider logs a warning; when `py-sandbox=false`, native code can receive local UDP
-traffic more broadly than the profile's `net=` rule suggests.
+DNS works differently from Linux. On macOS, `getaddrinfo` does not send UDP datagrams to port 53: it talks to the
+system resolver through the Unix socket `/var/run/mDNSResponder`. A `net=ALLOW|UDP|*|53|OUT` rule therefore becomes
+a grant on that socket, and no UDP rule at all. The provider logs a warning. Names then resolve through the system
+resolver, whatever its upstream server, so the DNS server of the provider cannot be pinned to one IP. A client that
+sends its own DNS datagrams (a DNS library, `dig`) gets no answer. Other UDP rules (for example port 123) stay
+plain port rules.
 
 Seatbelt's allow/deny rules do not support the same address exceptions as the Python socket guard. The provider keeps
 overlapping denies closed by omitting the conflicting broad allow. Review the warnings whenever a profile grants

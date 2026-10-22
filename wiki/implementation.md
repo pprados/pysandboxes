@@ -13,9 +13,13 @@
 ## Current implementation
 
 On macOS, the opt-in `sandbox-exec` provider wraps the same daemon command with an
-Apple Seatbelt profile generated from file and socket rules. The profile is private
-to the daemon's temporary directory, and `TMPDIR` points there for child temporary
-files. Seatbelt cannot enforce remote host/IP rules; see [the provider limits](sandbox-exec.md).
+Apple Seatbelt profile generated from file and socket rules (default deny, then one
+allow per `expose-*` and `net=` rule, then one deny per `ignore=`). The profile is
+handed to `sandbox-exec -f` through a `0600` named pipe, written once and removed once
+read, so no file holds it. `TMPDIR` points to a private scratch directory. `net=` rules
+become port rules: Seatbelt cannot enforce remote host/IP rules, and a DNS rule grants
+the `mDNSResponder` socket. No root privilege is needed. The platform tag is proven by
+the cross-os workflow. See [the provider limits](sandbox-exec.md).
 
 ### Complete mode
 Complete mode follows this sequence:

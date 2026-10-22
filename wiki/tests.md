@@ -56,7 +56,7 @@ the shape of the effort:
 | Suite | Target | Tests |
 |---|---|---|
 | Unit | `make unit-tests` | ~3790 |
-| Integration | `make integration-tests` | ~330 |
+| Integration | `make integration-tests` | ~340 |
 | Containers | `make container-tests` | ~60 |
 | Samples (12 demos) | `make sample-tests` | ~230 |
 | **Total, one interpreter** | `make all-tests` | **~4410** |
@@ -165,8 +165,10 @@ Nine entries are registered in `pysandboxes/_os_sandbox.py`: eight providers, pl
 | `landlock` | yes | yes | yes (ABI v4) | yes (2 modes) | yes | yes | yes |
 | `qemu` | yes | yes | yes (KVM) | yes (2 modes) | yes | yes | yes |
 | `qemu-tcg` | yes | yes | — | yes (2 modes) | — | — | — |
-| `sandbox-exec` (macOS) | yes | yes | yes (2 modes) | yes (2 modes) | **excluded** | **excluded** | **excluded** |
+| `sandbox-exec` | yes (macOS only) | yes (macOS only) | yes (2 modes, macOS only) | yes (2 modes, macOS only) | **excluded** | **excluded** | **excluded** |
 
+"Host" means the suite runs on the machine itself, not in a container. A Linux provider runs on a Linux host
+(`integration.yml`); `sandbox-exec` runs only on a macOS host, in `cross-os.yml`, and has no row on Linux.
 "Host: guards" is `test_guards_with_providers`. `qemu-tcg` is not a backend but
 a second host row for `qemu` with `qemu.use_kvm=false` (`ALL_OS_SANDBOX` in
 `tests/integration_tests/_env.py`). It carries the `slow` marker, which is how a
@@ -206,8 +208,8 @@ also exercises the bwrap daemon with the network-filtered profile.
 
 [`test_os_file_confinement.py`](../tests/integration_tests/test_os_file_confinement.py) does the same for
 files: with `py-sandbox=false`, a read-only directory refuses a write, a read outside every exposed path is refused,
-and a read-write directory accepts a write, under `python-sb` and daemon mode. Its files live under the home
-directory, not `/tmp`, because Landlock opens the whole system temporary directory to the sandbox. The host-name
+and a read-write directory accepts a write, under `python-sb` and daemon mode. It also checks that a file the host
+keeps in `/tmp` is out of reach while `tempfile` still works in the sandbox's own temporary directory. The host-name
 dimension of a network rule is not covered for `landlock` and `sandbox-exec`: their kernel rules name a port, so
 `test_os_netfilter.py` allows `*` for them and checks the port only.
 
@@ -273,16 +275,18 @@ Kubernetes rows need minikube and the per-backend images
 ## D. Synthesis of the validated scenarios
 
 Where each scenario runs, by operating system. The kernel-backed providers are Linux
-technology, so macOS and Windows run the Python layer over `subprocess`; the
+technology, so Windows runs the Python layer over `subprocess` and macOS runs it over
+`subprocess` and `sandbox-exec`; the
 [cross-os workflow](../.github/workflows/cross-os.yml) is what proves those two rows.
 
 | Scenario | Linux | macOS | Windows | Interpreters |
 |---|---|---|---|---|
 | Unit | whole suite | whole suite, Linux-only modules skipped | whole suite, Linux-only modules skipped | 3.11 to 3.14 |
-| Integration, per provider | `subprocess`, `firejail`, `bwrap`, `unshare`, `landlock`, `qemu` (KVM and TCG) | `subprocess` | `subprocess` | 3.11 to 3.14 |
-| OS-only network filter | `bwrap`, `unshare`, `qemu`, `landlock` (ABI v4), `firejail` | — | — | 3.11 to 3.14 |
+| Integration, per provider | `subprocess`, `firejail`, `bwrap`, `unshare`, `landlock`, `qemu` (KVM and TCG) | `subprocess`, `sandbox-exec` | `subprocess` | 3.11 to 3.14 |
+| OS-only network filter | `bwrap`, `unshare`, `qemu`, `landlock` (ABI v4), `firejail` | `sandbox-exec` (port only) | — | 3.11 to 3.14 |
+| OS-only file confinement | every Linux provider, `qemu` included | `sandbox-exec` | — | 3.11 to 3.14 |
 | Containers: Docker, Podman, Kubernetes | 48 rows on a real backend, 12 on `none` | — | — | 3.13 |
-| Samples (12 demos) | every provider | `subprocess` | `subprocess` | 3.11 to 3.14 |
+| Samples (12 demos) | every provider | `subprocess`, `sandbox-exec` (local VM; CI runs `crewai-demo` only) | `subprocess` | 3.11 to 3.14 |
 
 - **Guards.** Every integration row arms the six families described in
   [section A](#a-guard-families): `tst_usage` for files, sockets and environment,
@@ -299,7 +303,8 @@ technology, so macOS and Windows run the Python layer over `subprocess`; the
   on every interpreter and every provider.
 
 Row counts, to cross-check against the sections above: 84 host rows per
-interpreter and 60 container rows, 48 of them on a real backend. Both are
+interpreter and 60 container rows, 48 of them on a real backend, plus the 12 rows of
+the OS-only file confinement suite. Both are
 reproducible with `pytest --collect-only -q`. Unit tests sit outside these grids
 entirely, with about 3790 collected and none parametrized by backend or
 container condition, so they scale with the Python version alone.
