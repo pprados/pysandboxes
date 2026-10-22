@@ -45,10 +45,20 @@ if [ ! -x "$gnu/jq" ]; then
   echo "4155822bbf5ea90f5c79cf254665975eb4274d426d0709770c21774de5407443  $gnu/jq" | shasum -a 256 -c - >/dev/null
   chmod 755 "$gnu/jq"
 fi
+# LanceDB has no wheel for this Intel macOS: the crewai sample builds it from source, and its build needs protoc.
+if [ ! -x "$gnu/protoc" ]; then
+  work="$(mktemp -d)"
+  trap 'rm -rf "$work"' EXIT
+  curl -fsSL -o "$work/protoc.zip" https://github.com/protocolbuffers/protobuf/releases/download/v36.2/protoc-36.2-osx-x86_64.zip
+  echo "228cc7add4616cc14ca5e80dee83209d44449a7aee95a914ae748fa374efb078  $work/protoc.zip" | shasum -a 256 -c - >/dev/null
+  unzip -q "$work/protoc.zip" -d "$HOME/gnu"
+  chmod 755 "$gnu/protoc"
+fi
 printf '#!/bin/sh\nexec shasum -a 256 "$@"\n' > "$gnu/sha256sum"
 chmod 755 "$gnu/sha256sum"
 "$gnu/sed" --version | head -n 1
 "$gnu/jq" --version
+"$gnu/protoc" --version
 
 mkdir -p "$HOME/pysandboxes"
 echo "VM ready: uv, a compiler and OpenSSL are in place."
