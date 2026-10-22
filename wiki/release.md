@@ -34,7 +34,7 @@ alias python-sb='uvx --prerelease allow \
 It takes the highest version found on pypi.org and on these two test.pypi.org pages. `--find-links` limits
 test.pypi.org to the two packages: every dependency still comes from pypi.org, where nobody can squat its name.
 
-Tag a commit the nightly already proved, when you can. The nightly (`full-gate.yml`, 03:17 UTC on `develop`) runs the
+Tag a commit the nightly already proved, when you can. The nightly (`nightly-trigger.yml` starts `full-gate.yml` on `develop` at 03:17 UTC) runs the
 integration, sample, container and macOS and Windows provider suites; a tag on the same code reuses that run instead
 of repeating it. The lookup walks back over the release commit and over commits that touch only documentation, so a
 final version tagged right after a green nightly reuses it. A tag on any other code runs the suites itself, without the `qemu-tcg` rows, which
@@ -76,13 +76,13 @@ yanking only hides it.
 | `push-checks` | `lint.yml` and `test.yml` are green on the tagged commit, or on the commit below a documentation-only release commit (waits up to 30 min for them) |
 | `validate` | `make validate` on Python 3.13, `pip-audit` included |
 | `build` | `uv build`; the wheel version must equal the tag; `twine check`. Also builds `python-sb` when it changed (below) |
-| `reuse-lookup` | Looks for a green `schedule` run of `full-gate.yml` on the same code, walking back over release and documentation-only commits (a manual run never counts) |
+| `reuse-lookup` | Looks for a green nightly run of `full-gate.yml` (titled `Nightly`) on the same code, walking back over release and documentation-only commits (a run that is not the full nightly never counts) |
 | `full-gate` | The integration, sample, container and macOS and Windows provider suites, skipped when `reuse-lookup` found a nightly to reuse |
 | `wheel-tests` | The unit tests against the built wheel, installed in a clean venv, on Python 3.11 to 3.14 |
 | `publish-testpypi` | Waits for the approval, then uploads with Trusted Publishing and PEP 740 attestations |
 | `publish-pypi` | Final tags only: waits for the `pypi` approval, then uploads `pysandboxes` and, when due, `python-sb` |
 | `verify-published` | Downloads the wheel back from the index of the tag kind (pypi.org for a final tag, test.pypi.org otherwise) and compares its sha256 with the one built |
-| `images` | Calls `images.yml`: checks the tag again, then one runner per Python 3.11 to 3.14 resolves the newest patch of `python:<python>-slim`, builds the five images from that wheel on it, smoke-tests them, pushes them to `docker.io/pprados/<image>` |
+| `images` | Dispatches `images.yml` on the tag and waits for it (`dispatch-images.sh`; a called workflow would not receive the secrets of the `dockerhub` environment): it checks the tag again, then one runner per Python 3.11 to 3.14 resolves the newest patch of `python:<python>-slim`, builds the five images from the published wheel on it, smoke-tests them, pushes them to `docker.io/pprados/<image>` |
 | `advance-master` | Final tags only: fast-forwards `master` to the tagged commit, never forced |
 
 The images are `python-sb`, `python-sb-landlock`, `python-sb-unshare`, `python-sb-bwrap` and `python-sb-qemu`,

@@ -3,21 +3,24 @@
 #
 # The full test gate: the integration suite (3.11-3.14), the samples (3.11-3.14), the container suites and the
 # macOS and Windows provider suites (3.11-3.14).
-# Nightly on develop, TCG included; called by release.yml, TCG left out, for a tag whose commit no nightly proved.
+# Nightly on develop, TCG included, started by nightly-trigger.yml; called by release.yml, TCG left out, for a tag
+# whose commit no nightly proved.
 # .github/scripts/find-nightly-gate.sh reuses a nightly by reading the names of these jobs: keep the ids
-# integration, samples, containers and cross-os.
+# integration, samples, containers and cross-os, and the run name Nightly.
 name: Full Gate
 
+# Titled Nightly only for the full nightly: the reuse lookup trusts that title.
+run-name: ${{ inputs.nightly == true && inputs.exclude-tcg != true && 'Nightly' || 'Full Gate' }}
+
 on:
-  schedule:
-    # 03:17 UTC (05:17 in Paris in summer): the quietest hours of the hosted runners, between the American evening
-    # and the European morning; off the hour, when scheduled runs pile up. GitHub once fired a schedule 5h30 late
-    # (2026-09-30): such a run ends in the working day instead of before it.
-    - cron: "17 3 * * *"
   workflow_dispatch:
     inputs:
       exclude-tcg:
         description: Leave the qemu-tcg rows out and require /dev/kvm
+        type: boolean
+        default: false
+      nightly:
+        description: Behave as the nightly, which nightly-trigger.yml starts on develop
         type: boolean
         default: false
   workflow_call:
@@ -40,18 +43,17 @@ jobs:
       with:
         fetch-depth: 0
 
-    # GitHub fires schedule: from the default branch, a repository setting: assert it is develop rather than
-    # re-fetch it, which could test a later commit than the run's headSha, the one the reuse lookup trusts. A failed
-    # guard skips the suites, and such a nightly is never reused.
+    # Assert the ref is develop rather than re-fetch it, which could test a later commit than the run's headSha, the
+    # one the reuse lookup trusts. A failed guard skips the suites, and such a nightly is never reused.
     - name: Check that the nightly tests develop
-      if: github.event_name == 'schedule'
+      if: inputs.nightly == true
       run: |
         if [ "$GITHUB_REF" != refs/heads/develop ]; then
           echo "::error::the nightly runs on $GITHUB_REF, not refs/heads/develop"
           exit 1
         fi
 
-    # Under schedule, the checkout is github.sha, the head of develop: the commit the suites test.
+    # The checkout is github.sha, the head of the ref dispatched: the commit the suites test.
     - name: Look for commits from the last day
       id: commits
       run: |
@@ -63,25 +65,25 @@ jobs:
           echo "changed=false" >> "$GITHUB_OUTPUT"
         fi
 
-  # Under schedule, inputs.exclude-tcg is null, and null == true is false: the nightly keeps TCG.
+  # The nightly leaves exclude-tcg at false: it keeps TCG.
   integration:
     needs: changes
-    if: github.event_name != 'schedule' || needs.changes.outputs.changed == 'true'
+    if: inputs.nightly != true || needs.changes.outputs.changed == 'true'
     uses: ./.github/workflows/integration.yml
     with:
       exclude-tcg: ${{ inputs.exclude-tcg == true }}
 
   samples:
     needs: changes
-    if: github.event_name != 'schedule' || needs.changes.outputs.changed == 'true'
+    if: inputs.nightly != true || needs.changes.outputs.changed == 'true'
     uses: ./.github/workflows/samples.yml
 
   containers:
     needs: changes
-    if: github.event_name != 'schedule' || needs.changes.outputs.changed == 'true'
+    if: inputs.nightly != true || needs.changes.outputs.changed == 'true'
     uses: ./.github/workflows/containers.yml
 
   cross-os:
     needs: changes
-    if: github.event_name != 'schedule' || needs.changes.outputs.changed == 'true'
+    if: inputs.nightly != true || needs.changes.outputs.changed == 'true'
     uses: ./.github/workflows/cross-os.yml

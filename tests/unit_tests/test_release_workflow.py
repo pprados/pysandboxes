@@ -326,3 +326,33 @@ def test_the_temporary_switch_skips_only_the_nightly_lookup() -> None:
     assert ".github/scripts/find-nightly-gate.sh" in step["run"]
     assert ".github/scripts/checked-commits.sh" in step["run"]
     assert "::warning::RELEASE_SKIP_FULL_GATE=true: integration, sample and container suites skipped" in step["run"]
+
+
+NIGHTLY_WORKFLOW = WORKFLOW.parent / "nightly-trigger.yml"
+FULL_GATE_WORKFLOW = WORKFLOW.parent / "full-gate.yml"
+
+
+def test_the_nightly_cron_lives_in_the_trigger_so_that_it_follows_the_default_branch() -> None:
+    assert _workflow(NIGHTLY_WORKFLOW)[True]["schedule"] == [{"cron": "17 3 * * *"}]
+    assert "schedule" not in _workflow(FULL_GATE_WORKFLOW)[True]
+
+
+def test_the_trigger_starts_the_nightly_full_gate_on_develop() -> None:
+    workflow = _workflow(NIGHTLY_WORKFLOW)
+    assert workflow["permissions"] == {"contents": "read", "actions": "write"}
+    step = workflow["jobs"]["trigger"]["steps"][0]
+    assert step["run"] == 'gh workflow run full-gate.yml --repo "$GITHUB_REPOSITORY" --ref develop -f nightly=true'
+
+
+def test_only_the_full_nightly_is_titled_nightly() -> None:
+    # find-nightly-gate.sh trusts this title: a run that leaves out the TCG rows must not carry it.
+    title = " ".join(_workflow(FULL_GATE_WORKFLOW)["run-name"].split())
+    assert title == "${{ inputs.nightly == true && inputs.exclude-tcg != true && 'Nightly' || 'Full Gate' }}"
+
+
+def test_the_nightly_guard_and_the_skipped_suites_follow_the_nightly_input() -> None:
+    jobs = _workflow(FULL_GATE_WORKFLOW)["jobs"]
+    guard = next(s for s in jobs["changes"]["steps"] if s.get("name", "").startswith("Check that the nightly"))
+    assert guard["if"] == "inputs.nightly == true"
+    for suite in ("integration", "samples", "containers", "cross-os"):
+        assert jobs[suite]["if"] == "inputs.nightly != true || needs.changes.outputs.changed == 'true'", suite

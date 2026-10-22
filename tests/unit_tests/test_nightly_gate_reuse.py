@@ -22,12 +22,13 @@ esac
 """
 
 
-def _run(id_: int, sha: str = SHA, event: str = "schedule") -> dict[str, object]:
+def _run(id_: int, sha: str = SHA, event: str = "workflow_dispatch", title: str = "Nightly") -> dict[str, object]:
     return {
         "databaseId": id_,
         "url": f"https://example/runs/{id_}",
         "headSha": sha,
         "event": event,
+        "displayTitle": title,
         "status": "completed",
     }
 
@@ -90,7 +91,7 @@ def test_only_completed_nightly_runs_of_full_gate_on_develop_at_the_commit_are_a
     assert call[:2] == ["run", "list"]
     options = dict(zip(call[2::2], call[3::2], strict=True))
     assert options["--workflow"] == "full-gate.yml"
-    assert options["--event"] == "schedule"
+    assert options["--event"] == "workflow_dispatch"
     assert options["--branch"] == "develop"
     assert options["--commit"] == SHA
     assert options["--status"] == "completed"
@@ -126,8 +127,14 @@ def test_one_failed_windows_job_prevents_reuse(fake: Path) -> None:
     assert _lookup(fake, [_run(7)]) == {"reuse": "false"}
 
 
-@pytest.mark.parametrize("run", [_run(7, sha="b" * 40), _run(7, event="workflow_dispatch")])
-def test_a_run_of_another_commit_or_event_is_not_reused_even_if_listed(fake: Path, run: dict[str, object]) -> None:
+@pytest.mark.parametrize(
+    "run",
+    [_run(7, sha="b" * 40), _run(7, event="schedule"), _run(7, title="Full Gate")],
+    ids=["commit", "event", "title"],
+)
+def test_a_run_of_another_commit_event_or_title_is_not_reused_even_if_listed(
+    fake: Path, run: dict[str, object]
+) -> None:
     _pages(fake, 7, _jobs())
     assert _lookup(fake, [run]) == {"reuse": "false"}
 
