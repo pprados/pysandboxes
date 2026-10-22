@@ -2,19 +2,14 @@
 # License: Apache V2
 #
 # Builds the five container images of a signed release tag and pushes them to Docker Hub, one runner per Python, each
-# FROM the newest patch of its Python. Called by release.yml with the wheel it built and checked against the index;
-# dispatched on a final tag by images-refresh.yml when python:<minor>-slim moves to a new patch, it then downloads
-# the published wheel, so the images always embed exactly what was published. The push credential lives in the
-# dockerhub environment, restricted to v* tags: a dispatch on any other ref gets no credential.
+# FROM the newest patch of its Python. Dispatched on the tag by release.yml once the wheel is published, and on a
+# final tag by images-refresh.yml when python:<minor>-slim moves to a new patch; either way it downloads the published
+# wheel, so the images always embed exactly what was published. Never called as a reusable workflow: the secrets of
+# the dockerhub environment do not reach a called workflow. The push credential lives in that environment,
+# restricted to v* tags: a dispatch on any other ref gets no credential.
 name: Images
 
 on:
-  workflow_call:
-    inputs:
-      wheel-artifact:
-        description: Artifact of the calling run holding the wheel already checked against the index
-        type: string
-        required: true
   workflow_dispatch:
     inputs:
       python-versions:
@@ -97,16 +92,9 @@ jobs:
         patch=$(.github/scripts/python-patch.sh "$IMAGE_PYTHON")
         echo "PATCH=$patch" >>"$GITHUB_ENV"
 
-    - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c  # v8.0.1
-      if: inputs.wheel-artifact != ''
-      with:
-        name: ${{ inputs.wheel-artifact }}
-        path: dist/
-
     # The index never replaces a published file, and verify-published proved at release time that it serves the
     # wheel built from the tag.
     - name: Download the published wheel
-      if: inputs.wheel-artifact == ''
       env:
         INDEX_URL: >-
           ${{ needs.verify.outputs.final == 'true' && 'https://pypi.org/simple/'

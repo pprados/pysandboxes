@@ -164,9 +164,15 @@ def test_the_images_follow_the_checked_publication() -> None:
     assert " ".join(job["if"].split()) == (
         "${{ !cancelled() && vars.RELEASE_IMAGES != 'false' && needs.verify-published.result == 'success' }}"
     )
-    assert job["uses"] == "./.github/workflows/images.yml"
-    assert job["with"] == {"wheel-artifact": "dist"}
-    assert "secrets" not in job
+    assert "uses" not in job
+    assert job["permissions"] == {"actions": "write", "contents": "read"}
+    step = next(s for s in job["steps"] if "run" in s)
+    assert step["run"] == '.github/scripts/dispatch-images.sh "$GITHUB_REF_NAME"'
+
+
+def test_the_images_workflow_is_dispatched_never_called() -> None:
+    # A called workflow does not receive the secrets of its own environment: the Docker Hub login got none.
+    assert "workflow_call" not in _workflow(IMAGES_WORKFLOW)[True]
 
 
 def test_the_images_push_from_the_tag_restricted_dockerhub_environment() -> None:
@@ -196,10 +202,9 @@ def test_the_images_need_a_signed_tag() -> None:
 
 def test_a_dispatched_build_takes_the_published_wheel_from_the_index() -> None:
     job = _image_job()
-    artifact = next(s for s in job["steps"] if s.get("uses", "").startswith("actions/download-artifact@"))
-    assert artifact["if"] == "inputs.wheel-artifact != ''"
+    assert not any(s.get("uses", "").startswith("actions/download-artifact@") for s in job["steps"])
     download = job["steps"][_step_index(job, "pip download")]
-    assert download["if"] == "inputs.wheel-artifact == ''"
+    assert "if" not in download
     assert '"pysandboxes==$VERSION" --no-deps' in download["run"]
     assert '--index-url "$INDEX_URL"' in download["run"]
     assert " ".join(download["env"]["INDEX_URL"].split()) == (
