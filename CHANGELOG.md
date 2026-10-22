@@ -4,7 +4,7 @@
 |----------|---------------|------------|-----------|
 | ✅ 3.11   | ✅ none        | ✅ Linux    | ✅ Env     |
 | ✅ 3.12   | ✅ subprocess  | ✅ WSL      | ✅ Files   |
-| ✅ 3.13   | ✅ landlock    | ◐ MacOS²   | ✅ Network |
+| ✅ 3.13   | ✅ landlock    | ✅ MacOS²   | ✅ Network |
 | ✅ 3.14   | ✅ bwrap       | ◐ Windows² | ✅ Import  |
 |          | ✅ firejail    |            | ✅ API     |
 |          | ✅ unshare     |            | ✅ Eval    |
