@@ -1,0 +1,26 @@
+# Copyright (c) 2026, Philippe PRADOS
+# License: Apache V2
+cff-version: 1.2.0
+message: "If you use PySandboxes in your work, please cite it as below."
+type: software
+title: "PySandboxes"
+abstract: "Run untrusted Python code safely, with Python API guards and one OS isolation provider."
+authors:
+  - family-names: "Prados"
+    given-names: "Philippe"
+    email: "arxiv@prados.fr"
+    orcid: "https://orcid.org/0009-0007-0558-9634"
+license: Apache-2.0
+repository-code: "https://github.com/pprados/pysandboxes"
+url: "https://github.com/pprados/pysandboxes"
+references:
+  - type: unpublished
+    title: "Confining Python by Observation: Policy Inference Across Three Layers"
+    authors:
+      - family-names: "Prados"
+        given-names: "Philippe"
+        email: "arxiv@prados.fr"
+        orcid: "https://orcid.org/0009-0007-0558-9634"
+    year: 2026
+    month: 10
+    url: "https://github.com/pprados/pysandboxes/blob/master/research/confining-python-by-observation.md"
