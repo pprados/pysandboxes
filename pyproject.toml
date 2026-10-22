@@ -91,7 +91,7 @@ package = true
 default-groups = ["dev", "test"]
 exclude-newer = "7 days"
 # Security fixes of the test tools that the 7-day delay holds back (pip-audit blocks the release): drop once older.
-exclude-newer-package = { certifi = "2026-10-23T00:00:00Z", pillow = "2026-10-23T00:00:00Z" }
+exclude-newer-package = { certifi = "2026-10-23T00:00:00Z", pillow = "2026-10-23T00:00:00Z", virtualenv = "2026-10-23T00:00:00Z" }
 #executable-path = "~/workspace.bda/langgraph-codeagent/.venv/bin/python-sb"
 #executable-name = "python-sb"
 # dev-dependencies = ["pysandboxes"] # TODO
