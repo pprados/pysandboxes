@@ -2,6 +2,7 @@
 # License: Apache V2
 """Regression: firejail aborts on ``--whitelist=/proc``, a path learning mode writes."""
 
+import sys
 from pathlib import Path
 from unittest.mock import patch
 
@@ -23,6 +24,7 @@ def _firejail_args(rule: str, tmp_path: Path) -> list[str]:
 
 
 @pytest.mark.parametrize("path", ["/proc", "/proc/sys/kernel/random"])
+@pytest.mark.skipif(sys.platform != "linux", reason="Firejail's /proc mount behavior is Linux-specific")
 def test_a_proc_path_is_not_whitelisted(tmp_path: Path, path: str) -> None:
     """firejail mounts its own /proc and refuses it as a whitelist: "invalid whitelist path /proc"."""
     args = _firejail_args(f"expose-ro={path}", tmp_path)

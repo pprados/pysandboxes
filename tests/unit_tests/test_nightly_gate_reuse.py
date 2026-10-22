@@ -17,7 +17,7 @@ FAKE_GH = """#!/usr/bin/env bash
 printf '%s\\n' "$*" >>"$FAKE_DIR/calls"
 case $1 in
   run) cat "$FAKE_DIR/runs.json" ;;
-  api) id=${!#}; id=${id#*/runs/}; cat "$FAKE_DIR/jobs-${id%%/*}.json" ;;
+  api) for arg do :; done; id=${arg#*/runs/}; cat "$FAKE_DIR/jobs-${id%%/*}.json" ;;
 esac
 """
 

@@ -38,7 +38,7 @@ labelled.
 
 | Solution | Kind | Boundary that holds against hostile native code | Licence |
 |---|---|---|---|
-| **PySandboxes** | Python framework | Python API patching, inside one OS provider: Landlock, bubblewrap, Firejail, unshare, QEMU | Apache-2.0 |
+| **PySandboxes** | Python framework | Python API patching, inside one OS provider: Landlock, bubblewrap, Firejail, unshare, QEMU, or deprecated macOS Seatbelt | Apache-2.0 |
 | [RestrictedPython](https://github.com/zopefoundation/RestrictedPython) | Python library | None. AST rewriting at compile time, guards supplied by the host | ZPL-2.1 |
 | [smolagents](https://github.com/huggingface/smolagents) | Agent framework | None for the local AST interpreter. The remote executors delegate to Docker, E2B, Modal or Blaxel | Apache-2.0 |
 | [langchain-sandbox](https://github.com/langchain-ai/langchain-sandbox) | Python library, **archived** | Pyodide (CPython compiled to WASM) under Deno permissions | MIT |

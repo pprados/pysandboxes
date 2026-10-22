@@ -271,6 +271,7 @@ async def run_server(process_config: DaemonParameters) -> int:
         "landlock",
         "bwrap",
         "qemu",
+        "sandbox-exec",
     )
     if all_rules.use_py_sandbox:
         pysandboxes_logger.info(f"Start a py-sandbox encapsulated in an os-sandox of type {os_sandbox!r}")

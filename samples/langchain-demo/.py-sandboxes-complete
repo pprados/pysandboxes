@@ -65,6 +65,7 @@ py-sandbox=true
 
 os-sandbox=${OS_SANDBOX:-subprocess}
 include-platform=win32 "../windows-standard-imports.profile"
+include-platform=darwin "../macos-standard-imports.profile"
 
 # A library calling load_dotenv() at import (litellm, crewai, smolagents...) finds the
 # nearest .env above it and copies every name into os.environ, past the env= rules.

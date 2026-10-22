@@ -39,6 +39,8 @@ _LINUX_ONLY_TESTS = [
     "unit_tests/fault_injection/test_landlock_*.py",
 ]
 
+_MACOS_ONLY_TESTS = ["integration_tests/remote/test_sandbox_exec.py"]
+
 # Modules that run the release scripts (bash, git) the maintainer and the CI use, and the import layering check,
 # whose parser reads the sources with the platform encoding. None of them depends on what Windows runs.
 _NOT_ON_WINDOWS_TESTS = [
@@ -79,6 +81,8 @@ if sys.platform == "win32":
     collect_ignore_glob = [*collect_ignore_glob, *_NOT_ON_WINDOWS_TESTS]
 if sys.platform == "darwin" and not _has_gnu_release_tools():
     collect_ignore_glob = [*collect_ignore_glob, *_NOT_ON_MACOS_TESTS]
+if sys.platform != "darwin":
+    collect_ignore_glob = [*collect_ignore_glob, *_MACOS_ONLY_TESTS]
 
 # A script that calls an LLM (scripts/changelog-draft.sh) gets a command that fails, so no test spends tokens by
 # omission. Only the tests marked `llm` call the model, and only with RUN_LLM_TESTS=1.

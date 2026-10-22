@@ -112,12 +112,15 @@ INTEGRATION_TESTS ?= tests/integration_tests
 integration-tests:
 	set -a && if [ -f .env ]; then source .env; fi && unset VIRTUAL_ENV && uv run pytest $(INTEGRATION_TESTS)
 
-# The cross-os.yml steps, run in a VM: the `subprocess` provider is the only one on macOS and Windows. Three
-# processes, as in the workflow: the guard unit tests leave the socket guard armed, which breaks the integration ones.
+# The cross-os.yml steps, run in a VM: `subprocess` is the only provider on Windows. Three processes, as in the
+# workflow: the guard unit tests leave the socket guard armed, which breaks the integration ones.
 CROSS_OS_PYTEST = \
 	"uv run pytest tests/unit_tests/test_provider_platforms.py" \
 	"uv run pytest tests/unit_tests/guard" \
 	"uv run pytest -rs -m \"not slow\" tests/integration_tests/test_guards_with_providers.py tests/integration_tests/test_usage_with_providers.py"
+# macOS also runs the `sandbox-exec` provider: the "macOS Seatbelt enforcement" step of cross-os.yml.
+MACOS_PYTEST = $(CROSS_OS_PYTEST) \
+	"uv run pytest -rs tests/integration_tests/remote/test_sandbox_exec.py tests/integration_tests/test_os_netfilter.py"
 # What a VM needs of the checkout: it has no git, so the tracked and new files are streamed as a tar.
 VM_SOURCES = git ls-files -co --exclude-standard | tar -cf - -T -
 # hatch-vcs reads the version from git, which a VM does not have.
@@ -210,13 +213,13 @@ macos-vm:
 	done; \
 	echo "Timed out waiting for SSH: see $(OSX_KVM_DIR)/boot-ssh.log" >&2; exit 1
 
-## Run the cross-os.yml test steps in the macOS VM, with the subprocess provider
+## Run the cross-os.yml test steps in the macOS VM, with the subprocess and sandbox-exec providers
 macos-tests: macos-vm
 	@set -u; \
 	$(MACOS_SSH) "mkdir -p pysandboxes" || exit 1; \
 	$(VM_SOURCES) | $(MACOS_SSH) "tar -xf - -C pysandboxes" || exit 1; \
 	status=0; \
-	for cmd in $(CROSS_OS_PYTEST); do \
+	for cmd in $(MACOS_PYTEST); do \
 	  $(MACOS_SSH) "export PATH=\$$HOME/gnu/bin:\$$HOME/.local/bin:\$$HOME/.cargo/bin:/opt/homebrew/bin:/usr/local/bin:\$$PATH $(VM_ENV) $(MACOS_UV_RUN) OPENSSL_DIR=\$$HOME/openssl OPENSSL_STATIC=1; cd pysandboxes && uv sync --python $(MACOS_PYTHON) --group test $(MACOS_SYNC_SKIP) && $$cmd" || status=1; \
 	done; \
 	exit $$status
@@ -311,10 +314,8 @@ SAMPLES = \
 # $(MAKE) shares the jobserver, so -jN stays a global budget.
 # The per-sample targets must not be declared .PHONY: make skips the implicit
 # rule search for phony targets, which would leave this pattern rule unused.
-# `init` first: pytest lives in the sample's `test` dependency group, which
-# `uv run pytest` does not install -- uv syncs `dev` only. A developer whose
-# sample venv was hydrated by an earlier `make init` never notices; a clean
-# container fails with `Failed to spawn: pytest`. Two recipe lines rather than
+# `init` first, then include the `test` group in `uv run`: without it uv syncs
+# `dev` only and removes pytest from the environment. Two recipe lines rather than
 # two goals on one $(MAKE): goals given on a command line run concurrently
 # under -jN, which would race `tests` against the sync it depends on.
 # UV_GROUP is deliberately not overridden here: the sample Makefile declares it
@@ -340,7 +341,7 @@ sample-tests-%:
 		echo "skip $*-demo: requires-python >= $$req, running $(UV_PYTHON)"; \
 	else \
 		$(MAKE) -C samples/$*-demo init && \
-		cd samples/$*-demo && env $(addprefix -u ,$(LIVE_TEST_GATES)) uv run pytest -p no:dotenv -v tests; \
+		cd samples/$*-demo && env $(addprefix -u ,$(LIVE_TEST_GATES)) uv run --group test pytest -p no:dotenv -v tests; \
 	fi
 
 # mcp-client spawns the neighbouring server sample as a subprocess, through that

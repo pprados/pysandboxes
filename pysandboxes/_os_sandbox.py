@@ -35,6 +35,7 @@ from .tools import Environ, SyncOrAsyncFunc, check_mixte_async_async, is_in_sand
 logger = logging.getLogger(__name__)
 
 _LINUX = frozenset({"linux"})
+_DARWIN = frozenset({"darwin"})
 _ANY_OS = frozenset({"linux", "darwin", "win32"})
 
 # (subpackage.module_name, class_name, platforms) relative to package ``pysandboxes``.
@@ -51,6 +52,7 @@ _PROVIDER_SPECS: dict[str, tuple[str, str, frozenset[str]]] = {
     "unshare": ("remote.unshare_sse_daemon", "UnshareSSEDaemon", _LINUX),
     "landlock": ("remote.landlock_daemon", "LandlockSSEDaemon", _LINUX),
     "qemu": ("remote.qemu_sse_daemon", "QemuSSEDaemon", _LINUX),
+    "sandbox-exec": ("remote.sandbox_exec_daemon", "SandboxExecSSEDaemon", _DARWIN),
 }
 
 _provider_class_cache: dict[str, type[BaseDaemon]] = {}

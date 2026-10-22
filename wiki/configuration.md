@@ -50,7 +50,7 @@ the entire project tree, including files the program never touched. This is not 
 file (the rule syntax accepts a file path as well as a directory): the harness itself has to read the script
 file to run it, so the script's own directory is already learned even when the application opens nothing
 else there, and narrowing other reads in that same directory would not shrink the profile. A kernel-backed
-OS provider (`landlock`, `bwrap`, `firejail`, `unshare`, `qemu`) also needs every `sys.path` entry, which
+OS provider (`landlock`, `bwrap`, `firejail`, `unshare`, `qemu`, or macOS `sandbox-exec`) also needs every `sys.path` entry, which
 includes that directory, mounted for `os.listdir`/`os.scandir` to work at replay; this part is reasoned from
 the provider code, not separately verified by replaying under one of them. When the working directory
 differs from the script's own directory, there is no such floor: a relative-path read against an unrelated

@@ -14,12 +14,20 @@ index=${INDEX_URL:-https://test.pypi.org/simple/}
 attempts=${ATTEMPTS:-30}
 interval=${INTERVAL:-20}
 
-expected=$(sha256sum "$wheel" | cut -d' ' -f1)
+sha256() {
+    if command -v sha256sum >/dev/null 2>&1; then
+        sha256sum "$1" | cut -d' ' -f1
+    else
+        shasum -a 256 "$1" | cut -d' ' -f1
+    fi
+}
+
+expected=$(sha256 "$wheel")
 dest=$(mktemp -d)
 for ((i = 1; i <= attempts; i++)); do
     if pip download "pysandboxes==$version" --no-deps --no-cache-dir --only-binary :all: --index-url "$index" \
             --dest "$dest" >/dev/null 2>&1; then
-        published=$(sha256sum "$dest"/*.whl | cut -d' ' -f1)
+        published=$(sha256 "$dest"/*.whl)
         if [[ $published != "$expected" ]]; then
             echo "::error::the published wheel ($published) differs from the built one ($expected)"
             exit 1

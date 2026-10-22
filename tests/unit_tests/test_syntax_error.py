@@ -1,5 +1,4 @@
 import logging
-import sys
 from pathlib import Path
 from typing import Any, Generator, Mapping
 
@@ -10,11 +9,9 @@ from pysandboxes import ConfigSyntaxError
 from pysandboxes.py_sandbox import load_and_parse_config
 
 
-@pytest.mark.skipif(
-    sys.platform != "linux", reason="the profile names Linux providers, which the platform check refuses first"
-)
-def test_syntax_error(caplog: Generator[LogCaptureFixture, None, None]) -> None:
+def test_syntax_error(caplog: Generator[LogCaptureFixture, None, None], monkeypatch: pytest.MonkeyPatch) -> None:
     """Check all possible syntax errors."""
+    monkeypatch.setattr("sys.platform", "linux")
     config_path = Path(__file__).parent / "syntax-error.profile"
 
     cwd = str(Path.cwd())

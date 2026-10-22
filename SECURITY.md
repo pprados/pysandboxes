@@ -13,7 +13,7 @@ Report privately, never in a public issue or pull request:
 - **Alternative**: `github[at]prados.fr`.
 
 Please include the provider in use (`none`, `subprocess`, `landlock`, `bwrap`,
-`firejail`, `unshare`, `qemu`), the `.py-sandboxes` rules in force, the Python
+`firejail`, `unshare`, `qemu`, `sandbox-exec`), the `.py-sandboxes` rules in force, the Python
 and kernel versions, and a proof of concept small enough to run. A report
 naming the layer it defeats is worth far more than one that only shows an
 outcome.
@@ -51,6 +51,7 @@ an issue, but they are not treated as vulnerabilities:
 - **`py-sandbox=False`**, which switches the Python layer off on purpose. Only
   the chosen provider's OS boundary remains.
 - **`none` and `subprocess`**, which provide no OS boundary by design.
+- **The limits of macOS `sandbox-exec`**: it is deprecated by Apple, cannot match remote host/IP addresses, and its DNS reply allowance can permit local UDP inbound traffic broadly. The provider page documents these limits.
 - **What a given technology cannot express**, as documented per provider in the
   [provider comparison](wiki/os-providers.md) — for example `landlock` denies a path but cannot hide it.
 - **Attacks already published** in [`wiki/audit-eval-security.md`](wiki/audit-eval-security.md)

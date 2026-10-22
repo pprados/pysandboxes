@@ -38,10 +38,13 @@ The providers that can wrap the Python sandbox are:
 | [unshare](https://man7.org/linux/man-pages/man2/unshare.2.html) | [here](unshare.md)                    | • Disk mapping (without rename)<br/>• File filtering<br/>• Network filtering | This is a technology that allows isolating a Linux process at the disk and network levels using `unshare`, `slirp4netns` and `iptables`. |
 | [landlock](https://landlock.io/)                                | [here](landlock.md)                   | • Directory access<br/>• Network TCP port filtering                          | This is a technology that allows an auto isolation inside a Linux process.                                                               |
 | [qemu](https://www.qemu.org/)                            | [here](qemu.md)                       | • Total emulation of OS and CPU                                              | No need of privilege. Use KVM if it's possible, else use the emulation.                                                                  |
+| sandbox-exec | [here](sandbox-exec.md) | • Seatbelt path and port filtering<br/>• Deprecated by Apple<br/>• No remote host/IP filtering | Legacy macOS-only profile launcher. |
 
 The `none` column means plain Python with no sandbox. `py-sandbox` shows the Python layer. Each OS column shows that provider's controls; it does not include Python controls. In practice, OS providers wrap the Python layer.
 
 A ❌ means the provider does not enforce that control. The Python layer may still enforce it. For example, Landlock cannot filter imports, but blocks compiled code and direct syscalls. Combined controls provide the effective protection.
+
+`sandbox-exec` is macOS-only and deprecated. It is listed in the table above for compatibility, but it is not a kernel-backed provider and has no column in the matrix below. Its network rules constrain protocol and port, while remote host/IP constraints are unavailable. When DNS is allowed, Seatbelt also needs an unscoped local UDP inbound permission for replies. See [the provider page](sandbox-exec.md) before selecting it.
 
 | Guard                    | none | py-sandbox | landlock  |  unshare  |   bwrap   | firejail |       qemu       |
 |--------------------------|:----:|:----------:|:---------:|:---------:|:---------:|:------:|:----------------:|

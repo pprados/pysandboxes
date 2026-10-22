@@ -1,4 +1,4 @@
-"""Unit tests for `include "..."` path resolution in a configuration file."""
+"""Unit tests for configuration include path and platform selection."""
 
 import sys
 from pathlib import Path
@@ -33,6 +33,7 @@ class TestConfigInclude:
             'os-sandbox=qemu\ninclude "./local.conf"  # a comment must not hide it\n',
         )
         monkeypatch.chdir(tmp_path)
+        monkeypatch.setattr("sys.platform", "linux")
 
         rules = load_and_parse_config(profile)
 
@@ -50,6 +51,7 @@ class TestConfigInclude:
             'os-sandbox=qemu\ninclude "local.conf"\n',
         )
         monkeypatch.chdir(tmp_path)
+        monkeypatch.setattr("sys.platform", "linux")
 
         rules = load_and_parse_config(profile)
 
@@ -65,6 +67,7 @@ class TestConfigInclude:
             'os-sandbox=qemu\ninclude "./absent.conf"\nqemu.memory=1G\n',
         )
         monkeypatch.chdir(tmp_path)
+        monkeypatch.setattr("sys.platform", "linux")
 
         rules = load_and_parse_config(profile)
 

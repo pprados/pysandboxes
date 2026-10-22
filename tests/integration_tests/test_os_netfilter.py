@@ -22,6 +22,7 @@ from pathlib import Path
 
 import pytest
 
+from pysandboxes._os_sandbox import unsupported_platform_reason
 from pysandboxes.remote.bwrap_sse_daemon import BWrapSSEDaemon
 from pysandboxes.remote.landlock_daemon import _get_landlock_abi_version
 
@@ -29,7 +30,11 @@ from ._env import provider_skip_reason
 
 ROOT_DIR = Path(__file__).resolve().parent.parent.parent
 _GATEWAY = "10.0.2.2"
-_PROVIDERS = ("bwrap", "unshare", "qemu", "landlock")
+_PROVIDERS = tuple(
+    provider
+    for provider in ("bwrap", "unshare", "qemu", "landlock", "sandbox-exec")
+    if not unsupported_platform_reason(provider)
+)
 _FIREJAIL_BRIDGE = os.environ.get("PYSANDBOXES_FIREJAIL_TEST_BRIDGE", "docker0")
 _LANDLOCK_DEFAULT_DENY_REASON = provider_skip_reason("landlock") or (
     "Landlock default TCP deny requires ABI v4 (Linux 6.7+)" if _get_landlock_abi_version() < 4 else None
@@ -86,7 +91,7 @@ def host_listener() -> Iterator[int]:
 
 
 def _target(provider: str) -> str:
-    return "127.0.0.1" if provider == "landlock" else _GATEWAY
+    return "127.0.0.1" if provider in {"landlock", "sandbox-exec"} else _GATEWAY
 
 
 def _firejail_bridge_ip() -> str | None:
@@ -215,45 +220,48 @@ def test_the_same_destination_allowed_by_a_rule_connects(
     assert "CONNECTED" in _run(tmp_path, provider, mode, host_listener, f"{allow_host}|{host_listener}")
 
 
-@pytest.mark.parametrize("mode", ("python-sb", "daemon"))
-@pytest.mark.skipif(bool(_LANDLOCK_DEFAULT_DENY_REASON), reason=_LANDLOCK_DEFAULT_DENY_REASON or "")
-def test_landlock_denies_native_tcp_connections_by_default(tmp_path: Path, host_listener: int, mode: str) -> None:
-    # Prove the listener is reachable outside the sandbox before checking the OS restriction.
-    with socket.create_connection(("127.0.0.1", host_listener), timeout=5):
-        pass
+if not unsupported_platform_reason("landlock"):
 
-    assert "REFUSED" in _run(tmp_path, "landlock", mode, host_listener, allow=None)
+    @pytest.mark.parametrize("mode", ("python-sb", "daemon"))
+    @pytest.mark.skipif(bool(_LANDLOCK_DEFAULT_DENY_REASON), reason=_LANDLOCK_DEFAULT_DENY_REASON or "")
+    def test_landlock_denies_native_tcp_connections_by_default(tmp_path: Path, host_listener: int, mode: str) -> None:
+        # Prove the listener is reachable outside the sandbox before checking the OS restriction.
+        with socket.create_connection(("127.0.0.1", host_listener), timeout=5):
+            pass
 
-
-@pytest.mark.parametrize("mode", ("python-sb", "daemon"))
-def test_firejail_blocks_a_port_outside_the_allow_rule(
-    tmp_path: Path, firejail_bridge_listener: tuple[str, str, int, int], mode: str
-) -> None:
-    bridge, host, allowed_port, denied_port = firejail_bridge_listener
-    result = _run(
-        tmp_path,
-        "firejail",
-        mode,
-        denied_port,
-        f"{host}|{allowed_port}",
-        target_host=host,
-        firejail_bridge=bridge,
-    )
-    assert "REFUSED" in result
+        assert "REFUSED" in _run(tmp_path, "landlock", mode, host_listener, allow=None)
 
 
-@pytest.mark.parametrize("mode", ("python-sb", "daemon"))
-def test_firejail_connects_to_a_port_allowed_by_the_os_filter(
-    tmp_path: Path, firejail_bridge_listener: tuple[str, str, int, int], mode: str
-) -> None:
-    bridge, host, allowed_port, _ = firejail_bridge_listener
-    result = _run(
-        tmp_path,
-        "firejail",
-        mode,
-        allowed_port,
-        f"{host}|{allowed_port}",
-        target_host=host,
-        firejail_bridge=bridge,
-    )
-    assert "CONNECTED" in result
+if not unsupported_platform_reason("firejail"):
+
+    @pytest.mark.parametrize("mode", ("python-sb", "daemon"))
+    def test_firejail_blocks_a_port_outside_the_allow_rule(
+        tmp_path: Path, firejail_bridge_listener: tuple[str, str, int, int], mode: str
+    ) -> None:
+        bridge, host, allowed_port, denied_port = firejail_bridge_listener
+        result = _run(
+            tmp_path,
+            "firejail",
+            mode,
+            denied_port,
+            f"{host}|{allowed_port}",
+            target_host=host,
+            firejail_bridge=bridge,
+        )
+        assert "REFUSED" in result
+
+    @pytest.mark.parametrize("mode", ("python-sb", "daemon"))
+    def test_firejail_connects_to_a_port_allowed_by_the_os_filter(
+        tmp_path: Path, firejail_bridge_listener: tuple[str, str, int, int], mode: str
+    ) -> None:
+        bridge, host, allowed_port, _ = firejail_bridge_listener
+        result = _run(
+            tmp_path,
+            "firejail",
+            mode,
+            allowed_port,
+            f"{host}|{allowed_port}",
+            target_host=host,
+            firejail_bridge=bridge,
+        )
+        assert "CONNECTED" in result

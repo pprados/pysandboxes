@@ -35,7 +35,7 @@ shape='^(### (Added|Changed|Deprecated|Removed|Fixed|Security)|- .+|  .+)?$'
 errors=$(mktemp)
 trap 'rm -f "$errors"' EXIT
 if draft=$("${llm[@]}" "$prompt" <<<"$input" 2>"$errors") &&
-    grep -q '^- ' <<<"$draft" && ! grep -qvE "$shape" <<<"$draft"; then
+    grep -q '^- ' <<<"$draft" && ! grep -vE "$shape" <<<"$draft" | grep -qv '^$'; then
     printf '%s\n' "$draft"
     exit 0
 fi
@@ -46,7 +46,7 @@ tail -n 3 "$errors" | sed 's/^/  /' >&2
 [[ -z $entry ]] || { printf '%s\n' "$entry"; printed=1; }
 section() {
     local lines
-    lines=$(grep -E "^($2)(\([^)]*\))?!?: " <<<"$subjects" | sed -E 's/^[a-z]+(\([^)]*\))?!?: //; s/^./- \U&/' || true)
+    lines=$(grep -E "^($2)(\([^)]*\))?!?: " <<<"$subjects" | sed -E 's/^[a-z]+(\([^)]*\))?!?: //' | awk '{ print "- " toupper(substr($0, 1, 1)) substr($0, 2) }' || true)
     [[ -z $lines ]] && return
     [[ -n ${printed:-} ]] && echo
     echo "### $1"

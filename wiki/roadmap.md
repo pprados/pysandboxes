@@ -58,7 +58,7 @@ Planned work, in no committed order:
     - [ ] [Agent sandbox](https://agent-sandbox.sigs.k8s.io/docs/getting_started/)
   - [ ] Apple
     - [X] ~~App Sandbox~~ (rejected: not compatible with the approach)
-    - [ ] sandbox-exec
+    - [x] sandbox-exec (deprecated)
     - [ ] Collima
   - [ ] Windows
     - [ ] AppContainer

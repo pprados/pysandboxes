@@ -15,16 +15,16 @@ does not count as a vulnerability, such as the known Python-layer weaknesses in
 
 ## Getting started
 
-Python 3.11.5 to 3.14, with [uv](https://docs.astral.sh/uv/) exclusively. Every OS provider is a Linux technology, so
-what you can run depends on your system:
+Python 3.11.5 to 3.14, with [uv](https://docs.astral.sh/uv/) exclusively. Every OS provider is a Linux technology, except
+the deprecated Seatbelt `sandbox-exec` of macOS, so what you can run depends on your system:
 
 | Your system | What runs | Needs |
 |---|---|---|
 | Linux, or WSL2 | everything: the Python layer and the providers `landlock`, `bwrap`, `firejail`, `unshare`, `qemu` | the packages and kernel settings below |
-| macOS | the Python layer over `subprocess`, which is what `cross-os.yml` proves on macOS | Xcode command line tools, uv; GNU sed, jq and coreutils (`make setup-macos`) for the release-script tests, which are left out without them |
+| macOS | the Python layer over `subprocess` and the `sandbox-exec` provider, which is what `cross-os.yml` proves on macOS | Xcode command line tools, uv; GNU sed, jq and coreutils (`make setup-macos`) for the release-script tests, which are left out without them |
 | native Windows | the Python layer over `subprocess` | uv, git, GNU make, a bash (Git Bash) |
 
-On macOS and Windows, a change that touches a kernel-backed provider is tested in a Linux VM (Lima, Colima, Multipass
+On macOS and Windows, a change that touches a Linux kernel-backed provider is tested in a Linux VM (Lima, Colima, Multipass
 or UTM on a Mac) or in WSL2 (`wsl --install -d Ubuntu-24.04` on Windows). Prefer WSL2 on Windows: the Makefile is
 written for bash, and WSL2 gives you the providers too. Landlock is reported to work under WSL2; `make doctor`
 tells you whether your kernel has it. A VM on an Apple Silicon Mac or in WSL2 has no nested KVM in the general
@@ -87,7 +87,7 @@ them: CI runs lint and the unit tests, and `cross-os.yml` runs macOS and Windows
 |---|---|
 | `pysandboxes/sandboxes_api.py` | the public API: `@sandbox` and the `sandboxes()` context manager |
 | `pysandboxes/py_sandbox.py` | the Python layer, which patches the standard library at run time |
-| `pysandboxes/_os_sandbox.py` | the registry of OS providers, from `none` to `qemu` |
+| `pysandboxes/_os_sandbox.py` | the registry of OS providers, from `none` to `sandbox-exec` |
 | `pysandboxes/guard_*.py` | one guard per resource: files, network, imports, env, sensitive calls, eval |
 | `pysandboxes/eval_*.py` | the `eval-*` sub-language: rules, AST rewriting, runtime checks |
 | `pysandboxes/remote/` | the SSE channel between the host and the sandboxed child |
@@ -102,7 +102,7 @@ The [`wiki/`](wiki/Home.md) directory holds the documentation a contributor need
 - [`implementation.md`](wiki/implementation.md): how the framework is put together;
 - [`weaknesses.md`](wiki/weaknesses.md) and the two security assessments: what the Python layer does not stop,
   and the attacks already studied;
-- one page per OS provider (`bwrap.md`, `firejail.md`, `unshare.md`, `qemu.md`, `landlock.md`), and
+- one page per OS provider (`bwrap.md`, `firejail.md`, `unshare.md`, `qemu.md`, `landlock.md`, `sandbox-exec.md`), and
   [`eval.md`](wiki/eval.md) for the `eval-*` rules;
 - [`tests.md`](wiki/tests.md): which suite covers what, and the gaps;
 - [`release.md`](wiki/release.md): how a pre-release is published, and the settings behind it;

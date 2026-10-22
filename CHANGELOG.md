@@ -9,18 +9,22 @@
 |          | ✅ firejail    |            | ✅ API     |
 |          | ✅ unshare     |            | ✅ Eval    |
 |          | ✅ qemu        |            | ☐ Source  |
-|          | ✅ Docker¹     |            | ☐ Regexp  |
-|          | ✅ Podman¹     |            | ☐ DoS     |
+|          | ◐ sandbox-exec² |           | ☐ Regexp  |
+|          | ✅ Docker¹     |            | ☐ DoS     |
+|          | ✅ Podman¹     |            |           |
 |          | ☐ gVisor      |            |           |
 |          | ☐ micro-VM    |            |           |
 
 ¹ Docker and Podman are not providers of their own: a container runs the
 `unshare` provider, with `--privileged` for Docker.
 
-² The Python layer only, with the `subprocess` provider: every
-kernel boundary is a Linux technology.
+² macOS offers the deprecated Seatbelt `sandbox-exec` provider. Windows uses
+the Python layer with `subprocess`; kernel-backed providers are Linux technologies.
 
 ## [0.0.0] - 202X-XX-XX
+
+### Added
+- Add the macOS Seatbelt `sandbox-exec` provider, with documented host-filtering and DNS limitations.
 
 ### Fixed
 

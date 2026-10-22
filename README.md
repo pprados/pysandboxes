@@ -76,7 +76,7 @@ This is *complete mode*: the whole application runs under the sandbox. To isolat
 |---|---|---|
 | **Python layer** (`py-sandbox`) | Intercepts file, network, environment, import and sensitive-call APIs and applies the policy. Gives visible, explicit refusals. | Is not a boundary against hostile code: `ctypes`, native extensions and direct system calls bypass it. |
 | **Dynamic-code layer** (`eval-*`) | Parses, checks, rewrites and runs strings given to `eval()`, `exec()` and `compile()` under a budget and a timeout. | Applies only to those three entry points, and is not a process boundary. |
-| **OS layer** (a *provider*: `landlock`, `bwrap`, `firejail`, `unshare`, `qemu`) | Applies OS-level restrictions that can constrain compiled code, subject to the selected provider and profile. | Cannot express Python notions (import whitelist, `eval-*`), and each provider has its own limits. Landlock denies native TCP bind/connect by default and requires ABI v4 (Linux 6.7+); it cannot filter UDP. QEMU enforces `expose-ro` with a read-only 9p export. |
+| **OS layer** (a *provider*: `landlock`, `bwrap`, `firejail`, `unshare`, `qemu`, `sandbox-exec`) | Applies OS-level restrictions that can constrain compiled code, subject to the selected provider and profile. | Cannot express Python notions (import whitelist, `eval-*`), and each provider has its own limits. Landlock denies native TCP bind/connect by default and requires ABI v4 (Linux 6.7+); it cannot filter UDP. QEMU enforces `expose-ro` with a read-only 9p export. `sandbox-exec` (macOS) filters files and TCP/UDP ports but not remote hosts. |
 
 Defense in depth: use the Python layer to *see and refuse* misuse of legitimate code, add an OS provider when the code itself may be hostile. [Details of the model](https://github.com/pprados/pysandboxes/wiki/security-model).
 
@@ -104,7 +104,7 @@ Read these before relying on it. They are documented positions, not hidden ones.
 - **Learning is trust.** It records what the code does, including what it should not do. Learn from a trusted run, then review the diff of `.py-sandboxes`.
 - **A missing rule file means learning mode, which allows everything.** The effective rights also depend on `include` lines, the environment (`OS_SANDBOX`) and the command line. To lock a policy, see [what the rule file does not show](https://github.com/pprados/pysandboxes/wiki/use-cases#what-the-rule-file-does-not-show) and [Lock the rules](https://github.com/pprados/pysandboxes/wiki/configuration#lock-the-rules). In production, also make the `.py-sandboxes` files read-only for the user running the program ([details](https://github.com/pprados/pysandboxes/wiki/configuration#make-the-rule-files-read-only-in-production)).
 - **Controls apply to supported APIs.** They are not unconditional guarantees. Secrets already in process memory are not hidden from native code.
-- **Linux only for kernel isolation.** See [platform support](#platform-support).
+- **Kernel isolation is Linux, plus the deprecated `sandbox-exec` on macOS.** See [platform support](#platform-support).
 
 Known weaknesses are listed in [weaknesses](https://github.com/pprados/pysandboxes/wiki/weaknesses); what counts as a vulnerability, and how to report one, is in [SECURITY.md](https://github.com/pprados/pysandboxes/blob/master/SECURITY.md).
 
@@ -148,13 +148,14 @@ The OS layer is selected with `os-sandbox=<provider>` in `.py-sandboxes`, or for
 | Strongest separation, a VM (slower: more than 20 s to start) | `qemu` |
 | Resource limits and seccomp | `firejail` |
 | Inside Docker or Podman | `landlock` or `qemu` unprivileged; `unshare` or `bwrap` with `--privileged` |
+| Files and ports on macOS (Seatbelt, deprecated by Apple; no host filtering) | `sandbox-exec` |
 | Only process separation, no OS boundary (also macOS, Windows) | `subprocess` |
 
 `landlock` denies TCP bind/connect by default when Landlock ABI v4 is available (Linux 6.7+); it cannot filter UDP, hide denied paths, or protect the host's named Unix sockets. Below ABI v4, Landlock is unavailable rather than silently running without its default TCP boundary. Against native code that needs UDP or Unix-socket isolation, use `os-sandbox=bwrap` or `unshare`. QEMU applies `expose-ro` through a read-only 9p export. A named provider is never silently downgraded: if it is unavailable, the sandboxed process fails closed. The [provider comparison](https://github.com/pprados/pysandboxes/wiki/os-providers) gives the full matrix and limits.
 
 # Platform support
 
-Kernel-backed providers (`landlock`, `bwrap`, `firejail`, `unshare`, `qemu`) are Linux technologies, also available through WSL where the kernel and tooling requirements are met. On macOS and Windows only the Python layer with the `subprocess` provider exists, and there is **no** OS isolation. The Python layer is exercised on those systems by the [cross-OS workflow](https://github.com/pprados/pysandboxes/blob/master/.github/workflows/cross-os.yml). Provider prerequisites: [provider comparison](https://github.com/pprados/pysandboxes/wiki/os-providers).
+Kernel-backed providers (`landlock`, `bwrap`, `firejail`, `unshare`, `qemu`) are Linux technologies, also available through WSL where the kernel and tooling requirements are met. macOS also has the `sandbox-exec` provider, built on Apple's deprecated Seatbelt command: it filters file access and network protocol and port, but cannot enforce remote host or IP rules. On Windows only the Python layer with the `subprocess` provider exists, and there is **no** OS isolation. The Python layer is exercised on those systems by the [cross-OS workflow](https://github.com/pprados/pysandboxes/blob/master/.github/workflows/cross-os.yml). Provider prerequisites: [provider comparison](https://github.com/pprados/pysandboxes/wiki/os-providers).
 
 # Why trust it, and how it compares
 

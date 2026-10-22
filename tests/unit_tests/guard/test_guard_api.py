@@ -426,6 +426,10 @@ def test_ctypes_new_bypass_of_cdll_init_is_blocked(
     """
     import _ctypes
     import ctypes
+    import ctypes.util
+
+    libc = ctypes.util.find_library("c")
+    assert libc is not None
 
     table = patch_rules(learn=False)
     original_init = ctypes.CDLL.__init__
@@ -474,24 +478,29 @@ def test_ctypes_new_bypass_is_refused_end_to_end(tmp_path: Path) -> None:
     Run out of process: the patches are posted by the import hook, so a table
     inspection would prove nothing about what an interpreter actually does.
     """
+    import ctypes.util
+
+    libc = ctypes.util.find_library("c")
+    assert libc is not None
     work = tmp_path / "work"
     work.mkdir()
     repo = Path(__file__).resolve().parents[3]
     (work / ".py-sandboxes").write_text(
-        "py-sandbox=true\nos-sandbox=subprocess\npython-import=*\n" f"expose-rw={work}\nexpose-ro={repo}\n"
+        f"py-sandbox=true\nos-sandbox=subprocess\npython-import=*\nexpose-rw={work}\nexpose-ro={repo}\n"
     )
     (work / "probe.py").write_text(
         "import _ctypes\n"
         "import ctypes\n"
         "from pysandboxes.e import SandBoxError\n"
         "obj = ctypes.CDLL.__new__(ctypes.CDLL)\n"
-        "obj._name = 'libc.so.6'\n"
+        f"libc = {libc!r}\n"
+        "obj._name = libc\n"
         "class _FuncPtr(ctypes._CFuncPtr):\n"
         "    _flags_ = obj._func_flags_\n"
         "    _restype_ = obj._func_restype_\n"
         "obj._FuncPtr = _FuncPtr\n"
         "try:\n"
-        "    obj._handle = _ctypes.dlopen('libc.so.6', 2)\n"
+        "    obj._handle = _ctypes.dlopen(libc, 2)\n"
         "    obj.system(b'true')\n"
         "    print('bypass ALLOWED')\n"
         "except SandBoxError:\n"
@@ -711,7 +720,7 @@ def test_pickle_loads_and_its_twin_are_refused_end_to_end(tmp_path: Path) -> Non
     work.mkdir()
     repo = Path(__file__).resolve().parents[3]
     (work / ".py-sandboxes").write_text(
-        "py-sandbox=true\nos-sandbox=subprocess\npython-import=*\n" f"expose-rw={work}\nexpose-ro={repo}\n"
+        f"py-sandbox=true\nos-sandbox=subprocess\npython-import=*\nexpose-rw={work}\nexpose-ro={repo}\n"
     )
     (work / "probe.py").write_text(
         "import pickle\n"
@@ -781,7 +790,7 @@ def test_subinterpreter_creation_is_refused_end_to_end(tmp_path: Path) -> None:
     work.mkdir()
     repo = Path(__file__).resolve().parents[3]
     (work / ".py-sandboxes").write_text(
-        "py-sandbox=true\nos-sandbox=subprocess\npython-import=*\n" f"expose-rw={work}\nexpose-ro={repo}\n"
+        f"py-sandbox=true\nos-sandbox=subprocess\npython-import=*\nexpose-rw={work}\nexpose-ro={repo}\n"
     )
     (work / "probe.py").write_text(
         "import sys\n"

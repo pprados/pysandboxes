@@ -10,8 +10,8 @@ name: Cross-OS Provider Tests
 # nature, and its failures would bury what this job is for. Modules testing a
 # Linux-only provider are left out of the collection by tests/conftest.py.
 #
-# Both runners exercise the one provider they have (`subprocess`), and run the
-# guards' own unit tests: they are what the Python layer rests on there.
+# Windows exercises `subprocess`; macOS exercises `sandbox-exec` and `subprocess`.
+# Both run the guards' own unit tests: they are what the Python layer rests on there.
 #
 # Called by full-gate.yml, so the nightly proves macOS and Windows too, plus on demand: `gh act` cannot run macOS or
 # Windows runners, and `make gh-tests` only replays the push workflows.
@@ -46,6 +46,13 @@ jobs:
     - name: Install uv
       run: python -m pip install uv
 
+    - name: Install GNU utilities on macOS
+      if: ${{ matrix.os == 'macos-latest' }}
+      run: |
+        brew install coreutils gnu-sed jq
+        echo "$(brew --prefix coreutils)/libexec/gnubin" >> "$GITHUB_PATH"
+        echo "$(brew --prefix gnu-sed)/libexec/gnubin" >> "$GITHUB_PATH"
+
     - name: Install dependencies
       run: uv sync --group test
 
@@ -63,3 +70,12 @@ jobs:
         uv run pytest -rs -m 'not slow'
         tests/integration_tests/test_guards_with_providers.py
         tests/integration_tests/test_usage_with_providers.py
+
+    - name: macOS Seatbelt enforcement
+      if: ${{ matrix.os == 'macos-latest' && !cancelled() }}
+      env:
+        PYSANDBOXES_FAIL_ON_SKIP: "1"
+      run: >-
+        uv run pytest -rs
+        tests/integration_tests/remote/test_sandbox_exec.py
+        tests/integration_tests/test_os_netfilter.py

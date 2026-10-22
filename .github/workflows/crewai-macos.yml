@@ -1,0 +1,40 @@
+name: CrewAI macOS ARM
+
+on:
+  push:
+    paths:
+    - .github/workflows/crewai-macos.yml
+    - samples/crewai-demo/**
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: macos-latest
+    timeout-minutes: 30
+    env:
+      UV_PYTHON: "3.13"
+    steps:
+    - uses: actions/checkout@v5
+
+    - name: Verify ARM64 runner
+      run: test "$(uname -m)" = arm64
+
+    - name: Set up Python 3.13
+      uses: actions/setup-python@v6
+      with:
+        python-version: "3.13"
+
+    - name: Install uv
+      run: |
+        export UV_INSTALL_DIR="$RUNNER_TEMP/uv-bin"
+        curl -LsSf https://astral.sh/uv/0.13.0/install.sh | sh
+        echo "$UV_INSTALL_DIR" >> "$GITHUB_PATH"
+
+    - name: Install CrewAI sample dependencies
+      run: make -C samples/crewai-demo init
+
+    - name: Prepare sample data directories
+      run: mkdir -p "$HOME/.local/share/crewai-demo" "$HOME/.local/share/crewai/credentials"
+
+    - name: Test CrewAI sample
+      run: make -C samples/crewai-demo tests
