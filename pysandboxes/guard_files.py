@@ -147,7 +147,7 @@ _rules: FilesRules = cast(FilesRules, ())
 _protected_config_paths: frozenset[str] = frozenset()
 
 _os_path_realpath = os.path.realpath
-_os_path_abspath = os.path.abspath
+_os_path_abspath_unguarded = os.path.abspath
 _os_readlink = os.readlink
 _os_stat = os.stat
 _os_fstat = os.fstat
@@ -161,6 +161,16 @@ _canonicalizing: contextvars.ContextVar[bool] = contextvars.ContextVar("_canonic
 # is already absolute: ``ntpath`` before Python 3.13. The answer stays inside ``realpath``; the path it returns is
 # still judged through the patched ``os.lstat`` and ``os.readlink``.
 _realpath_cwd: contextvars.ContextVar[bool] = contextvars.ContextVar("_realpath_cwd", default=False)
+
+
+def _os_path_abspath(path: str) -> str:
+    """Make ``path`` absolute for the guard: a relative path resolves against the real working directory, which
+    the rules then judge, whether or not a rule exposes that directory itself."""
+    token = _realpath_cwd.set(True)
+    try:
+        return _os_path_abspath_unguarded(path)
+    finally:
+        _realpath_cwd.reset(token)
 
 
 def _dir_path(path: str) -> str:

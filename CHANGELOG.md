@@ -20,6 +20,12 @@
 ² The Python layer only, with the `subprocess` provider: every
 kernel boundary is a Linux technology.
 
+## [0.0.0] - 202X-XX-XX
+
+### Fixed
+
+- `python-sb app/script.py` runs again under a profile that exposes only `./app`, such as a learned one.
+
 ## [0.7.0] - 2026-10-22
 
 First public release.
