@@ -90,8 +90,12 @@ def host_listener() -> Iterator[int]:
     server.close()
 
 
+# Providers whose kernel rules name a port, never a host: a rule for a host is a rule for every host on that port.
+_PORT_ONLY_PROVIDERS = frozenset({"landlock", "sandbox-exec"})
+
+
 def _target(provider: str) -> str:
-    return "127.0.0.1" if provider in {"landlock", "sandbox-exec"} else _GATEWAY
+    return "127.0.0.1" if provider in _PORT_ONLY_PROVIDERS else _GATEWAY
 
 
 def _firejail_bridge_ip() -> str | None:
@@ -216,7 +220,7 @@ def test_the_same_destination_allowed_by_a_rule_connects(
     tmp_path: Path, host_listener: int, provider: str, mode: str
 ) -> None:
     """Negative control: the refusal above comes from the filter, not from an unreachable listener."""
-    allow_host = "*" if provider == "landlock" else _GATEWAY
+    allow_host = "*" if provider in _PORT_ONLY_PROVIDERS else _GATEWAY
     assert "CONNECTED" in _run(tmp_path, provider, mode, host_listener, f"{allow_host}|{host_listener}")
 
 

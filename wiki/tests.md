@@ -156,16 +156,16 @@ that loads a profile exercises it implicitly.
 Nine entries are registered in `pysandboxes/_os_sandbox.py`: eight providers, plus
 `_sse_server`, which is internal and not user-selectable.
 
-| Backend | Host: `tst_usage` | Host: guards | OS-only netfilter | Docker | Podman | Kubernetes |
-|---|---|---|---|---|---|---|
-| `subprocess` | yes | yes | — | — | — | — |
-| `firejail` | yes | yes | yes (2 modes) | **excluded** | **excluded** | **excluded** |
-| `bwrap` | yes | yes | yes (2 modes) | yes (privileged) | yes (privileged) | yes (privileged) |
-| `unshare` | yes | yes | yes (2 modes) | yes (privileged) | yes (privileged) | yes (privileged) |
-| `landlock` | yes | yes | yes (ABI v4) | yes | yes | yes |
-| `qemu` | yes | yes | yes (KVM) | yes | yes | yes |
-| `qemu-tcg` | yes | yes | — | — | — | — |
-| `sandbox-exec` (macOS) | yes | yes | yes (2 modes) | **excluded** | **excluded** | **excluded** |
+| Backend | Host: `tst_usage` | Host: guards | OS-only netfilter | OS-only files | Docker | Podman | Kubernetes |
+|---|---|---|---|---|---|---|---|
+| `subprocess` | yes | yes | — | — | — | — | — |
+| `firejail` | yes | yes | yes (2 modes) | yes (2 modes) | **excluded** | **excluded** | **excluded** |
+| `bwrap` | yes | yes | yes (2 modes) | yes (2 modes) | yes (privileged) | yes (privileged) | yes (privileged) |
+| `unshare` | yes | yes | yes (2 modes) | yes (2 modes) | yes (privileged) | yes (privileged) | yes (privileged) |
+| `landlock` | yes | yes | yes (ABI v4) | yes (2 modes) | yes | yes | yes |
+| `qemu` | yes | yes | yes (KVM) | yes (2 modes) | yes | yes | yes |
+| `qemu-tcg` | yes | yes | — | yes (2 modes) | — | — | — |
+| `sandbox-exec` (macOS) | yes | yes | yes (2 modes) | yes (2 modes) | **excluded** | **excluded** | **excluded** |
 
 "Host: guards" is `test_guards_with_providers`. `qemu-tcg` is not a backend but
 a second host row for `qemu` with `qemu.use_kvm=false` (`ALL_OS_SANDBOX` in
@@ -203,6 +203,13 @@ scenario checks OS-only network enforcement with `py-sandbox=false` for
 under both `python-sb` and daemon mode. It pairs a denied connection with a
 permitted control connection. [`remote/test_bwrap.py`](../tests/integration_tests/remote/test_bwrap.py)
 also exercises the bwrap daemon with the network-filtered profile.
+
+[`test_os_file_confinement.py`](../tests/integration_tests/test_os_file_confinement.py) does the same for
+files: with `py-sandbox=false`, a read-only directory refuses a write, a read outside every exposed path is refused,
+and a read-write directory accepts a write, under `python-sb` and daemon mode. Its files live under the home
+directory, not `/tmp`, because Landlock opens the whole system temporary directory to the sandbox. The host-name
+dimension of a network rule is not covered for `landlock` and `sandbox-exec`: their kernel rules name a port, so
+`test_os_netfilter.py` allows `*` for them and checks the port only.
 
 `tst_usage.py` cannot prove the Firejail filter by itself because the Python
 socket guard is also active. The OS-only scenario covers Firejail alongside

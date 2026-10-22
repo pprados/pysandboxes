@@ -78,4 +78,5 @@ jobs:
       run: >-
         uv run pytest -rs
         tests/integration_tests/remote/test_sandbox_exec.py
+        tests/integration_tests/test_os_file_confinement.py
         tests/integration_tests/test_os_netfilter.py

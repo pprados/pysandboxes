@@ -120,7 +120,7 @@ CROSS_OS_PYTEST = \
 	"uv run pytest -rs -m \"not slow\" tests/integration_tests/test_guards_with_providers.py tests/integration_tests/test_usage_with_providers.py"
 # macOS also runs the `sandbox-exec` provider: the "macOS Seatbelt enforcement" step of cross-os.yml.
 MACOS_PYTEST = $(CROSS_OS_PYTEST) \
-	"uv run pytest -rs tests/integration_tests/remote/test_sandbox_exec.py tests/integration_tests/test_os_netfilter.py"
+	"uv run pytest -rs tests/integration_tests/remote/test_sandbox_exec.py tests/integration_tests/test_os_file_confinement.py tests/integration_tests/test_os_netfilter.py"
 # What a VM needs of the checkout: it has no git, so the tracked and new files are streamed as a tar.
 VM_SOURCES = git ls-files -co --exclude-standard | tar -cf - -T -
 # hatch-vcs reads the version from git, which a VM does not have.
