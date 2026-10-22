@@ -82,6 +82,15 @@ From then on, the configuration is refused at startup when:
 The lock only holds while the file holding it is loaded: `--pysandboxes-config=` can name another file, so pin the
 full command line where the program is launched.
 
+### Make the rule files read-only in production
+
+In production, set the permissions of the `.py-sandboxes` files (and of the files they include) to read-only for
+the user running the program, for example `chmod 444 .py-sandboxes`, owned by another account (or by `root`) so
+that the user cannot change the mode back. The `learn=false` lock protects the configuration at startup; the file
+permissions protect the file itself, so a program or a compromised process running as that user cannot rewrite the
+whitelist, or delete the file to trigger the learning mode, for the next run. Do not grant `expose-rw=` on the
+directory holding the rule files either.
+
 ---
 
 ### Interactive sessions and IPython
