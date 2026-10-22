@@ -428,7 +428,7 @@ class UnshareSSEDaemon(BaseSubProcessDaemon):
             config_file = temp / "unshare_config.json"
             if config_file.exists():
                 config_file.unlink()
-            os.mkfifo(config_file)
+            os.mkfifo(config_file, 0o600)
 
         def publish_config() -> None:
             config_file.write_text(config.to_json())
@@ -713,7 +713,7 @@ class UnshareSSEDaemon(BaseSubProcessDaemon):
                 config_file = temp / "unshare_config.json"
                 if config_file.exists():
                     config_file.unlink()
-                os.mkfifo(config_file)
+                os.mkfifo(config_file, 0o600)
 
             def publish_config() -> None:
                 config_file.write_text(config.to_json())
@@ -793,7 +793,7 @@ class UnshareSSEDaemon(BaseSubProcessDaemon):
             ports_spec = slirp_extract_port_forwards(all_rules, self.port)
 
             # Create the DaemonParameters FIFO
-            os.mkfifo(pipe_path)
+            os.mkfifo(pipe_path, 0o600)
 
             if DEBUG_LAUNCH:
                 try:

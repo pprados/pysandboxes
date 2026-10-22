@@ -511,7 +511,7 @@ class FireJailSSEDaemon(BaseSubProcessDaemon):
                         netfilter_file = Path("tmp/netfilter.net")
                     else:
                         netfilter_file = temp / "netfilter.net"
-                        os.mkfifo(netfilter_file)
+                        os.mkfifo(netfilter_file, 0o600)
 
                     def publish_netfilter() -> None:
                         _ = netfilter_file.write_text("\n".join(net_filter4))
@@ -528,7 +528,7 @@ class FireJailSSEDaemon(BaseSubProcessDaemon):
                         netfilter6_file = Path("tmp/netfilter6.net")
                     else:
                         netfilter6_file = temp / "netfilter6.net"
-                        os.mkfifo(netfilter6_file)
+                        os.mkfifo(netfilter6_file, 0o600)
 
                     def publish_netfilter6() -> None:
                         _ = netfilter6_file.write_text("\n".join(net_filter6))

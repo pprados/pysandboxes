@@ -212,7 +212,7 @@ async def launch_sandbox(
     """
     use_fifo = config_writer is None and sys.platform != "win32"
     if use_fifo:
-        os.mkfifo(pipe_path)
+        os.mkfifo(pipe_path, 0o600)
     elif config_writer is None:
         # Windows has no FIFO: the child reads a plain file in the private temporary directory
         pipe_path.write_bytes(pickle.dumps(process_config))
