@@ -11,7 +11,7 @@ from pysandboxes import RuleFileNotFoundError, RulePermissionError
 from pysandboxes.guard_files import _check_alias, _wrap_pathlib_Path_glob
 from pysandboxes.sb_types import ConfigLine
 
-from .test_guard_io import activate_guard_files_rules
+from .test_guard_io import _deactivate_all_rules, activate_guard_files_rules
 
 NonePath = Path()
 
@@ -266,3 +266,17 @@ def test_copytree_ignore_callback_runs_with_the_alias_check_restored(tree: Path)
     shutil.copytree(tree / "rw" / "srcdir", tree / "rw" / "copied", ignore=ignore)
     assert seen_during_callback
     assert all(seen_during_callback), "ignore= callback ran with the alias check disabled"
+
+
+def test_a_relative_path_in_an_exposed_directory_opens_without_exposing_the_working_directory(tree: Path) -> None:
+    previous = os.getcwd()
+    os.chdir(tree)
+    try:
+        _arm(tree)
+        with open("ro/file.txt") as f:
+            assert f.read() == "ro"
+        with pytest.raises(RuleFileNotFoundError):
+            os.getcwd()
+    finally:
+        _deactivate_all_rules()
+        os.chdir(previous)

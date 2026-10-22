@@ -45,6 +45,9 @@ logger = logging.getLogger(__name__)
 _RAW_EXEC = exec
 _RAW_EVAL = eval
 _RAW_COMPILE = compile
+# The program's own path is made absolute with the real working directory: the guarded getcwd refuses a directory
+# no rule exposes, which a profile that exposes only ./app does not.
+_RAW_GETCWD = os.getcwd
 
 
 @contextlib.contextmanager
@@ -266,6 +269,10 @@ def _python_module(all_rules: AllRules, mod_name: str) -> int:
     return 0
 
 
+def _absolute(path: str) -> str:
+    return os.path.normpath(os.path.join(_RAW_GETCWD(), path))
+
+
 def _main_globals(file: str | None) -> dict:
     """The namespace CPython gives to ``__main__``.
 
@@ -284,7 +291,7 @@ def _main_globals(file: str | None) -> dict:
     }
     if file is not None:
         # CPython 3.9+: an absolute __file__, a SourceFileLoader, and a __cached__ that is None.
-        absolute = os.path.abspath(file)
+        absolute = _absolute(file)
         namespace["__file__"] = absolute
         namespace["__cached__"] = None
         namespace["__loader__"] = importlib.machinery.SourceFileLoader("__main__", absolute)
@@ -321,7 +328,7 @@ def _python_script(all_rules: AllRules, script: Path, args: List[str]) -> int:
     sys.argv = [str(script)] + args
     # Runs the user script by design; the OS sandbox isolates it.
     # Compiled against the real path so a traceback names the user's file.
-    namespace = _enter_main(str(script), os.path.dirname(os.path.realpath(script)))
+    namespace = _enter_main(str(script), os.path.dirname(os.path.realpath(_absolute(str(script)))))
     _RAW_EXEC(_RAW_COMPILE(script_body, namespace["__file__"], "exec"), namespace)
     if sys.flags.inspect:
         return _python_interactive(all_rules=all_rules, ban=False)

@@ -41,3 +41,21 @@ def test_a_missing_script_exits_like_cpython(tmp_path: Path) -> None:
 
     assert result.returncode == 2, result.stderr
     assert "can't open file" in result.stderr
+
+
+def test_a_relative_script_runs_when_the_profile_exposes_only_its_directory(tmp_path: Path) -> None:
+    (tmp_path / "app").mkdir()
+    (tmp_path / "app" / "hello.py").write_text("print('HELLO')\n")
+    profile = tmp_path / "app.profile"
+    profile.write_text("py-sandbox=true\nos-sandbox=subprocess\npython-import=*\nexpose-ro=./app\n")
+
+    result = subprocess.run(
+        [sys.executable, "-m", "pysandboxes.python_sb", f"--pysandboxes-config={profile}", "app/hello.py"],
+        capture_output=True,
+        text=True,
+        timeout=120,
+        cwd=tmp_path,
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert "HELLO" in result.stdout
