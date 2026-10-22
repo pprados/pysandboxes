@@ -2058,7 +2058,7 @@ requires-dist = [
     { name = "typing-extensions", specifier = ">=4.0.0" },
     { name = "uvicorn", specifier = ">=0.34.0" },
 ]
-provides-extras = ["all", "bwrap", "firejail", "landlock", "subprocess", "unshare"]
+provides-extras = ["all", "bwrap", "firejail", "landlock", "sandbox-exec", "subprocess", "unshare"]
 
 [package.metadata.requires-dev]
 dev = [

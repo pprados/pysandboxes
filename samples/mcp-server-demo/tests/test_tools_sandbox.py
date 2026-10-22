@@ -17,6 +17,7 @@ transport proves the mock, not the rule.
 """
 
 import asyncio
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -48,7 +49,7 @@ def armed_kwargs() -> dict[str, object]:
     return {
         "sandboxes_config": CONFIG,
         "py_sandbox": "true",
-        "os_sandbox": "subprocess",
+        "os_sandbox": os.environ.get("OS_SANDBOX", "subprocess"),
     }
 
 

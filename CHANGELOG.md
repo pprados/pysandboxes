@@ -18,7 +18,7 @@
 ¹ Docker and Podman are not providers of their own: a container runs the
 `unshare` provider, with `--privileged` for Docker.
 
-² macOS offers the deprecated Seatbelt `sandbox-exec` provider. Windows uses
+² macOS offers the Seatbelt `sandbox-exec` provider. Windows uses
 the Python layer with `subprocess`; kernel-backed providers are Linux technologies.
 
 ## [0.0.0] - 202X-XX-XX
@@ -29,6 +29,8 @@ the Python layer with `subprocess`; kernel-backed providers are Linux technologi
 ### Fixed
 
 - `python-sb app/script.py` runs again under a profile that exposes only `./app`, such as a learned one.
+- The samples' partial-mode tests run under the provider named by `OS_SANDBOX` instead of always under `subprocess`, so
+  `make sample-tests` now exercises that provider in both modes.
 
 ## [0.7.0] - 2026-10-22
 

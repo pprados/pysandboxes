@@ -1,6 +1,6 @@
 # Copyright (c) 2026, Philippe PRADOS
 # License: Apache V2
-"""macOS Seatbelt launcher using the deprecated ``sandbox-exec`` command."""
+"""macOS Seatbelt launcher using the ``sandbox-exec`` command."""
 
 from __future__ import annotations
 

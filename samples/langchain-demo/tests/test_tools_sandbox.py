@@ -17,6 +17,7 @@ Scenarios B and C run armed, against the real network. Nothing is mocked: a
 mocked transport proves the mock, not the rule.
 """
 
+import os
 import subprocess
 import sys
 import time
@@ -53,7 +54,7 @@ POPEN_ESCAPE = (
 
 
 def armed_kwargs() -> dict[str, object]:
-    return {"sandboxes_config": CONFIG, "py_sandbox": "true", "os_sandbox": "subprocess"}
+    return {"sandboxes_config": CONFIG, "py_sandbox": "true", "os_sandbox": os.environ.get("OS_SANDBOX", "subprocess")}
 
 
 def test_scenario_a_the_escape_succeeds_without_the_sandbox() -> None:

@@ -234,6 +234,6 @@ the rights of the user, and the same rule file pattern contains them.
 
 Only Python is covered by the Python layer. Starting a process is denied by default, but a script granted
 `python-api=ALLOW:process-exec` to start `bash`, `curl` or a compiled binary escapes it, and only a kernel provider
-  still holds. On macOS, the deprecated `sandbox-exec` Seatbelt provider can add
+  still holds. On macOS, the `sandbox-exec` Seatbelt provider can add
   filesystem and port filtering but cannot constrain remote host/IP addresses. On
   Windows, the Python layer runs alone with `none` or `subprocess`.

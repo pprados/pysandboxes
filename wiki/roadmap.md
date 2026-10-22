@@ -20,7 +20,7 @@ Planned work, in no committed order:
 - [ ] OS Compatible
   - [X] Linux
   - [ ] Windows
-  - [ ] Mac OS
+  - [X] Mac OS
 - [ ] OS-sandboxes
   - [X] Basic
     - [X] None
@@ -58,7 +58,7 @@ Planned work, in no committed order:
     - [ ] [Agent sandbox](https://agent-sandbox.sigs.k8s.io/docs/getting_started/)
   - [ ] Apple
     - [X] ~~App Sandbox~~ (rejected: not compatible with the approach)
-    - [x] sandbox-exec (deprecated)
+    - [x] sandbox-exec
     - [ ] Collima
   - [ ] Windows
     - [ ] AppContainer
