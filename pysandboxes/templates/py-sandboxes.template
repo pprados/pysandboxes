@@ -318,7 +318,7 @@ remote-result-guard=true
 #
 # qemu.start_timeout — Seconds the daemon gets to answer, VM boot included
 #   The default follows the acceleration in use: 90 with KVM (a whole run takes about
-#   22s), 180 when QEMU runs emulated (the same guest answers at ~125s). A container
+#   22s), 300 when QEMU runs emulated (the same guest answers at ~125s, slower on a loaded host). A container
 #   without /dev/kvm needs nothing here; set the key only to override that. The guest is
 #   pinged until this deadline and no other limit applies, so there is nothing else to
 #   raise. Past it the start fails and the VM is killed, not left behind.

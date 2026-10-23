@@ -30,8 +30,8 @@ LOOP_FOR_PING = 100  # Try to ping how many times?
 TIMEOUT_FOR_START_DAEMON = 30  # seconds
 # QEMU needs VM boot (QEMU_BOOT_DELAY) + ping loop; allow up to 90s
 TIMEOUT_FOR_START_DAEMON_QEMU = 90  # seconds
-# Emulated, the same guest was measured answering at ~125s; leave a margin over that.
-TIMEOUT_FOR_START_DAEMON_QEMU_TCG = 180  # seconds
+# Emulated, the same guest was measured answering at ~125s locally, and past 180s on a loaded hosted runner.
+TIMEOUT_FOR_START_DAEMON_QEMU_TCG = 300  # seconds
 
 
 def qemu_start_timeout(os_sandbox_params: Mapping[str, Any]) -> float:
