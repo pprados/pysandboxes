@@ -1881,7 +1881,7 @@ _default_rules: dict[str, Callable[..., Any]] = {
     "os.rmdir": _f(_wrap_os_rmdir),
     "os.scandir": _f(_wrap_os_scandir),
     "os.stat": _f(_wrap_os_stat, write=False),
-    # ALLOW os.statvfs = _wrap_filename(os.statvfs)
+    "os.statvfs": _f(_wrap_filename, write=False),
     "os.lstat": _f(_wrap_filename, write=False, learn=False),
     # ALLOW os.stat_float_times
     "os.symlink": _f(_wrap_os_symlink),

@@ -214,6 +214,8 @@ def test_shutil_disk_usage(files: Dict[str, Path]) -> None:  # noqa: F811
     import shutil
 
     assert shutil.disk_usage(files["bind_dest"]).total > 0
+    with pytest.raises(RuleFileNotFoundError):
+        shutil.disk_usage(files["ignore"])
 
 
 def test_shutil_make_archive(files: Dict[str, Path]) -> None:  # noqa: F811

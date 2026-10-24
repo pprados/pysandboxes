@@ -112,7 +112,7 @@ Rules in `.py-sandboxes` files, whitelist-based:
 - **`develop`** = integration branch. Daily work there; feature branches from it, back to it.
 - **`master`** = releases only. Merge at publication only, never ordinary work. No PR/merge → `master` outside release. Compare branch vs `develop`, not `master`.
 - **`CONTRIBUTING.md`**: what PR must carry = checklist for the maintainer review. Rule change → goes there, not only here.
-- **`CHANGELOG.md`**: merge → `develop` w/ new feature or user-visible fix → add 1 line to open `## [0.0.0] - 202X-XX-XX` entry, under `### Added` / `### Changed` / `### Fixed`. User-facing, no impl detail. Until the first public release the entry only says what that release has, under `### Added`, no `### Changed` / `### Fixed`. Post-release: no open entry; first merge after adds `## [0.0.0] - 202X-XX-XX` line + empty line, above first `## [` line. Never date entry nor add version: `make publish-patch` / `publish-minor` / `publish-final` do.
+- **`CHANGELOG.md`**: every bug fix and new feature gets 1 user-facing line in the open `## [0.0.0] - 202X-XX-XX` entry, under `### Added` / `### Changed` / `### Fixed`; no implementation detail. Until the first public release, the entry only says what that release has, under `### Added`, with no `### Changed` / `### Fixed`. Post-release: no open entry; first merge after adds `## [0.0.0] - 202X-XX-XX` line + empty line, above first `## [` line. Never date entry nor add version: `make publish-patch` / `publish-minor` / `publish-final` do.
 
 ### Design and Planning Documents
 - Specs + plans in repo tree, git-excluded dir, never committed: `.superpowers/specs/YYYY-MM-DD-<topic>-design.md`, `.superpowers/plans/YYYY-MM-DD-<topic>.md`.
