@@ -82,6 +82,12 @@ def test_dir_entry_setattr_delegates_to_the_wrapped_target() -> None:
     assert target.custom_attr == "value"  # type: ignore[attr-defined]
 
 
+def test_windows_disk_usage_calls_the_guarded_nt_function(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(guard_files.sys, "platform", "win32")
+
+    assert "nt._getdiskusage" in guard_files.patch_rules(learn=False)
+
+
 # %% parse_rules
 
 

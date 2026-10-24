@@ -2005,6 +2005,8 @@ def patch_rules(learn: bool) -> dict[str, Callable[..., Any]]:
         }
     elif sys.version_info < (3, 13):
         rules["os.path.realpath"] = _f(_wrap_os_path_realpath)
+    if sys.platform == "win32":
+        rules["nt._getdiskusage"] = _f(_wrap_filename, write=False)
     rules |= _twin_rules(rules)
     return rules
 
