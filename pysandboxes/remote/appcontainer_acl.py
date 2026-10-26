@@ -224,11 +224,13 @@ def _remove_mask_access(path: Path, package_sid: str, runtime_sid: str, *, prote
         "[System.Security.AccessControl.AccessControlType]::Deny); $acl.AddAccessRule($deny); "
     )
     sddl = _run_acl_script(
-        "$acl = Get-Acl -LiteralPath $env:PYSB_PATH; " + protect
+        "$acl = Get-Acl -LiteralPath $env:PYSB_PATH; "
+        + protect
         + "$sids = @($env:PYSB_SID, $env:PYSB_RUNTIME_SID, 'S-1-3-4'); "
         "$rules = @($acl.Access | Where-Object { $sids -contains $_.IdentityReference.Value }); "
-        "foreach ($rule in $rules) { [void]$acl.RemoveAccessRuleSpecific($rule) }; " + deny_package +
-        "$acl.GetSecurityDescriptorSddlForm([System.Security.AccessControl.AccessControlSections]::Access)",
+        "foreach ($rule in $rules) { [void]$acl.RemoveAccessRuleSpecific($rule) }; "
+        + deny_package
+        + "$acl.GetSecurityDescriptorSddlForm([System.Security.AccessControl.AccessControlSections]::Access)",
         {"PYSB_PATH": str(path), "PYSB_SID": package_sid, "PYSB_RUNTIME_SID": runtime_sid},
         locked=True,
     ).strip()

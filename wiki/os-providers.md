@@ -43,8 +43,8 @@ So a ❌ means "*this technology does not deal with that concern*", never "*that
 | **Network**              | | | | | | | | |
 | • TCP                    | ❌ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | Partial³ |
 | • UDP                    | ❌ | ✅ | ❌ | ✅ | ✅ | ✅ | ✅ | Partial³ |
-| • host                   | ❌ | ✅ | ❌ | ✅ | ✅ | ✅ | ✅ | ❌ |
-| • port                   | ❌ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ❌ |
+| • host                   | ❌ | ✅ | ❌ | ✅ | ✅ | ✅ | ✅ | ❌³ |
+| • port                   | ❌ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ❌³ |
 | OS-sandbox               | ❌ | ❌ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
 | VM compatible            | ❌ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
 | **Docker / Podman**      | | | | | | | | |
@@ -61,9 +61,10 @@ So a ❌ means "*this technology does not deal with that concern*", never "*that
 
 ¹ AppContainer is implemented on this branch but unavailable in released packages until Windows CI passes. Docker and
 Kubernetes deployment rows are N/A: this provider targets Windows hosts. ² `ignore=` covers only paths present
-at launch and their names may remain listable. ³ Capabilities select public Internet or private-network access;
-they do not enforce host, port, protocol, or loopback rules. The Python guard provides those finer checks when
-enabled.
+at launch and their names may remain listable. ³ AppContainer denies outbound network access by default. An
+`ALLOW` `net=` rule grants a broad public-Internet or private-network capability; AppContainer itself does not
+filter host, port, protocol, or loopback. The Python guard checks the first three only while enabled, so native
+code can bypass those checks. Loopback is blocked by AppContainer even when a rule allows it.
 
 `ignore=` is enforced differently by each technology: **py-sandbox** and **firejail** make the path disappear (`FileNotFoundError`), **unshare** has the OS refuse it, and **bwrap** and **qemu** mask it, so a read succeeds and returns nothing. **landlock** denies access to a path but cannot hide one, so it has no equivalent: with `--py-sandbox=False` an ignored file stays readable there.
 

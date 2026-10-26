@@ -53,10 +53,32 @@ errors.
 
 ## Requirements and local validation
 
-The provider requires Windows 8 or later (`userenv.CreateAppContainerProfile`). It is designed to run without
-administrator privileges; an administrator may need to install Python machine-wide or grant the runtime
-capability access once. The reproducible local validation setup uses Linux, Docker or Podman, `/dev/kvm`, about
-40 GB of disk, 4 GB RAM, and around 30 minutes for the first Windows 11 Pro VM installation.
+The provider requires Windows 8 or later (`userenv.CreateAppContainerProfile`) and targets a Windows host. This
+repository does not provide a Docker, Podman, or Kubernetes deployment for this provider; the local Linux VM
+workflow below uses Docker or Podman only to run the Windows VM.
+
+Normal use does not require an administrator account. The Windows account running the sandbox needs:
+
+- Read and execute access to the Python interpreter, its standard library, and the virtual environment.
+- Permission to change the DACL on paths that the provider must expose or mask for a run. A user normally has
+  this permission on paths they own; protected paths owned by another account may require an administrator to
+  adjust their ACLs.
+- Write access to its `%LOCALAPPDATA%\pysandboxes\appcontainer` state directory, created by the provider.
+
+The provider changes DACLs only; it does not require SACL privileges. It creates temporary per-run grants on
+exposed paths and removes them when the run ends. For Python runtime paths, it grants read and execute access to
+the `pysandboxesRuntime` capability SID and caches that grant. If the account cannot change the runtime DACL,
+an administrator must apply the one-time grant shown by the error message. Machine-wide Python installation is
+optional; the local VM uses it for reproducibility and copies the runtime into the standard user's profile.
+
+Windows network enforcement has narrower rights and features than the Linux providers. With no allowed `net=`
+rule, AppContainer blocks outbound network access. An allowed rule selects broad public Internet or private
+network capability. Host, port, and protocol checks remain in the Python guard and can be bypassed by native
+code; AppContainer itself also blocks loopback. This provider does not offer OS-level per-host or per-port
+filtering for standard users.
+
+The reproducible local validation setup uses Linux, Docker or Podman, `/dev/kvm`, about 40 GB of disk, 4 GB RAM,
+and around 30 minutes for the first Windows 11 Pro VM installation.
 
 The Makefile workflow is:
 
