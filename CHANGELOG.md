@@ -27,6 +27,7 @@ the Python layer with `subprocess`; kernel-backed providers are Linux technologi
 - Add the macOS Seatbelt `sandbox-exec` provider, with documented host-filtering and DNS limitations.
 
 ### Changed
+- A profile generated on macOS names `sandbox-exec` when it is available, instead of `subprocess`.
 - A device, a FIFO or a socket is exposed as the file itself, and `/dev/null`, `/dev/zero`, `/dev/urandom` and
   `/dev/random` need no rule: `landlock` and `firejail` no longer open the whole `/dev`, and learning no longer writes
   `expose-rw=/dev`.
