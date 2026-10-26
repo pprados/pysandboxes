@@ -438,6 +438,11 @@ class FireJailSSEDaemon(BaseSubProcessDaemon):
                 else:
                     args.append(f"--read-write={rule.path}")
 
+        # A --whitelist on a device rebuilds /dev from the listed files alone: multiprocessing loses its semaphores.
+        if any(r.path.startswith("/dev/") for r in all_rules.file_rules if isinstance(r, FSExposeRule)):
+            if os.path.isdir("/dev/shm"):
+                args.extend(["--whitelist=/dev/shm", "--read-write=/dev/shm"])
+
         # Add pipe_path rule
         # with --private-tmp, need more parameters
         if pipe_path:

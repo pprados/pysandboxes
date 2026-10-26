@@ -36,7 +36,7 @@ from aiohttp import ClientConnectorError, ClientOSError, ClientTimeout, ServerDi
 
 from ..all_rules import AllRules
 from ..e import SandBoxError
-from ..guard_files import FSExposeRule, IgnoreRule
+from ..guard_files import FSExposeRule, IgnoreRule, is_special_file
 from ..immutable_dict import ImmutableDict
 from ..main_logger import ErrorMsg
 from ..netfilter import rule_to_netfilter
@@ -553,12 +553,13 @@ class BWrapSSEDaemon(BaseSubProcessDaemon):
                     args.extend(["--ro-bind", sp, sp])
 
         # File rules: apply expose-ro first, then expose-rw so writable mounts override
+        # A device bound with --bind or --ro-bind is nodev: opening it fails with EACCES, so it needs --dev-bind.
         for rule in all_rules.file_rules:
             if isinstance(rule, FSExposeRule) and not rule.write:
-                args.extend(["--ro-bind", rule.path, rule.path])
+                args.extend([("--dev-bind" if is_special_file(Path(rule.path)) else "--ro-bind"), rule.path, rule.path])
         for rule in all_rules.file_rules:
             if isinstance(rule, FSExposeRule) and rule.write:
-                args.extend(["--bind", rule.path, rule.path])
+                args.extend([("--dev-bind" if is_special_file(Path(rule.path)) else "--bind"), rule.path, rule.path])
 
         # Temp dir so child can read the config pipe
         temp_str = str(temp)

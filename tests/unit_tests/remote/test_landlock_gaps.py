@@ -333,6 +333,22 @@ class TestProviderActivation:
             grant = recorder.adds()[opened.index(directory)][2]._obj.allowed_access
             assert grant == ll.ACCESS_RO & recorder.attr("create").handled_access_fs
 
+    def test_a_rule_on_a_device_gets_only_the_file_rights(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """The kernel refuses a directory right on a single file (EINVAL): a device rule is masked down."""
+        recorder = _Recorder(monkeypatch, abi=4)
+
+        ll._apply_landlock([("/dev/null", True), ("/dev/urandom", False)])
+
+        opened = [path.decode() for path in recorder.opened]
+        handled = recorder.attr("create").handled_access_fs
+        adds = recorder.adds()
+        assert adds[opened.index("/dev/null")][2]._obj.allowed_access == ll.ACCESS_FILE & handled
+        assert (
+            adds[opened.index("/dev/urandom")][2]._obj.allowed_access
+            == (ll.LANDLOCK_ACCESS_FS_EXECUTE | ll.LANDLOCK_ACCESS_FS_READ_FILE) & handled
+        )
+        assert ll.ACCESS_FILE & ll.LANDLOCK_ACCESS_FS_READ_DIR == 0
+
     def test_a_relative_path_is_anchored_at_the_current_directory_whatever_its_first_character(
         self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
     ) -> None:
@@ -400,7 +416,8 @@ class TestCollectPaths:
 
         assert paths["/usr"] == "ro"
         assert paths["/etc"] == "ro"
-        assert paths["/dev"] == "rw"
+        assert "/dev" not in paths
+        assert paths["/dev/shm"] == "rw"
         assert paths[str(tmp_path / "temp")] == "rw"
         assert paths[os.path.dirname(os.path.realpath(sys.executable))] in ("ro", "rw")
 

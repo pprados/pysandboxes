@@ -66,8 +66,8 @@ include "/etc/py-sandboxes/global-py-sandboxes.profile"  # For all the node
 #
 # Rules:
 # - ignore=<glob pattern>   Block access to files matching glob pattern
-# - expose-rw=<source>      Expose host directory (read-write)
-# - expose-ro=<source>      Expose host directory (read-only)
+# - expose-rw=<source>      Expose host directory, device, FIFO or socket (read-write)
+# - expose-ro=<source>      Expose host directory, device, FIFO or socket (read-only)
 #
 # Security guidelines:
 # - Always use most restrictive access possible (prefer expose-ro over expose-rw)

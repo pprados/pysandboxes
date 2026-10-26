@@ -255,6 +255,20 @@ class TestExposedPaths:
         assert "--read-only=/srv/data/" in args
         assert "--read-write=/srv/data/" not in args
 
+    @pytest.mark.skipif(not Path("/dev/shm").is_dir(), reason="no /dev/shm on this host")
+    def test_a_device_is_whitelisted_as_a_file_and_dev_shm_stays(self, tmp_path: Path) -> None:
+        """--whitelist rebuilds /dev from the listed files: without /dev/shm multiprocessing has no semaphore."""
+        args = _args(tmp_path, self._rules(FSExposeRule("/dev/null", True, _CONFIG)))
+
+        assert "--whitelist=/dev/null" in args
+        assert "--read-write=/dev/null" in args
+        assert "--whitelist=/dev/shm" in args
+
+    def test_without_a_device_rule_dev_is_left_alone(self, tmp_path: Path) -> None:
+        args = _args(tmp_path, self._rules(FSExposeRule("/srv/data/", False, _CONFIG)))
+
+        assert "--whitelist=/dev/shm" not in args
+
     def test_a_writable_path_is_read_write(self, tmp_path: Path) -> None:
         args = _args(tmp_path, self._rules(FSExposeRule("/srv/data/", True, _CONFIG)))
 

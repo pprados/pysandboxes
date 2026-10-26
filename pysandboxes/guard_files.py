@@ -243,6 +243,31 @@ _CA_STORES = (
     "/usr/share/pki/",
 )
 
+# Devices every program needs, exposed as the files they are: granting their directory, /dev, would open every disk,
+# terminal and input device of the host. `(path, write)`; a device missing on the host adds nothing.
+SAFE_DEVICES: tuple[tuple[str, bool], ...] = (
+    ("/dev/null", True),
+    ("/dev/zero", False),
+    ("/dev/urandom", False),
+    ("/dev/random", False),
+)
+
+
+def is_special_file(path: Path) -> bool:
+    """Tell whether ``path`` is a device, a FIFO or a socket: a file a rule names itself, not through its directory."""
+    try:
+        mode = path.stat().st_mode
+    except OSError:
+        return False
+    return stat.S_ISCHR(mode) or stat.S_ISBLK(mode) or stat.S_ISFIFO(mode) or stat.S_ISSOCK(mode)
+
+
+def _rule_covers(rule_path: str, canon_path: str) -> bool:
+    """Tell whether an expose rule covers ``canon_path``: a directory rule its tree, a file rule that file only."""
+    if not rule_path or rule_path.endswith(("/", os.sep)):
+        return canon_path.startswith(rule_path) or canon_path == rule_path[:-1]
+    return canon_path.rstrip("/" + os.sep) == rule_path
+
 
 def parse_rules(
     config: ConfigLines,
@@ -310,7 +335,7 @@ def parse_rules(
                     )
                 )
                 continue
-            if not resolved.is_dir():
+            if not resolved.is_dir() and not is_special_file(resolved):
                 errors.append(
                     (
                         f"{format_ruleref(rule)}: " f"In {rule.rule!r}, path must be a directory.",
@@ -320,7 +345,7 @@ def parse_rules(
                 )
                 continue
             is_write = rule.rule.startswith("expose-rw=")
-            path_str = _dir_path(str(resolved))
+            path_str = str(resolved) if is_special_file(resolved) else _dir_path(str(resolved))
             for expose_rule in rules_expose:
                 if expose_rule.path == path_str:
                     if expose_rule.write != is_write:
@@ -387,6 +412,11 @@ def parse_rules(
         if Path(store).is_dir():
             rules_expose.append(
                 FSExposeRule(path=store, write=False, config=ConfigLine("<ca-certificates>", Path(), 0))
+            )
+    for device, writable in SAFE_DEVICES:
+        if is_special_file(Path(device)) and not any(r.path == device for r in rules_expose):
+            rules_expose.append(
+                FSExposeRule(path=device, write=writable, config=ConfigLine("<safe-devices>", Path(), 0))
             )
     rules_expose = sorted(rules_expose, key=lambda r: len(r.path), reverse=True)
     return tuple(rules_ignore + cast(list[FilesRule], rules_expose)), ignore_rules
@@ -505,6 +535,7 @@ def generate_rules(
     global _special_env, _special_home
     learn = learn.copy()
     parent_level: dict[Path, bool] = {}
+    learned_special: set[Path] = set()
     list_bin = list(follow_links_executable(Path(sys.executable), set()))
     for learn_rule in filter(lambda x: isinstance(x, LearnFileRule), learn):
         parent = learn_rule.path.absolute()
@@ -517,7 +548,11 @@ def generate_rules(
                 break
         else:
             # logger.debug("Generate rule for %s", learn_rule.path)
-            if not parent.is_dir():
+            if is_special_file(parent):
+                if any(str(parent) == device for device, _ in SAFE_DEVICES):
+                    continue
+                learned_special.add(parent)
+            elif not parent.is_dir():
                 parent = parent.parent
             if not parent_level.get(parent, False) and learn_rule.write:
                 parent_level[parent] = True
@@ -536,7 +571,7 @@ def generate_rules(
             # path, before any `${special-var}` substitution below adds its own `$`.
             logger.warning("Skip learned file rule with a path that cannot be safely re-encoded: %r", str(path))
             continue
-        if path.exists() and (path.is_file() or path.is_dir()) and os.access(path, os.R_OK):
+        if path.exists() and (path.is_file() or path.is_dir() or path in learned_special) and os.access(path, os.R_OK):
             write = parent_level[path]
             value = None
             overflow = False
@@ -631,7 +666,7 @@ def _apply_src_to_dest_rules(
         if isinstance(rule, FSExposeRule):
             assert rule.path is not None
             rp = rule.path
-            if real_path.startswith(rp) or real_path == rp[:-1]:
+            if _rule_covers(rp, real_path):
                 return real_path, None
         elif isinstance(rule, IgnoreRule):
             if _ignore_matches(original_path, rule.source) or _ignore_matches(real_path, rule.source):
@@ -648,7 +683,7 @@ def _matching_expose_root(canon_path: str) -> str | None:
     for rule in _rules:
         if isinstance(rule, FSExposeRule) and rule.path is not None:
             rp = rule.path
-            if canon_path.startswith(rp) or canon_path == rp[:-1]:
+            if _rule_covers(rp, canon_path):
                 return rp
     return None
 
@@ -703,7 +738,7 @@ def _apply_dest_to_src_rules(
     for rule in _rules:
         if isinstance(rule, FSExposeRule):
             rp = rule.path
-            if canon_path.startswith(rp) or canon_path == rp[:-1]:
+            if _rule_covers(rp, canon_path):
                 if not rule.write and write:
                     if is_learning_mode():
                         add_learning_rule(LearnFileRule(Path(str(path)), True))

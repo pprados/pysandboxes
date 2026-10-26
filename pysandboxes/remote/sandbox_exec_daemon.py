@@ -31,7 +31,6 @@ _SYSTEM_READ_PATHS = (
     "/Library/Apple",
     "/private/etc",
     "/private/var/db/timezone",
-    "/dev",
 )
 _MAX_PROFILE_PORTS = 4096
 # The unix socket of the system resolver: getaddrinfo asks mDNSResponder, it does not query UDP port 53 itself.

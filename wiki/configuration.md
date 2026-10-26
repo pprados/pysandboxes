@@ -44,7 +44,8 @@ python-sb --pysandboxes-config=cfg/my-app.py-sandboxes --learn -m ...
 ### Review the learned rules before trusting them
 
 Learning mode groups file accesses by directory rather than by file: reading one file directly under a
-directory grants `expose-ro=` (or `expose-rw=`) on that whole directory, not only on the file that was read.
+directory grants `expose-ro=` (or `expose-rw=`) on that whole directory, not only on the file that was read. A device, FIFO or socket is the exception: it is exposed
+as the file itself, and `/dev/null`, `/dev/zero`, `/dev/urandom` and `/dev/random` need no rule at all.
 For a script launched from a project's root directory, a single relative `open("config.json")` can expose
 the entire project tree, including files the program never touched. This is not narrowed to the individual
 file (the rule syntax accepts a file path as well as a directory): the harness itself has to read the script

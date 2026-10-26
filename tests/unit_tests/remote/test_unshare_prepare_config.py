@@ -214,6 +214,11 @@ class TestMounts:
         assert config.mounts_rw == [(pipe, pipe)]
         assert (pipe, pipe) not in config.mounts_ro
 
+    def test_a_device_rule_is_left_to_the_tmpfs_dev_the_setup_builds(self, tmp_path: Path) -> None:
+        config, _ = _prepare(_rules(files=("expose-ro=/dev/full",)), tmp_path)
+
+        assert not [mount for mount in config.mounts_rw + config.mounts_ro if mount[0].startswith("/dev/")]
+
     def test_the_interpreter_and_its_search_path_are_mounted(self, tmp_path: Path) -> None:
         config, _ = _prepare(_rules(), tmp_path)
 

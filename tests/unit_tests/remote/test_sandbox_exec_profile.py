@@ -68,6 +68,21 @@ def test_profile_denies_by_default_and_quotes_read_write_paths(tmp_path: Path) -
     assert f'(allow file-map-executable (subpath "{exposed}")' not in profile
 
 
+def test_the_dev_directory_is_not_granted_only_the_devices_named_by_a_rule(tmp_path: Path) -> None:
+    profile = _profile(
+        tmp_path,
+        files=(
+            FSExposeRule("/dev/null", True, _line("<safe-devices>")),
+            FSExposeRule("/dev/urandom", False, _line("<safe-devices>")),
+        ),
+    )
+
+    assert '(subpath "/dev")' not in profile
+    assert '(allow file-write* (subpath "/dev/null")' in profile
+    assert '(allow file-read* (subpath "/dev/urandom")' in profile
+    assert '(allow file-write* (subpath "/dev/urandom")' not in profile
+
+
 def test_python_symlink_target_directories_are_available_to_seatbelt(tmp_path: Path) -> None:
     python_install = tmp_path / "python-install"
     python_bin = python_install / "bin"

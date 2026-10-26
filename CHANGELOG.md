@@ -27,6 +27,9 @@ the Python layer with `subprocess`; kernel-backed providers are Linux technologi
 - Add the macOS Seatbelt `sandbox-exec` provider, with documented host-filtering and DNS limitations.
 
 ### Changed
+- A device, a FIFO or a socket is exposed as the file itself, and `/dev/null`, `/dev/zero`, `/dev/urandom` and
+  `/dev/random` need no rule: `landlock` and `firejail` no longer open the whole `/dev`, and learning no longer writes
+  `expose-rw=/dev`.
 - `landlock` gives the sandbox a temporary directory of its own, removed when the daemon stops, instead of the host's
   whole `/tmp`: `tempfile` works as before, but a hard-coded `/tmp/...` path is now refused.
 

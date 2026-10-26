@@ -88,6 +88,13 @@ HANDLED_ACCESS_FS = (
 
 # Read-only: execute, read files, list directory.
 ACCESS_RO = LANDLOCK_ACCESS_FS_EXECUTE | LANDLOCK_ACCESS_FS_READ_FILE | LANDLOCK_ACCESS_FS_READ_DIR
+# What a rule on a single file accepts: the kernel refuses a directory right (EINVAL) there.
+ACCESS_FILE = (
+    LANDLOCK_ACCESS_FS_EXECUTE
+    | LANDLOCK_ACCESS_FS_READ_FILE
+    | LANDLOCK_ACCESS_FS_WRITE_FILE
+    | LANDLOCK_ACCESS_FS_TRUNCATE
+)
 # Read-write: ACCESS_RO plus full directory semantics (create/remove/link/rename/truncate).
 # Includes all MAKE_* so writable dirs can have subdirs, regular files, symlinks, sockets, FIFOs.
 # REFER is required for rename/link across dirs. TRUNCATE is required for open(O_TRUNC)/creat/ftruncate.
@@ -309,6 +316,8 @@ def _apply_landlock(
             elif not os.path.isabs(path):
                 path = os.path.abspath(path)
             allowed = (ACCESS_RW if write else ACCESS_RO) & handled_fs
+            if os.path.exists(path) and not os.path.isdir(path):
+                allowed &= ACCESS_FILE
             parent_fd = libc.open(path.encode("utf-8"), O_PATH)
             if parent_fd < 0:
                 errno = ctypes.get_errno()
@@ -401,9 +410,9 @@ def _collect_landlock_paths(all_rules: AllRules, temp: Path, cwd: str) -> list[t
     for p in ["/bin", "/usr", "/lib", "/lib64", "/etc"]:
         if os.path.exists(p):
             add(p, "ro")
-    # /dev (e.g. /dev/shm for multiprocessing semaphores) - read-write for runtime
-    if os.path.exists("/dev"):
-        add("/dev", "rw")
+    # /dev/shm holds the multiprocessing semaphores; the devices come as file rules (guard_files.SAFE_DEVICES).
+    if os.path.exists("/dev/shm"):
+        add("/dev/shm", "rw")
 
     # Python interpreter and library paths
     add(os.path.dirname(os.path.realpath(sys.executable)), "ro")

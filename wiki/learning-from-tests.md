@@ -47,7 +47,7 @@ host; inspect where the sandboxed code uses it before classifying it.
 Some tests can feed the rules, never the whole suite, for three reasons:
 - Running the test runner itself in the sandbox (`python-sb --learn -m pytest`) learns the runner. A test needing
   only `csv` added `_pytest`, `pluggy`, every installed pytest plugin, `subprocess`, `pdb`, `marshal`,
-  `expose-rw=${TMPDIR:-/tmp}`, `expose-rw=/dev`, the `PYTEST_*` variables and
+  `expose-rw=${TMPDIR:-/tmp}`, the `PYTEST_*` variables and
   `python-api=ALLOW:faulthandler.enable` to the profile.
 - Learning never refuses, it records. A test written to provoke a refusal fails with `DID NOT RAISE`, and adds to
   the profile the very rule it was written to forbid, such as an `expose-ro` on the directory it tried to read.

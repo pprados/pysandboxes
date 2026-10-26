@@ -340,6 +340,8 @@ class UnshareSSEDaemon(BaseSubProcessDaemon):
 
         for rule in all_rules.file_rules:
             if isinstance(rule, FSExposeRule):
+                if rule.path.startswith("/dev/"):
+                    continue  # unshare_setup mounts its own tmpfs over /dev, which hides a mount made here
                 mounts.add((rule.path, rule.path, rule.write))
             elif isinstance(rule, IgnoreRule):
                 pass  # Handled via ignore_paths overlay in unshare_setup

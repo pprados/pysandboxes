@@ -114,6 +114,18 @@ class TestBwrapArgs:
         for path in bound:
             assert (str(path), str(path)) in binds
 
+    def test_a_device_is_bound_with_dev_bind_because_a_plain_bind_is_nodev(self, tmp_path: Path) -> None:
+        rules = EmptyRules._replace(
+            file_rules=(FSExposeRule("/dev/null", True, _CONFIG), FSExposeRule("/dev/urandom", False, _CONFIG))
+        )
+
+        args = _args(tmp_path, rules)
+
+        assert ("/dev/null", "/dev/null") in _triples(args, "--dev-bind")
+        assert ("/dev/urandom", "/dev/urandom") in _triples(args, "--dev-bind")
+        assert ("/dev/null", "/dev/null") not in _triples(args, "--bind")
+        assert ("/dev/urandom", "/dev/urandom") not in _triples(args, "--ro-bind")
+
     def test_exposed_paths_are_bound_read_only_or_writable_and_the_temp_dir_is_writable(self, tmp_path: Path) -> None:
         read_only, writable = tmp_path / "ro", tmp_path / "rw"
         rules = EmptyRules._replace(
