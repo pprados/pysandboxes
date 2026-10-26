@@ -195,6 +195,15 @@ class TestFileRulesMounts:
         ]
         assert [t for t, _ in mounts] == [t for t, _, _ in specs]
 
+    def test_a_device_rule_is_not_shared_the_guest_has_its_own_dev(self, tmp_path: Path) -> None:
+        (tmp_path / "a").mkdir()
+
+        specs, _ = self._mounts(tmp_path, [_expose("/dev/null"), _expose(tmp_path / "a")])
+
+        assert [str(h) for t, h, _ in specs if t.startswith("pysb_") and t[5:].isdigit()] == [
+            str((tmp_path / "a").resolve())
+        ]
+
     def test_the_number_is_the_position_of_the_rule_not_of_the_mount(self, tmp_path: Path) -> None:
         from pysandboxes.guard_files import IgnoreRule
 

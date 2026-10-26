@@ -28,7 +28,7 @@ from typing import Any, Callable, Mapping
 from ..all_rules import AllRules
 from ..config import DEBUG
 from ..e import SandBoxError
-from ..guard_files import _CA_STORES, FSExposeRule
+from ..guard_files import _CA_STORES, FSExposeRule, is_special_file
 from ..immutable_dict import ImmutableDict
 from ..main_logger import ErrorMsg
 from ..netfilter import rule_to_netfilter
@@ -882,6 +882,8 @@ def _file_rules_mounts(
         if not isinstance(rule, FSExposeRule):
             continue
         host_path = Path(rule.path.rstrip("/")).resolve()
+        if is_special_file(host_path):
+            continue  # 9p shares a directory, and the guest has a /dev of its own
         if host_path.is_file():
             host_path = host_path.parent
         if not host_path.exists():
