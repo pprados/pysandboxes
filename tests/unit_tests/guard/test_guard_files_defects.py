@@ -275,8 +275,9 @@ def test_a_relative_path_in_an_exposed_directory_opens_without_exposing_the_work
         _arm(tree)
         with open("ro/file.txt") as f:
             assert f.read() == "ro"
+        assert os.getcwd() == os.path.realpath(tree)
         with pytest.raises(RuleFileNotFoundError):
-            os.getcwd()
+            open(tree / "out" / "secret.txt")
     finally:
         _deactivate_all_rules()
         os.chdir(previous)

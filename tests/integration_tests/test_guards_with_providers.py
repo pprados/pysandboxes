@@ -233,34 +233,43 @@ def test_a_listed_import_is_accepted_under_every_backend(os_sandbox: str, tmp_pa
 
 
 @pytest.mark.parametrize("os_sandbox", os_sandbox_params())
-def test_realpath_of_an_exposed_file_works_with_an_unexposed_working_directory(
+def test_getcwd_and_getcwdb_report_hidden_directory_without_file_access(
     os_sandbox: str, tmp_path: Path, tmp_path_factory: pytest.TempPathFactory
 ) -> None:
-    """``os.path.realpath`` resolves an exposed file when no rule exposes the working directory.
-
-    Before Python 3.13, ``ntpath.realpath`` asks ``os.getcwd()`` even for an absolute path, and the
-    guard refuses a working directory it does not expose: the guard lets that one answer through
-    while ``realpath`` runs. ``os.getcwd()`` called by the program stays refused, which is also what
-    proves the working directory is hidden and the call above did not pass for want of a rule.
-    """
+    """Both cwd APIs report the hidden directory without granting file access."""
     _skip_unavailable(os_sandbox)
     hidden = tmp_path_factory.mktemp("hidden-cwd")
+    (hidden / "secret.txt").write_text("secret")
     target = tmp_path / "script.py"
     script = (
         "import os\n"
         "import pysandboxes\n"
         "print('PKG', pysandboxes.__file__)\n"
+        "cwd = os.getcwd()\n"
+        "print('CWD', cwd)\n"
+        "cwd_bytes = os.getcwdb()\n"
+        "print('CWDB_MATCH', cwd_bytes == os.fsencode(cwd))\n"
         "try:\n"
-        "    os.getcwd()\n"
-        "    print('GETCWD allowed')\n"
+        "    with open(os.path.join(cwd, 'secret.txt')) as file:\n"
+        "        file.read()\n"
+        "    print('READ allowed')\n"
         "except BaseException as err:\n"
-        "    print('GETCWD', type(err).__name__)\n"
+        "    print('READ', type(err).__name__)\n"
+        "try:\n"
+        "    with open(os.path.join(cwd, 'created.txt'), 'w'):\n"
+        "        pass\n"
+        "    print('WRITE allowed')\n"
+        "except BaseException as err:\n"
+        "    print('WRITE', type(err).__name__)\n"
         f"print('REAL', os.path.realpath({str(target)!r}))\n"
     )
     done = _run(os_sandbox, "python-import=*\n", script, tmp_path, cwd=hidden)
     assert done.returncode == 0, done.stderr
     assert f"PKG {ROOT_DIR}" in done.stdout, done.stdout
-    assert "GETCWD RuleFileNotFoundError" in done.stdout, done.stdout
+    assert f"CWD {hidden}" in done.stdout, done.stdout
+    assert "CWDB_MATCH True" in done.stdout, done.stdout
+    assert "READ RuleFileNotFoundError" in done.stdout, done.stdout
+    assert "WRITE RuleFileNotFoundError" in done.stdout, done.stdout
     assert f"REAL {os.path.realpath(target)}" in done.stdout, done.stdout
 
 

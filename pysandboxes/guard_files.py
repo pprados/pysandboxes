@@ -1407,11 +1407,8 @@ def _wrap_os_getcwd(func: Callable[..., Any]) -> Callable[..., Any]:
 
         remapped, rule = _apply_src_to_dest_rules(new_dir)
         if remapped is None:
-            if is_learning_mode():
-                # add_learning_rule(LearnFileRule(Path(new_dir), False))
-                remapped = new_dir
-            else:
-                _raise_access(new_dir)
+            # Reporting the current path does not grant access to its contents.
+            remapped = new_dir
 
         if remapped.endswith(os.path.sep + "."):
             remapped = remapped[:-2]
@@ -1443,11 +1440,8 @@ def _wrap_os_getcwdb(func: Callable[..., Any]) -> Callable[..., Any]:
 
         remapped, rule = _apply_src_to_dest_rules(new_dir)
         if remapped is None:
-            if is_learning_mode():
-                # add_learning_rule(LearnFileRule(Path(new_dir), False))
-                remapped = new_dir
-            else:
-                _raise_access(new_dir)
+            # Reporting the current path does not grant access to its contents.
+            remapped = new_dir
         if remapped.endswith(os.path.sep + "."):
             remapped = remapped[:-2]
         if remapped.endswith(os.path.sep):

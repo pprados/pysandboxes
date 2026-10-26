@@ -433,13 +433,15 @@ def test_wrap_os_access_forwards_the_real_check_during_learning(tmp_path: Path) 
 # %% _wrap_os_getcwd / _wrap_os_getcwdb
 
 
-def test_wrap_os_getcwd_denies_a_directory_hidden_by_an_ignore_rule(tmp_path: Path) -> None:
+def test_wrap_os_getcwd_reports_a_directory_hidden_by_an_ignore_rule_without_opening_it(tmp_path: Path) -> None:
+    """The name of the working directory is reported; what it holds stays hidden."""
+    (tmp_path / "secret.txt").write_text("secret")
     activate_guard_files_rules([ConfigLine(f"ignore={tmp_path}{os.sep}", Path(), 0)])
     wrapped = _wrap_os_getcwd(lambda: str(tmp_path))
 
+    assert wrapped() == str(tmp_path)
     with pytest.raises(RuleFileNotFoundError) as exc:
-        wrapped()
-
+        open(tmp_path / "secret.txt")
     assert sandbox_denials(exc.value)
 
 
@@ -456,13 +458,14 @@ def test_wrap_os_getcwd_learns_a_directory_hidden_by_an_ignore_rule(tmp_path: Pa
     assert result == str(tmp_path)
 
 
-def test_wrap_os_getcwdb_denies_a_directory_hidden_by_an_ignore_rule(tmp_path: Path) -> None:
+def test_wrap_os_getcwdb_reports_a_directory_hidden_by_an_ignore_rule_without_opening_it(tmp_path: Path) -> None:
+    (tmp_path / "secret.txt").write_text("secret")
     activate_guard_files_rules([ConfigLine(f"ignore={tmp_path}{os.sep}", Path(), 0)])
     wrapped = _wrap_os_getcwdb(lambda: str(tmp_path).encode())
 
+    assert wrapped() == str(tmp_path).encode()
     with pytest.raises(RuleFileNotFoundError) as exc:
-        wrapped()
-
+        open(tmp_path / "secret.txt")
     assert sandbox_denials(exc.value)
 
 
@@ -1452,7 +1455,7 @@ def test_wrap_os_getcwd_keeps_the_root_separator() -> None:
 
 
 def test_wrap_os_path_realpath_lets_the_standard_library_ask_for_the_working_directory(tmp_path: Path) -> None:
-    """``ntpath.realpath`` asks for the working directory before Python 3.13, which no rule exposes."""
+    """``ntpath.realpath`` asks for the working directory before Python 3.13, which no rule exposes: it is reported."""
     activate_guard_files_rules([ConfigLine(f"ignore={tmp_path}{os.sep}", Path(), 0)])
     getcwd = _wrap_os_getcwd(lambda: str(tmp_path))
     asked: list[str] = []
@@ -1463,8 +1466,7 @@ def test_wrap_os_path_realpath_lets_the_standard_library_ask_for_the_working_dir
 
     assert _wrap_os_path_realpath(realpath)("x") == "x"
     assert asked == [str(tmp_path)]
-    with pytest.raises(RuleFileNotFoundError):
-        getcwd()
+    assert getcwd() == str(tmp_path)
 
 
 # %% _link_target -- Windows extended-length prefix
