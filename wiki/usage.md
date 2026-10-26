@@ -1,6 +1,6 @@
 # Usage: complete mode and partial mode
 
-See the [README](../README.md) for a quick start. This page documents the two usage modes.
+https://github.com/user-attachments/assets/3700b690-0e86-408e-a3e7-e299268bfc25
 
 The public API is four things:
 

@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/usr/bin/env -S uvx python-sb
 # Copyright (c) 2026, Carbon-It, Philippe Prados (pprados)
 # License: Apache V2
 """List the rules a diff adds to or removes from the .py-sandboxes files, riskiest first.

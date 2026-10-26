@@ -1,8 +1,5 @@
 # PY-SANDBOXES
-
-
 https://github.com/user-attachments/assets/3700b690-0e86-408e-a3e7-e299268bfc25
-
 
 [![PyPI version](https://img.shields.io/pypi/v/pysandboxes.svg)](https://pypi.org/project/pysandboxes/)
 [![Python versions](https://img.shields.io/badge/python-3.11%2B-blue.svg)](https://pypi.org/project/pysandboxes/)
