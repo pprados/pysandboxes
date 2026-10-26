@@ -10,6 +10,7 @@ import os
 import stat
 import sys
 from pathlib import Path
+from unittest.mock import patch
 
 import pytest
 
@@ -115,10 +116,17 @@ def test_a_file_rule_covers_that_file_and_not_a_name_it_prefixes(tmp_path: Path)
         _deactivate_all_rules()
 
 
-def test_a_learned_device_yields_a_file_rule_not_its_directory() -> None:
-    learned = {guard_files.LearnFileRule(Path("/dev/full"), False)}
+def test_a_learned_special_file_yields_a_file_rule_not_its_directory(tmp_path: Path) -> None:
+    fifo = tmp_path / "pipe"
+    os.mkfifo(fifo)
 
-    assert generate_rules(learned) == ["expose-ro=/dev/full"]
+    with (
+        patch.dict("pysandboxes.guard_files._special_env", {}, clear=True),
+        patch.dict("pysandboxes.guard_files._special_home", {}, clear=True),
+    ):
+        rules = generate_rules({guard_files.LearnFileRule(fifo, False)})
+
+    assert rules == [f"expose-ro={fifo}"]
 
 
 def test_a_learned_safe_device_yields_no_rule() -> None:
