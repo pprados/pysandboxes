@@ -407,6 +407,28 @@ def test_a_sync_start_that_timed_out_is_cancelled_and_never_counted(monkeypatch:
     assert _os_sandbox._startup_counter == 0
 
 
+def test_a_generated_profile_names_sandbox_exec_on_macos_when_available(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(_os_sandbox.sys, "platform", "darwin")
+    monkeypatch.setattr(
+        _os_sandbox.providers_factory["sandbox-exec"], "unavailable_reason", classmethod(lambda cls: None)
+    )
+
+    assert _os_sandbox.default_os_sandbox() == "sandbox-exec"
+
+
+def test_a_generated_profile_names_subprocess_on_macos_when_sandbox_exec_is_unavailable(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(_os_sandbox.sys, "platform", "darwin")
+    monkeypatch.setattr(
+        _os_sandbox.providers_factory["sandbox-exec"],
+        "unavailable_reason",
+        classmethod(lambda cls: "/usr/bin/sandbox-exec is missing or not executable"),
+    )
+
+    assert _os_sandbox.default_os_sandbox() == "subprocess"
+
+
 def test_a_generated_profile_names_landlock_when_available(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(_os_sandbox, "unsupported_platform_reason", lambda name: None)
     monkeypatch.setattr(_os_sandbox.providers_factory["landlock"], "unavailable_reason", classmethod(lambda cls: None))

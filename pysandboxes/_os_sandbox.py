@@ -134,10 +134,14 @@ DEFAULT_OS_SANDBOX_MARK = "@DEFAULT_OS_SANDBOX@"
 def default_os_sandbox() -> str:
     """Return the provider a newly generated profile names.
 
-    ``landlock`` on Linux when the kernel supports it: no extra binary is needed. ``subprocess``,
-    which adds no OS boundary, everywhere else, with a warning when Linux lacks Landlock. The name is
-    written in the profile, so a later run never downgrades it.
+    ``landlock`` on Linux when the kernel supports it: no extra binary is needed. On macOS,
+    ``sandbox-exec`` is used when its executable is available. ``subprocess``, which adds no OS
+    boundary, is the fallback. The name is written in the profile, so a later run never downgrades it.
     """
+    if sys.platform == "darwin":
+        if providers_factory["sandbox-exec"].unavailable_reason() is None:
+            return "sandbox-exec"
+        return "subprocess"
     if unsupported_platform_reason("landlock") is not None:
         return "subprocess"
     reason = providers_factory["landlock"].unavailable_reason()
