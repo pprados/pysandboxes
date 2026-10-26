@@ -47,7 +47,10 @@ def test_the_twin_rule_reuses_the_os_factory() -> None:
     assert twins, "no twin rule was generated at all"
 
     for key in twins:
-        assert rules[key] is rules[f"os.{key.split('.', 1)[1]}"]
+        name = key.split(".", 1)[1]
+        if not hasattr(os, name):
+            continue  # a call only the twin has, such as nt._getdiskusage: it has no os rule to share
+        assert rules[key] is rules[f"os.{name}"]
 
 
 def test_a_rule_that_os_owns_itself_gets_no_twin() -> None:
