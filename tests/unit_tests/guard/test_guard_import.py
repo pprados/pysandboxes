@@ -537,3 +537,12 @@ def test_ntpath_stays_loaded_for_the_pathlib_of_an_old_python_3_12() -> None:
 
 def test_an_interpreter_without_ntpath_still_activates() -> None:
     assert _activation_probe("sys.modules['ntpath'] = None") == "False"
+
+
+def test_a_module_is_not_judged_while_the_import_guard_is_off(monkeypatch: pytest.MonkeyPatch) -> None:
+    """With ``py-sandbox=false`` no rule is loaded: judging then would refuse every import, ``-m`` included."""
+    monkeypatch.setattr(guard_import, "_activated", False)
+    monkeypatch.setattr(guard_import, "_rules", ())
+
+    guard_import._judge_user_import("tests")
+    guard_import._judge_user_import("tests.integration_tests.tst_file_probe")

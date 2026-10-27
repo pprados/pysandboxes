@@ -23,13 +23,13 @@ import sys
 from contextlib import contextmanager
 from contextvars import ContextVar
 from copy import copy
-from pathlib import Path
 
 # Python 3.10+ only
 from importlib import resources
 from importlib.abc import Loader
 from importlib.machinery import ModuleSpec
 from importlib.metadata import DistributionFinder
+from pathlib import Path
 from types import ModuleType
 from typing import (
     TYPE_CHECKING,
@@ -219,6 +219,8 @@ def _judge_user_import(name: str) -> None:
     Only the kept modules themselves go unjudged: a submodule (``asyncio.subprocess``) is judged on its
     top-level name, as the finder judges it when it is not loaded yet.
     """
+    if not _activated:
+        return
     module_name = name.split(".", 1)[0]
     if name in _KEPT_MODULES or _is_import_allowed(module_name):
         return
