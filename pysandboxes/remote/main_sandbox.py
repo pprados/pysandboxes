@@ -133,7 +133,10 @@ def _debug_log() -> None:
 # %%
 
 
-def run_guest(process_config: DaemonParameters) -> int:
+def run_guest(
+    process_config: DaemonParameters,
+    module_specs: Any = None,
+) -> int:
     """Run inside VM guest: same init as main_sandbox then python_in_sb or run_server.
 
     Used by QEMU guest bootstrap when config is already loaded from the pipe.
@@ -192,7 +195,7 @@ def run_guest(process_config: DaemonParameters) -> int:
             print(PYTHON_OUTPUT_START, flush=True)
             saved_stderr_fd = _redirect_guest_stderr(guest_run_dir)
             try:
-                rc = python_in_sb(all_rules, list(python_main_args))
+                rc = python_in_sb(all_rules, list(python_main_args), module_specs)
             except Exception:
                 # The host reads the guest's stderr from the shared run dir, and only
                 # until the interpreter exits. An exception raised here is printed by
@@ -486,8 +489,16 @@ def main() -> int:
         # sentinels from it, and its own stdlib imports (abc, re, time, ...) would be
         # charged to the user's rules just the same -- a profile naming its modules one
         # by one, as a learned one does, then dies on the harness's imports.
-        import pysandboxes.remote.python_in_sb  # noqa: F401
+        import pysandboxes.remote.python_in_sb as python_in_sb_module
+
         import pysandboxes.remote.qemu_guest_console_io  # noqa: F401
+
+        module_args = sandboxes_args if sandboxes_parsed._python_sb else list(python_main_args)
+        module_specs = None
+        if len(module_args) > 1 and module_args[0] == "-m":
+            module_specs = python_in_sb_module._find_module_specs(module_args[1])
+    else:
+        module_specs = None
     # The transport pickles an exception together with its tblib traceback, and
     # catch_stdio imports tblib from inside its own except handler. That import
     # belongs to the framework, not to the user: a learned profile can never
@@ -521,13 +532,13 @@ def main() -> int:
     # QEMU/python_sb: config was written by host with python_main_args → run user module in guest
     if python_main_args:
         _qemu_show_boot_console_guest_trace(process_config, "main: entering run_guest")
-        return run_guest(process_config)
+        return run_guest(process_config, module_specs)
 
     # Use python-sb command? (subprocess/firejail path: args from CLI)
     if sandboxes_parsed._python_sb:
         from .python_in_sb import python_in_sb
 
-        return python_in_sb(all_rules, sandboxes_args)
+        return python_in_sb(all_rules, sandboxes_args, module_specs)
 
     # Else _start the server
     _qemu_show_boot_console_guest_trace(process_config, "main: entering asyncio.run(run_server)")

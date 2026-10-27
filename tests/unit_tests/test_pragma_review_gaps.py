@@ -181,7 +181,8 @@ class TestPythonInSbDispatch:
 
         self._run("-m", "json.tool", "a")
 
-        assert [(name, args[1:]) for name, args in calls] == [("_python_module", ("json.tool",))]
+        assert [(name, args[1]) for name, args in calls] == [("_python_module", "json.tool")]
+        assert calls[0][1][2].module.name == "json.tool"
         assert sys.argv[1:] == ["a"] and sys.argv[0].endswith("tool.py")
 
     def test_dash_m_without_a_name_explains_itself(

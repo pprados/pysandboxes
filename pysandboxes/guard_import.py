@@ -23,6 +23,7 @@ import sys
 from contextlib import contextmanager
 from contextvars import ContextVar
 from copy import copy
+from pathlib import Path
 
 # Python 3.10+ only
 from importlib import resources
@@ -45,7 +46,7 @@ from typing import (
 from .e import RuleModuleNotFoundError
 from .guard_wraps import guard_wraps
 from .immutable_dict import ImmutableDict
-from .learning import add_learning_rule, is_learning_mode
+from .learning import LearnFileRule, add_learning_rule, is_learning_mode
 from .main_logger import ErrorMsg
 from .sb_types import ConfigLines
 from .tools import is_in_sandbox
@@ -658,6 +659,13 @@ class GuardFinder(importlib.abc.MetaPathFinder):
             elif is_learning_mode() and is_in_sandbox():
                 if "*" not in _rules and not _is_import_allowed(module_name):
                     add_learning_rule(LearnImportRule(module_name))
+                if module_name != "pysandboxes":
+                    if new_spec.origin and os.path.isabs(new_spec.origin):
+                        add_learning_rule(LearnFileRule(Path(new_spec.origin), False))
+                    elif new_spec.submodule_search_locations:
+                        for location in new_spec.submodule_search_locations:
+                            if os.path.isabs(location):
+                                add_learning_rule(LearnFileRule(Path(location), False))
             elif not _is_import_allowed(module_name):
                 ex = RuleModuleNotFoundError(f"Module named {module_name!r} is not allowed by a rule")
                 try:

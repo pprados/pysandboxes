@@ -12,9 +12,10 @@ import runpy
 import signal
 import sys
 import traceback
+from collections.abc import Sequence
 from pathlib import Path
 from types import FrameType, ModuleType
-from typing import Any, Dict, Iterator, List, Set
+from typing import Any, Dict, Iterator, List, NamedTuple, Set
 
 from pysandboxes.learning import (
     generate_config_from_learning,
@@ -26,10 +27,69 @@ from pysandboxes.learning import (
 from ..all_rules import AllRules
 from ..e import RuleApiPermissionError, SandBoxError
 from ..guard_api import is_allowed
+from ..guard_import import _judge_user_import
 from ..lifecycle import arm
 from ..main_logger import config_log
 
 logger = logging.getLogger(__name__)
+
+
+class _ModuleSpecs(NamedTuple):
+    packages: tuple[importlib.machinery.ModuleSpec, ...]
+    module: importlib.machinery.ModuleSpec | None
+    main: importlib.machinery.ModuleSpec | None
+
+
+def _find_one_module_spec(fullname: str, path: Sequence[str] | None) -> importlib.machinery.ModuleSpec | None:
+    for finder in sys.meta_path:
+        spec = finder.find_spec(fullname, path, None)
+        if spec is not None:
+            return spec
+    return None
+
+
+# `importlib.util.find_spec` imports parents for dotted names; initialize them later, after guards are armed.
+def _find_module_specs(mod_name: str) -> _ModuleSpecs:
+    parts = mod_name.split(".")
+    path: Sequence[str] | None = None
+    spec: importlib.machinery.ModuleSpec | None = None
+    packages: list[importlib.machinery.ModuleSpec] = []
+    for index in range(len(parts)):
+        fullname = ".".join(parts[: index + 1])
+        spec = _find_one_module_spec(fullname, path)
+        if spec is None:
+            return _ModuleSpecs(tuple(packages), None, None)
+        if index < len(parts) - 1:
+            path = spec.submodule_search_locations
+            if path is None:
+                return _ModuleSpecs(tuple(packages), None, None)
+            packages.append(spec)
+
+    main_spec = None
+    if spec is not None and spec.submodule_search_locations is not None:
+        packages.append(spec)
+        main_spec = _find_one_module_spec(f"{mod_name}.__main__", spec.submodule_search_locations)
+    return _ModuleSpecs(tuple(packages), spec, main_spec)
+
+
+def _load_module_packages(packages: Sequence[importlib.machinery.ModuleSpec]) -> None:
+    for spec in packages:
+        if spec.name in sys.modules:
+            continue
+        _judge_user_import(spec.name)
+        module = importlib.util.module_from_spec(spec)
+        sys.modules[spec.name] = module
+        try:
+            if spec.loader is not None:
+                spec.loader.exec_module(module)
+        except BaseException:
+            if sys.modules.get(spec.name) is module:
+                del sys.modules[spec.name]
+            raise
+        parent_name, _, child_name = spec.name.rpartition(".")
+        if parent_name and parent_name in sys.modules:
+            setattr(sys.modules[parent_name], child_name, module)
+
 
 # Captured at import time, which main_sandbox.py performs before
 # activate_sandboxes(), so these are the unpatched builtins. This is the
@@ -259,8 +319,10 @@ def _python_interactive(
     return 0
 
 
-def _python_module(all_rules: AllRules, mod_name: str) -> int:
+def _python_module(all_rules: AllRules, mod_name: str, module_specs: _ModuleSpecs | None = None) -> int:
     _before_user_code()
+    if module_specs is not None:
+        _load_module_packages(module_specs.packages)
     # alter_sys, as ``python -m`` does: the module runs as sys.modules["__main__"], which calendar and others
     # rely on (their enum members are published into that module).
     runpy.run_module(mod_name, run_name="__main__", alter_sys=True)
@@ -373,6 +435,7 @@ def convert_extra_rules(args: List[str]) -> Dict[str, Set[str]]:
 def python_in_sb(
     all_rules: AllRules,
     python_cmd: List[str],
+    module_specs: _ModuleSpecs | None = None,
 ) -> int:
     try:
         set_learning_path(all_rules.learning_path)  # TODO: may be duplicate of main_sandbox
@@ -387,14 +450,12 @@ def python_in_sb(
                 python_cmd.pop(0)  # Remove module name
                 if mod_name == "pytest":
                     _inject_pytest_color_yes(python_cmd)
-                spec = importlib.util.find_spec(mod_name)
+                module_specs = module_specs if module_specs is not None else _find_module_specs(mod_name)
+                spec, main_spec = module_specs.module, module_specs.main
                 if spec is None:
                     print(f"{sys.executable}: No module named {mod_name}", file=sys.stderr)
                     return 1
-                if (
-                    spec.submodule_search_locations is not None
-                    and importlib.util.find_spec(f"{mod_name}.__main__") is None
-                ):
+                if spec.submodule_search_locations is not None and main_spec is None:
                     print(
                         f"{sys.executable}: No module named {mod_name}.__main__; "
                         f"{mod_name!r} is a package and cannot be directly executed",
@@ -405,7 +466,7 @@ def python_in_sb(
                     sys.argv = [spec.origin] + python_cmd
                 else:
                     sys.argv = [""] + python_cmd
-                return _python_module(all_rules, mod_name)
+                return _python_module(all_rules, mod_name, module_specs)
             else:
                 # Error case for '-m' without a module name
                 print(

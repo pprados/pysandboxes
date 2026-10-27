@@ -2,9 +2,9 @@
 # License: Apache V2
 """`python_in_sb`: how the arguments of `python-sb` pick what runs, with every runner recorded."""
 
-import importlib.util
 import io
 import sys
+from importlib.machinery import ModuleSpec
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
@@ -90,10 +90,11 @@ class TestInteractive:
 
 class TestModule:
     def _spec(self, monkeypatch: pytest.MonkeyPatch, origin: Any, found: bool = True) -> None:
+        spec = ModuleSpec("mod", loader=None, origin=origin) if found else None
         monkeypatch.setattr(
-            importlib.util,
-            "find_spec",
-            lambda name: SimpleNamespace(origin=origin, submodule_search_locations=None) if found else None,
+            pis,
+            "_find_module_specs",
+            lambda name: pis._ModuleSpecs((), spec, None),
         )
 
     def test_the_module_runs_with_its_origin_and_the_remaining_arguments_as_argv(
@@ -105,7 +106,8 @@ class TestModule:
         assert _run(runs, ["-m", "mod", "a", "b"]) == 7
 
         ((name, args, _),) = [c for c in runs.calls if c[0] == "module"]
-        assert args == (EmptyRules, "mod")
+        assert args[:2] == (EmptyRules, "mod")
+        assert args[2].module.origin == "/lib/mod.py"
         assert runs.argv_seen[-1] == ["/lib/mod.py", "a", "b"]
 
     def test_an_unknown_module_is_refused_like_python_dash_m(
@@ -121,14 +123,13 @@ class TestModule:
     def test_a_package_without_main_is_refused_like_python_dash_m(
         self, runs: _Runs, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
     ) -> None:
+        package = ModuleSpec("pkg", loader=None, origin="/lib/pkg/__init__.py", is_package=True)
+        assert package.submodule_search_locations is not None
+        package.submodule_search_locations.append("/lib/pkg")
         monkeypatch.setattr(
-            importlib.util,
-            "find_spec",
-            lambda name: (
-                SimpleNamespace(origin="/lib/pkg/__init__.py", submodule_search_locations=["/lib/pkg"])
-                if name == "pkg"
-                else None
-            ),
+            pis,
+            "_find_module_specs",
+            lambda name: pis._ModuleSpecs((package,), package, None),
         )
 
         assert _run(runs, ["-m", "pkg"]) == 1
@@ -234,6 +235,35 @@ class TestLearningSave:
         _run(runs, ["tool.py"])
 
         assert runs.saved == 0
+
+
+def test_module_spec_discovery_does_not_import_parent_package(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    package = tmp_path / "demo"
+    package.mkdir()
+    marker = tmp_path / "init-ran"
+    module = package / "main.py"
+    (package / "__init__.py").write_text(
+        f"from pathlib import Path\nPath({str(marker)!r}).write_text('ran')\n", encoding="utf-8"
+    )
+    module.write_text("", encoding="utf-8")
+    monkeypatch.syspath_prepend(str(tmp_path))
+
+    module_specs = pis._find_module_specs("demo.main")
+
+    assert module_specs.module is not None
+    assert module_specs.module.origin == str(module)
+    assert module_specs.main is None
+    assert [spec.name for spec in module_specs.packages] == ["demo"]
+    assert not marker.exists()
+
+    def deny_import(name: str) -> None:
+        assert name == "demo"
+        raise PermissionError(name)
+
+    monkeypatch.setattr(pis, "_judge_user_import", deny_import)
+    with pytest.raises(PermissionError, match="demo"):
+        pis._load_module_packages(module_specs.packages)
+    assert not marker.exists()
 
 
 def test_a_module_runs_as_the_main_module_like_python_dash_m(monkeypatch: pytest.MonkeyPatch) -> None:

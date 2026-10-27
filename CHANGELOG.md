@@ -38,6 +38,7 @@ the Python layer with `subprocess`; kernel-backed providers are Linux technologi
 ### Fixed
 
 - `shutil.disk_usage()` now obeys file access rules.
+- Learn module source access found by `importlib`, so `python-sb -m package.module` works after learning without granting project-root reads.
 - `python-sb app/script.py` runs again under a profile that exposes only `./app`, such as a learned one.
 - The samples' partial-mode tests run under the provider named by `OS_SANDBOX` instead of always under `subprocess`, so
   `make sample-tests` now exercises that provider in both modes.

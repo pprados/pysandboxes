@@ -8,6 +8,7 @@ Only the pure parts are covered here. ``GuardFinder`` and ``GuardLoader`` mutate
 
 import logging
 import sys
+from importlib.machinery import ModuleSpec
 from pathlib import Path
 from types import ModuleType
 from typing import Any, Callable, cast
@@ -16,6 +17,7 @@ import pytest
 
 from pysandboxes import guard_import
 from pysandboxes.e import RuleModuleNotFoundError
+from pysandboxes.guard_files import LearnFileRule
 from pysandboxes.guard_import import (
     LearnImportRule,
     PatchRule,
@@ -215,6 +217,53 @@ def test_in_the_user_code_learning_records_the_import(monkeypatch: pytest.Monkey
     with user_code():
         assert import_("json") == "json"
     assert recorded == [LearnImportRule("json")]
+
+
+def test_importlib_learning_records_the_module_source(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    _activate(monkeypatch, ())
+    recorded: list[Any] = []
+    spec = ModuleSpec("demo.main", loader=None, origin=str(tmp_path / "demo" / "main.py"))
+
+    class Finder:
+        def find_spec(self, fullname: str, path: Any, target: Any = None) -> ModuleSpec | None:
+            return spec if fullname == "demo.main" else None
+
+    monkeypatch.setattr(guard_import, "_in_framework_window", lambda: False)
+    monkeypatch.setattr(guard_import, "is_in_sandbox", lambda: True)
+    monkeypatch.setattr(guard_import, "is_learning_mode", lambda: True)
+    monkeypatch.setattr(guard_import, "add_learning_rule", recorded.append)
+    guard_finder = guard_import.GuardFinder()
+    monkeypatch.setattr(sys, "meta_path", [guard_finder, Finder()])
+
+    found = guard_finder.find_spec("demo.main", [str(tmp_path / "demo")])
+
+    assert found is spec
+    assert LearnImportRule("demo") in recorded
+    assert spec.origin is not None
+    assert LearnFileRule(Path(spec.origin), False) in recorded
+
+
+def test_importlib_learning_does_not_expose_the_framework_source(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    _activate(monkeypatch, ())
+    recorded: list[Any] = []
+    spec = ModuleSpec("pysandboxes.guard_import", loader=None, origin=str(tmp_path / "pysandboxes" / "guard_import.py"))
+
+    class Finder:
+        def find_spec(self, fullname: str, path: Any, target: Any = None) -> ModuleSpec | None:
+            return spec if fullname == "pysandboxes.guard_import" else None
+
+    guard_finder = guard_import.GuardFinder()
+    monkeypatch.setattr(sys, "meta_path", [guard_finder, Finder()])
+    monkeypatch.setattr(guard_import, "_in_framework_window", lambda: False)
+    monkeypatch.setattr(guard_import, "is_in_sandbox", lambda: True)
+    monkeypatch.setattr(guard_import, "is_learning_mode", lambda: True)
+    monkeypatch.setattr(guard_import, "add_learning_rule", recorded.append)
+
+    assert guard_finder.find_spec("pysandboxes.guard_import", [str(tmp_path / "pysandboxes")]) is not None
+
+    assert not any(isinstance(rule, LearnFileRule) for rule in recorded)
 
 
 def test_in_the_user_code_a_missing_module_is_not_learned(monkeypatch: pytest.MonkeyPatch) -> None:

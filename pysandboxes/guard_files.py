@@ -27,7 +27,6 @@ from os import scandir as _scandir
 from pathlib import Path as Path
 from types import ModuleType, TracebackType
 from typing import (
-    TYPE_CHECKING,
     Any,
     Callable,
     Iterable,
@@ -45,14 +44,11 @@ if sys.platform == "darwin":
 from .e import RuleFileNotFoundError, RulePermissionError
 from .guard_envs import LearnEnviron
 from .guard_wraps import guard_wraps
-from .learning import add_learning_rule, is_learning_mode
+from .learning import LearnFileRule, add_learning_rule, is_learning_mode
 from .main_logger import ErrorMsg, format_ruleref
 from .sb_types import ConfigLine, ConfigLines
 from .tools import follow_links_executable
 from .tools import patch_factory as _f
-
-if TYPE_CHECKING:
-    import pathlib
 
 _Path_glob = Path.glob
 _Path_rglob = Path.rglob
@@ -94,18 +90,6 @@ class IgnoreRule(NamedTuple):
 FilesRule = FSExposeRule | IgnoreRule
 
 FilesRules = tuple[FilesRule, ...]
-
-
-class LearnFileRule(NamedTuple):
-    """File access observed during learning mode.
-
-    Attributes:
-        path: File or directory path that was accessed.
-        write: Whether write access was attempted.
-    """
-
-    path: "pathlib.Path"
-    write: bool
 
 
 class _DirEntry:

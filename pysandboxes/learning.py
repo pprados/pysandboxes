@@ -21,7 +21,7 @@ from datetime import datetime
 # Python 3.10+ only
 from importlib import resources
 from pathlib import Path
-from typing import Any, Set
+from typing import Any, NamedTuple, Set
 
 from .config import DEBUG
 from .main_logger import make_relative_path, pysandboxes_logger
@@ -33,6 +33,19 @@ _learning: Set[Any] = set()
 
 _learning_path: Path | None = None
 _learning_mode: bool = False
+
+
+class LearnFileRule(NamedTuple):
+    """File access observed during learning mode.
+
+    Attributes:
+        path: File or directory path that was accessed.
+        write: Whether write access was attempted.
+    """
+
+    path: Path
+    write: bool
+
 
 # Check double usage
 _lock_generate = threading.Lock()

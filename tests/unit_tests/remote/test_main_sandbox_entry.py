@@ -55,16 +55,16 @@ def harness(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> Any:
     monkeypatch.setattr("pysandboxes.py_sandbox.activate_sandboxes", h.note("activate"))
     monkeypatch.setattr(pysandboxes, "os_sandbox", "unset", raising=False)
 
-    def run_guest(config: DaemonParameters) -> int:
-        h.journal.append(("run_guest", ((config,), {})))
+    def run_guest(config: DaemonParameters, module_specs: Any = None) -> int:
+        h.journal.append(("run_guest", ((config, module_specs), {})))
         return 11
 
     async def run_server(config: DaemonParameters) -> int:
         h.journal.append(("run_server", ((config,), {})))
         return 7
 
-    def python_in_sb(rules: AllRules, args: list[str]) -> int:
-        h.journal.append(("python_in_sb", ((rules, args), {})))
+    def python_in_sb(rules: AllRules, args: list[str], module_specs: Any = None) -> int:
+        h.journal.append(("python_in_sb", ((rules, args, module_specs), {})))
         return 5
 
     monkeypatch.setattr(main_sandbox, "run_guest", run_guest)
@@ -140,8 +140,30 @@ def test_python_sb_runs_the_program_with_the_unparsed_arguments(
     assert _run(monkeypatch, tmp_path, EmptyRules, "--_python-sb", "script.py", "--flag") == 5
 
     (args, _), *_ = harness.named("python_in_sb")
-    assert args == (EmptyRules, ["script.py", "--flag"])
+    assert args == (EmptyRules, ["script.py", "--flag"], None)
     assert not harness.named("run_server")
+
+
+def test_python_sb_resolves_module_before_arming_guards(
+    harness: _Harness, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    module_specs = (object(), None)
+
+    def find_specs(name: str) -> Any:
+        harness.journal.append(("find_module_specs", (name,)))
+        return module_specs
+
+    monkeypatch.setattr(
+        "pysandboxes.remote.python_in_sb._find_module_specs",
+        find_specs,
+    )
+
+    assert _run(monkeypatch, tmp_path, EmptyRules, "--_python-sb", "-m", "demo.main", "url") == 5
+
+    order = harness.order()
+    assert order.index("find_module_specs") < order.index("activate") < order.index("python_in_sb")
+    assert harness.named("find_module_specs") == [("demo.main",)]
+    assert harness.named("python_in_sb")[0][0] == (EmptyRules, ["-m", "demo.main", "url"], module_specs)
 
 
 def test_an_abbreviated_internal_option_is_not_taken_from_the_command_line(
@@ -221,9 +243,29 @@ class TestGuest:
         (args, kwargs), *_ = harness.named("activate")
         assert args[0].root_path == Path.cwd()
         assert kwargs == {"rules_provider": "none"}
-        ((config,), _), *_ = harness.named("run_guest")
+        ((config, _), _), *_ = harness.named("run_guest")
         assert config.all_rules.root_path == Path.cwd()
         assert not harness.named("run_server")
+
+    def test_qemu_guest_resolves_module_before_arming_guards(
+        self, harness: _Harness, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
+        module_specs = object()
+
+        def find_specs(name: str) -> Any:
+            harness.journal.append(("find_module_specs", (name,)))
+            return module_specs
+
+        monkeypatch.setattr(
+            "pysandboxes.remote.python_in_sb._find_module_specs",
+            find_specs,
+        )
+
+        _run(monkeypatch, tmp_path, EmptyRules, python_main_args=("-m", "demo.main"), guest_run_dir=str(tmp_path))
+
+        order = harness.order()
+        assert order.index("find_module_specs") < order.index("activate") < order.index("run_guest")
+        assert harness.named("run_guest")[0][0][1] is module_specs
 
     def test_a_program_without_a_run_dir_gets_no_terminal_defaults(
         self, harness: _Harness, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
@@ -270,7 +312,8 @@ class TestEntryPointsPreloaded:
 
         def activate(*args: Any, **kwargs: Any) -> None:
             seen.update({name: name in sys.modules for name in _ENTRY_POINTS})
-            monkeypatch.setattr("pysandboxes.remote.python_in_sb.python_in_sb", lambda rules, args: 5)
+
+        monkeypatch.setattr("pysandboxes.remote.python_in_sb.python_in_sb", lambda rules, args, specs=None: 5)
 
         monkeypatch.setattr("pysandboxes.py_sandbox.activate_sandboxes", activate)
         _run(monkeypatch, tmp_path, EmptyRules, *argv, **config)

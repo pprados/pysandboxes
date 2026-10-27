@@ -111,8 +111,8 @@ class TestRunGuest:
     def _python(self, monkeypatch: pytest.MonkeyPatch, outcome: Any) -> list[Any]:
         calls: list[Any] = []
 
-        def python_in_sb(all_rules: Any, args: list[str]) -> int:
-            calls.append(args)
+        def python_in_sb(all_rules: Any, args: list[str], module_specs: Any = None) -> int:
+            calls.append((args, module_specs))
             if isinstance(outcome, BaseException):
                 raise outcome
             return int(outcome)
@@ -128,7 +128,7 @@ class TestRunGuest:
         rc = main_sandbox.run_guest(_config(tmp_path, args=("-m", "mod")))
 
         assert rc == 3
-        assert calls == [["-m", "mod"]]
+        assert calls == [(["-m", "mod"], None)]
         assert (tmp_path / "exitcode").read_text() == "3"
         assert capsys.readouterr().out == f"{PYTHON_OUTPUT_START}\n{PYTHON_OUTPUT_END}\n"
 
