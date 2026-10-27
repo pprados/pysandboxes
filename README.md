@@ -67,6 +67,14 @@ The policy then goes through three steps:
 
 This is *complete mode*: the whole application runs under the sandbox. To isolate only some functions and keep the rest of the program free, see [partial mode](#partial-mode-isolate-some-functions).
 
+**Using a coding agent? Install the project skills.** They guide the agent through learning rules from your tests and reviewing every rule change before it is merged, instead of letting it edit `.py-sandboxes` freely:
+
+```bash
+npx skills add pprados/pysandboxes/skills --skill '*'
+```
+
+See [coding agents](https://github.com/pprados/pysandboxes/wiki/coding-agents) for what the two skills do and how to install them for the current user.
+
 # Three layers, three different promises
 
 | Layer | What it does | What it does not do |
