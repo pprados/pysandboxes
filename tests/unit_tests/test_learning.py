@@ -662,9 +662,9 @@ def test_stack_capture_does_not_load_source_lines(monkeypatch: pytest.MonkeyPatc
     def refuse_source_lookup(*_args: object, **_kwargs: object) -> str:
         raise AssertionError("stack capture must not load source lines")
 
-    monkeypatch.setattr(linecache, "getline", refuse_source_lookup)
-
-    stack = learning._capture_learning_stack()
+    with monkeypatch.context() as scoped:
+        scoped.setattr(linecache, "getline", refuse_source_lookup)
+        stack = learning._capture_learning_stack()
 
     assert any("test_stack_capture_does_not_load_source_lines" in frame for frame in stack)
 

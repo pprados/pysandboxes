@@ -275,17 +275,19 @@ def _capture_learning_stack() -> tuple[str, ...]:
         code = frame.f_code
         filename = code.co_filename.replace("\\", "/")
         name = Path(filename).name
+        module_name = frame.f_globals.get("__name__", "")
         if filename.startswith("<") or name in {"learning.py", "guard_eval.py"}:
             frame = frame.f_back
             continue
-        if "/pysandboxes/remote/" in filename:
+        if module_name == "pysandboxes" or module_name.startswith("pysandboxes.remote"):
             frame = frame.f_back
             continue
-        if "/pysandboxes/" in filename and not name.startswith("guard_"):
+        if module_name.startswith("pysandboxes.") and not module_name.startswith("pysandboxes.guard_"):
             frame = frame.f_back
             continue
-        if "/pysandboxes/" in filename:
-            filename = "pysandboxes/" + filename.partition("/pysandboxes/")[2]
+        if module_name.startswith("pysandboxes."):
+            module_path = module_name.removeprefix("pysandboxes.").replace(".", "/")
+            filename = f"pysandboxes/{module_path}.py"
         if "/site-packages/" in filename:
             package = filename.partition("/site-packages/")[2].split("/", 1)[0]
             package_frames[package] += 1
