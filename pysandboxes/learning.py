@@ -26,6 +26,7 @@ from importlib import resources
 from pathlib import Path
 from typing import Any, NamedTuple, Set
 
+from ._contracts import ensure
 from .config import DEBUG
 from .main_logger import make_relative_path, pysandboxes_logger
 
@@ -508,11 +509,13 @@ def is_learning_mode() -> bool:
     return _learning_mode
 
 
+@ensure(lambda mode, result: is_learning_mode() == mode)
 def set_learning_mode(mode: bool) -> None:
     global _learning_mode
     _learning_mode = mode
 
 
+@ensure(lambda rule, result: not is_learning_mode() or rule in _learning)
 def add_learning_rule(rule: Any) -> None:
     """Add a rule to the learning set.
 

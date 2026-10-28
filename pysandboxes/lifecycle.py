@@ -26,6 +26,8 @@ import logging
 import os
 import sys
 
+from ._contracts import ensure, raises
+
 logger = logging.getLogger(__name__)
 
 # A counter, not a latch: the SSE daemon enters on top of the process-wide
@@ -36,12 +38,14 @@ _entered: int = 0
 _armed: bool = False
 
 
+@ensure(lambda result: is_in_sandbox())
 def enter() -> None:
     """Record that this process is the sandboxed child."""
     global _entered
     _entered += 1
 
 
+@raises(AssertionError)
 def leave() -> None:
     """Undo one :func:`enter`."""
     global _entered

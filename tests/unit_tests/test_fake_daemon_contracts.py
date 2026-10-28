@@ -1,7 +1,9 @@
 # Copyright (c) 2026, Philippe PRADOS
 # License: Apache V2
 import asyncio
+from typing import Any
 
+import deal
 import pytest  # type: ignore[import-untyped]
 from hypothesis import given
 from hypothesis import strategies as st
@@ -27,6 +29,20 @@ def test_a_fake_daemon_is_started_exactly_between_a_start_and_the_next_end(ops: 
     for op in ops:
         asyncio.run(_apply(daemon, op))
         assert daemon.is_started == (op == "start")
+
+
+def test_the_contracts_are_armed_on_the_fake_daemon_lifecycle() -> None:
+    """Negative control: a lifecycle method that forgets to flip the flag is refused by its contract."""
+    for name in ("_start", "_stop", "_shutdown"):
+        assert hasattr(getattr(FakeDaemon, name), "__deal_contract")
+
+    class Forgetful(FakeDaemon):
+        async def _start(self, all_rules: Any, *, envs: Any, log_level: int, init_fn: Any) -> None:
+            pass
+
+    wrapped = deal.ensure(lambda self, all_rules, envs, log_level, init_fn, result: self.is_started)(Forgetful._start)
+    with pytest.raises(deal.PostContractError):
+        asyncio.run(wrapped(Forgetful("t"), None, envs={}, log_level=0, init_fn=None))
 
 
 @pytest.mark.parametrize("method", ["call_in_sandbox", "async_call_in_sandbox"])

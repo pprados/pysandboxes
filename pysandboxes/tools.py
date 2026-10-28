@@ -22,6 +22,7 @@ from typing import (
     cast,
 )
 
+from ._contracts import ensure, post, raises
 from .lifecycle import enter as _lc_enter
 from .lifecycle import is_in_sandbox as _lc_is_in_sandbox
 from .lifecycle import leave as _lc_leave
@@ -31,6 +32,9 @@ Environ = dict[str, str] | os._Environ[str]  # type: ignore
 """Type alias for environment variable mappings."""
 
 
+@post(lambda result: isinstance(result, str))
+@ensure(lambda s, envs, result: "${" in s or result == s)
+@raises(ValueError)
 def resolve_env_variables(s: str, envs: Environ | Envs) -> str:
     """Resolve environment variables in a string using bash-like syntax.
 
@@ -114,6 +118,8 @@ def substitute_config_env_vars(lines: ConfigLines, env_vars: Environ) -> ConfigL
     return resolved
 
 
+@ensure(lambda config, result: len(result) <= len(config))
+@post(lambda result: all(line.rule and line.rule[0] not in "#{" for line in result))
 def remove_config_comments(config: ConfigLines) -> ConfigLines:
     """Remove comments and template lines from configuration.
 
@@ -138,6 +144,9 @@ def remove_config_comments(config: ConfigLines) -> ConfigLines:
     return processed_lines
 
 
+@ensure(lambda config, result: len(result) <= len(config))
+@ensure(lambda config, result: remove_comments(result) == result)
+@post(lambda result: all(line and line[0] != "#" for line in result))
 def remove_comments(config: list[str]) -> list[str]:
     """Remove comments from a list of strings.
 
@@ -215,6 +224,7 @@ def is_in_sandbox() -> bool:
     return _lc_is_in_sandbox()
 
 
+@ensure(lambda value, result: not value or _lc_is_in_sandbox())
 def set_is_in_sandbox(value: bool) -> None:
     """Set sandbox execution state.
 
@@ -227,12 +237,16 @@ def set_is_in_sandbox(value: bool) -> None:
         _lc_leave()
 
 
+@post(lambda result: result >= 0)
+@ensure(lambda returncode, result: returncode >= 0 or result > 128)
 def shell_status(returncode: int) -> int:
     """The exit status a shell reports for a child: `128 + signum` for one killed by a signal, whose asyncio
     return code is `-signum`."""
     return returncode if returncode >= 0 else 128 - returncode
 
 
+@post(lambda result: isinstance(result, int))
+@ensure(lambda e, result, report=False: e.code is not None or result == 0)
 def exit_status(e: SystemExit, report: bool = False) -> int:
     """The process exit status CPython gives a `SystemExit`: `None` is 0, an int is itself, anything else is 1.
 

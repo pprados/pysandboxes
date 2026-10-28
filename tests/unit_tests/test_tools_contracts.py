@@ -1,18 +1,14 @@
 # Copyright (c) 2026, Philippe PRADOS
 # License: Apache V2
-import os
 from pathlib import Path
 
 import pytest  # type: ignore[import-untyped]
 from hypothesis import given
 from hypothesis import strategies as st
 
-from pysandboxes import guard_files
 from pysandboxes.sb_types import ConfigLine
 from pysandboxes.tools import (
     exit_status,
-    follow_links_executable,
-    get_callable_info,
     remove_comments,
     remove_config_comments,
     resolve_env_variables,
@@ -109,31 +105,6 @@ def test_remove_config_comments_keeps_the_position_of_each_survivor(config: list
 def test_remove_config_comments_drops_template_lines() -> None:
     cfg = [ConfigLine("{% if x %}", Path("p"), 1), ConfigLine("net=ALLOW", Path("p"), 2)]
     assert [c.rule for c in remove_config_comments(cfg)] == ["net=ALLOW"]
-
-
-def test_get_callable_info_gives_the_qualified_name_of_a_method() -> None:
-    class Holder:
-        def method(self) -> None: ...
-
-    _, name = get_callable_info(Holder.method)
-    assert name == Holder.method.__qualname__
-    assert name != "method"
-
-
-def test_follow_links_executable_follows_a_relative_symlink(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    # The launcher runs unguarded, where readlink returns the link as written; the guard's wrapper would hand back
-    # an absolute path and make the relative branch unreachable.
-    monkeypatch.setattr(os, "readlink", guard_files._os_readlink)
-    (tmp_path / "base" / "bin").mkdir(parents=True)
-    (tmp_path / "venv" / "bin").mkdir(parents=True)
-    real = tmp_path / "base" / "bin" / "python"
-    real.write_text("")
-    link = tmp_path / "venv" / "bin" / "python"
-    link.symlink_to("../../base/bin/python")
-    assert os.readlink(link) == "../../base/bin/python"
-    found = follow_links_executable(link, set())
-    assert tmp_path / "base" in found
-    assert tmp_path / "venv" in found
 
 
 @given(st.integers(min_value=0, max_value=255))

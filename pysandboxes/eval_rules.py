@@ -15,6 +15,7 @@ import logging
 from datetime import date, datetime, time, timedelta
 from typing import Any, NamedTuple
 
+from ._contracts import ensure, post, raises
 from .immutable_dict import ImmutableDict
 from .main_logger import ErrorMsg, format_ruleref
 from .sb_types import ConfigLine, ConfigLines
@@ -127,6 +128,10 @@ DEFAULT_RULES = EvalRules(
 )
 
 
+@post(lambda result: isinstance(result, (int, float, str)))
+@ensure(lambda key, value, result: isinstance(result, str) == (key == "eval-namespace"))
+@ensure(lambda key, value, result: key != "eval-namespace" or result in NAMESPACE_MODES)
+@raises(ValueError)
 def parse_scalar(key: str, value: str) -> int | float | str:
     """Parse one scalar key's value.
 

@@ -12,6 +12,7 @@ from abc import ABC, abstractmethod
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Callable
 
+from ._contracts import ensure
 from .immutable_dict import ImmutableDict
 from .main_logger import ErrorMsg
 from .sb_types import ConfigLines, Envs
@@ -200,6 +201,7 @@ class FakeDaemon(BaseDaemon):
     ) -> "AllRules":
         return all_rules
 
+    @ensure(lambda self, all_rules, envs, log_level, init_fn, result: self.is_started)
     async def _start(
         self,
         all_rules: "AllRules",
@@ -211,10 +213,12 @@ class FakeDaemon(BaseDaemon):
         logger.debug("FakeDaemon._start...")
         self._is_started = True
 
+    @ensure(lambda self, max_pending, result: not self.is_started)
     async def _stop(self, max_pending: int) -> None:
         logger.debug("FakeDaemon._stop...")
         self._is_started = False
 
+    @ensure(lambda self, graceful_shutdown=True, result=None: not self.is_started)
     async def _shutdown(self, graceful_shutdown: bool = True) -> None:
         logger.debug("FakeDaemon._shutdown...")
         self._is_started = False
