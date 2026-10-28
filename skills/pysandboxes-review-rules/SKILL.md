@@ -39,7 +39,7 @@ Destination: application => `.py-sandboxes`. runner/plugin/test-data => `.py-san
 `.py-sandboxes.tests` includes `.py-sandboxes`, no duplicates. Never include `.py-sandboxes.learn`. `# owner=` comments are not provenance. Never copy all candidates.
 
 ## 4. Report
-User's language, rules verbatim. Added rules grouped by destination file, riskiest first. Each: exact rule line, indented line = function, triggering call, test/entry. Batch `python-import=` modules by destination and owner; keep each import with a criticality comment on its own line and preserve the comment. Add `file:line`, test id, confidence if needed. Broader/unexplained: say so + fix. Each **high** risk: own sentence. Then removed rules. Propose only; no active profile edit unless asked.
+User's language, rules verbatim. Added rules grouped by destination file, riskiest first. Each: exact rule line, indented line = function, triggering call, test/entry. Batch `python-import=` modules by destination and owner; keep each import with a criticality comment on its own line and preserve the comment. Add `file:line`, test id, confidence if needed. Broader/unexplained: say so + fix. Each **high** risk: own sentence. Then removed rules. Propose only; no active profile edit unless asked. Risky import: give exact rule, caller chain (`file:line`), why code needs it, capability it grants, and narrower alternative or `none found`.
 
 ```text
   net=ALLOW|TCP|example.com|443|OUT
@@ -47,4 +47,22 @@ User's language, rules verbatim. Added rules grouped by destination file, riskie
 ```
 
 ## 5. Approval
-Show target branch + exact diff, explain each change, ask approval per change. Explicit yes before editing active profile, committing rules, merging. Approval to learn != approval to promote. Before merge into main: re-diff vs current main, present review, ask approval of rules + merge. No yes, no merge.
+Show target branch + exact diff. Ask approval with a numbered multi-question form. Include every proposed permission; one yes/no question per exact rule. For each: show rule, source chain (`file:line`), operation and why it needs access, capability/risk granted, and narrower alternative or `none found`. For grouped `python-import=` rules, justify every module. Write questions in caveman style: short, clear sentences. Example:
+
+```text
+1. Rule: net=ALLOW|TCP|example.com|443|OUT
+   Source: demo/page_reader.py:5 -> requests.get(url)
+   Need: fetch page for read_page().
+   Grants: outbound HTTPS to example.com.
+   Narrower rule: none.
+   Approve this permission? Yes/no.
+
+2. Rule: python-import=importlib
+   Source: urllib3/http2/__init__.py:3 -> importlib.metadata.version()
+   Need: check optional HTTP/2 dependencies.
+   Grants: dynamic imports; broader than metadata lookup.
+   Narrower rule: none; guard matches top-level module.
+   Approve this permission? Yes/no.
+```
+
+Never ask one blanket question for several permissions. Explicit yes before editing active profile, committing rules, merging. Approval to learn != approval to promote. Before merge into main: re-diff vs current main, present review, ask approval of rules + merge. No yes, no merge.
