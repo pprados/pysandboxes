@@ -61,11 +61,16 @@ def test_an_unbalanced_leave_is_refused() -> None:
     lifecycle._entered = 0
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="leave() decrements before it asserts: a refused leave leaves the counter at -1, so the next enter "
-    "reports the process out of the sandbox",
-)
+def test_a_negative_counter_is_refused_too() -> None:
+    lifecycle._entered = -1
+    try:
+        with pytest.raises(AssertionError):
+            leave()
+        assert lifecycle._entered == -1
+    finally:
+        lifecycle._entered = 0
+
+
 def test_a_refused_leave_does_not_corrupt_the_counter() -> None:
     lifecycle._entered = 0
     try:

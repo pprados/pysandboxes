@@ -74,8 +74,8 @@ def test_a_rule_the_parser_cannot_use_is_reported_not_raised(group: str) -> None
 
 
 def test_the_properties_have_teeth() -> None:
-    """Negative control: a parser that raises, or that invents a line, would be caught by the check above."""
-    lines = [ConfigLine("eval-max-alloc=infMB", PATH, 1)]
-    with pytest.raises(OverflowError):
-        eval_rules.parse_scalar.__wrapped__("eval-max-alloc", "infMB")  # type: ignore[attr-defined]
-    assert set([ConfigLine("invented", PATH, 9)]) - set(lines)
+    """Negative control: a parser that invents a line is caught by the containment check above."""
+    lines = [ConfigLine("eval-call=a", PATH, 1)]
+    invented = (None, [ConfigLine("invented", PATH, 9)])
+    assert not set(_others("eval", invented)) <= set(lines)
+    assert set(_others("eval", (None, lines))) <= set(lines)
