@@ -1,5 +1,6 @@
 """Unit tests for learning module."""
 
+import logging
 import subprocess
 import sys
 import tempfile
@@ -181,11 +182,11 @@ class TestAddLearningRule:
         assert learned == set(rules)
 
 
-def _patched_rule_generators(envs: list[str] | None = None) -> tuple:
+def _patched_rule_generators(envs: list[str] | None = None, imports: list[str] | None = None) -> tuple:
     """Patch every generate_rules a learning run calls, so only env rules vary."""
     return (
         patch("pysandboxes.guard_envs.generate_rules", return_value=envs or []),
-        patch("pysandboxes.guard_import.generate_rules", return_value=[]),
+        patch("pysandboxes.guard_import.generate_rules", return_value=imports or []),
         patch("pysandboxes.guard_files.generate_rules", return_value=[]),
         patch("pysandboxes.guard_socket.generate_rules", return_value=[]),
         patch("pysandboxes.guard_api.generate_rules", return_value=[]),
@@ -332,6 +333,42 @@ class TestEnvVarsNeverRead:
         probed = set(probed_line.split(",")) if probed_line else set()
         assert not (used & probed), f"probing the substitution table must not record a use, but {used & probed} did"
 
+    def test_generating_file_rules_does_not_learn_home(self) -> None:
+        script = textwrap.dedent("""
+            import os
+            from pathlib import Path
+            from pysandboxes.guard_envs import LearnEnviron
+            from pysandboxes.py_sandbox import _parse_include
+            from pysandboxes.sb_types import ConfigLine
+
+            LearnEnviron._instance = None
+            envs = LearnEnviron()
+            os.environ = envs
+            from pysandboxes.guard_files import LearnFileRule, generate_rules
+            from pysandboxes.main_logger import make_relative_path
+
+            envs._keys_used.clear()
+            generate_rules({LearnFileRule(Path.cwd() / "pyproject.toml", False)})
+            make_relative_path(Path("/etc/passwd"))
+            _parse_include(
+                Path.cwd(),
+                set(),
+                [ConfigLine('include "~/.config/no-such-profile"', Path("profile"), 1)],
+            )
+            print(",".join(sorted(envs._keys_used)))
+            """)
+        result = subprocess.run(
+            [sys.executable, "-c", script],
+            capture_output=True,
+            text=True,
+            timeout=60,
+        )
+
+        assert result.returncode == 0, result.stderr
+        output = result.stdout.strip()
+        learned = set(output.splitlines()[-1].split(",")) if output else set()
+        assert "HOME" not in learned
+
 
 class TestExposeRoGranularity:
     """A6.5 (characterization, not changed): a file read directly under a directory
@@ -433,8 +470,14 @@ def test_a_run_without_a_rule_file_learns_under_subprocess(tmp_path: Path) -> No
     assert all_rules.os_sandbox == "subprocess"
 
 
-def _generate(cfg: Path, envs: list[str] | None = None, api: list[str] | None = None) -> None:
+def _generate(
+    cfg: Path,
+    envs: list[str] | None = None,
+    api: list[str] | None = None,
+    imports: list[str] | None = None,
+) -> None:
     patches = list(_patched_rule_generators(envs))
+    patches[1] = patch("pysandboxes.guard_import.generate_rules", return_value=imports or [])
     patches[4] = patch("pysandboxes.guard_api.generate_rules", return_value=api or [])
     with (
         patches[0],
@@ -521,3 +564,182 @@ def test_a_failed_write_reports_its_own_error_not_a_missing_temporary_file(
 
     with pytest.raises(PermissionError, match="no write access"):
         learning._write_atomic(tmp_path / ".py-sandboxes", "x")
+
+
+def test_info_summary_maps_generated_imports_to_deduplicated_stacks_without_locals(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from pysandboxes import learning
+    from pysandboxes.guard_import import LearnImportRule
+
+    rule = LearnImportRule("inspect")
+    config = tmp_path / ".py-sandboxes"
+    secret = "must-not-appear-in-logs"
+    monkeypatch.setattr(learning, "_learning_origins", {}, raising=False)
+
+    with (
+        patch("pysandboxes.guard_envs.generate_rules", return_value=[]),
+        patch("pysandboxes.guard_files.generate_rules", return_value=[]),
+        patch("pysandboxes.guard_socket.generate_rules", return_value=[]),
+        patch("pysandboxes.guard_api.generate_rules", return_value=[]),
+        patch("pysandboxes.eval_rules.generate_rules", return_value=[]),
+        patch("pysandboxes.learning._learning_path", config),
+        patch("pysandboxes.learning._save_learning_done", False),
+        patch("pysandboxes.learning._learning_mode", True),
+        patch("pysandboxes.learning._learning", set()),
+    ):
+        with caplog.at_level(logging.INFO, logger="Pysandboxes"):
+            for _ in range(5):
+                learning.add_learning_rule(rule)
+            generate_config_from_learning()
+
+    assert "python-import=inspect" in config.read_text()
+    assert "python-import=inspect" in caplog.text
+    assert "LearnImportRule(name='inspect')" in caplog.text
+    assert "5 observations" in caplog.text
+    assert "test_info_summary_maps_generated_imports" in caplog.text
+    assert caplog.text.count("test_info_summary_maps_generated_imports") == 1
+    assert secret not in caplog.text
+
+
+def test_info_summary_traces_generated_environment_rules(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from pysandboxes import learning
+    from pysandboxes.guard_envs import LearnEnviron
+
+    monkeypatch.setattr(LearnEnviron, "_instance", None)
+    monkeypatch.setattr(learning, "_learning_origins", {}, raising=False)
+    environ = LearnEnviron()
+    config = tmp_path / ".py-sandboxes"
+
+    with (
+        patch("pysandboxes.guard_import.generate_rules", return_value=[]),
+        patch("pysandboxes.guard_files.generate_rules", return_value=[]),
+        patch("pysandboxes.guard_socket.generate_rules", return_value=[]),
+        patch("pysandboxes.guard_api.generate_rules", return_value=[]),
+        patch("pysandboxes.eval_rules.generate_rules", return_value=[]),
+        patch("pysandboxes.learning._learning_path", config),
+        patch("pysandboxes.learning._save_learning_done", False),
+        patch("pysandboxes.learning._learning_mode", True),
+        patch("pysandboxes.learning._learning", set()),
+    ):
+        with caplog.at_level(logging.INFO, logger="Pysandboxes"):
+            environ.learn_read("PYTEST_INFO_PROVENANCE")
+            generate_config_from_learning()
+
+    assert "env=PYTEST_INFO_PROVENANCE=" + "$" + "{PYTEST_INFO_PROVENANCE}" in config.read_text()
+    assert "LearnEnvRule(key='PYTEST_INFO_PROVENANCE')" in caplog.text
+    assert "test_info_summary_traces_generated_environment_rules" in caplog.text
+
+
+def test_stack_capture_does_not_read_the_learning_environment(
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    import os
+
+    from pysandboxes import learning
+    from pysandboxes.guard_envs import LearnEnviron
+
+    environ = LearnEnviron()
+    environ._keys_used.clear()
+    monkeypatch.setattr(os, "environ", environ)
+
+    with (
+        patch("pysandboxes.learning._learning_mode", True),
+        caplog.at_level(logging.INFO, logger="Pysandboxes"),
+    ):
+        learning._capture_learning_stack()
+
+    assert not environ._keys_used
+
+
+def test_stack_capture_does_not_load_source_lines(monkeypatch: pytest.MonkeyPatch) -> None:
+    import linecache
+
+    from pysandboxes import learning
+
+    def refuse_source_lookup(*_args: object, **_kwargs: object) -> str:
+        raise AssertionError("stack capture must not load source lines")
+
+    monkeypatch.setattr(linecache, "getline", refuse_source_lookup)
+
+    stack = learning._capture_learning_stack()
+
+    assert any("test_stack_capture_does_not_load_source_lines" in frame for frame in stack)
+
+
+def test_info_summary_marks_generated_rules_without_a_captured_stack(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from pysandboxes import learning
+
+    monkeypatch.setattr(learning, "_learning_origins", {}, raising=False)
+    with caplog.at_level(logging.INFO, logger="Pysandboxes"):
+        _generate(tmp_path / ".py-sandboxes", imports=["python-import=inspect"])
+
+    assert "generated: python-import=inspect" in caplog.text
+    assert "origin not captured at INFO: inspect" in caplog.text
+
+
+def test_learning_summary_is_suppressed_below_info_level(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from pysandboxes import learning
+
+    monkeypatch.setattr(learning, "_learning_origins", {}, raising=False)
+    with caplog.at_level(logging.WARNING, logger="Pysandboxes"):
+        _generate(tmp_path / ".py-sandboxes", imports=["python-import=inspect"])
+
+    assert "Learning rule provenance" not in caplog.text
+
+
+def test_info_summary_groups_other_generated_rule_families_with_sources(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from pysandboxes import learning
+    from pysandboxes.eval_rules import LearnEvalRule
+    from pysandboxes.guard_api import LearnApiRule
+    from pysandboxes.guard_files import LearnFileRule
+    from pysandboxes.guard_socket import Direction, Kind, LearnSocketRule
+
+    sources = {
+        LearnFileRule(tmp_path / "app.py", False),
+        LearnSocketRule("connect", Kind.TCP, "example.com", 443, Direction.OUT, ()),
+        LearnApiRule("os.system"),
+        LearnEvalRule("eval-call", "open"),
+        "remote-result-mode=objects",
+    }
+    generated = {
+        "envs": [],
+        "imports": [],
+        "files": ["expose-ro=/tmp/app"],
+        "sockets": ["net=ALLOW|TCP|example.com|443|OUT"],
+        "api": ["python-api=ALLOW:os.system"],
+        "eval": ["eval-call=open"],
+    }
+    monkeypatch.setattr(learning, "_learning_origins", {}, raising=False)
+
+    with (
+        patch("pysandboxes.guard_envs.generate_rules", return_value=generated["envs"]),
+        patch("pysandboxes.guard_import.generate_rules", return_value=generated["imports"]),
+        patch("pysandboxes.guard_files.generate_rules", return_value=generated["files"]),
+        patch("pysandboxes.guard_socket.generate_rules", return_value=generated["sockets"]),
+        patch("pysandboxes.guard_api.generate_rules", return_value=generated["api"]),
+        patch("pysandboxes.eval_rules.generate_rules", return_value=generated["eval"]),
+        patch("pysandboxes.learning._learning_path", tmp_path / ".py-sandboxes"),
+        patch("pysandboxes.learning._save_learning_done", False),
+        patch("pysandboxes.learning._learning_mode", True),
+        patch("pysandboxes.learning._learning", set()),
+    ):
+        with caplog.at_level(logging.INFO, logger="Pysandboxes"):
+            for source in sources:
+                learning.add_learning_rule(source)
+            generate_config_from_learning()
+
+    assert "expose-ro=/tmp/app" in caplog.text
+    assert "net=ALLOW|TCP|example.com|443|OUT" in caplog.text
+    assert "python-api=ALLOW:os.system" in caplog.text
+    assert "eval-call=open" in caplog.text
+    assert "remote-result-mode=objects" in caplog.text
+    assert all(repr(source) in caplog.text for source in sources)

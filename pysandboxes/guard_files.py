@@ -42,7 +42,7 @@ if sys.platform == "darwin":
     import fcntl
 
 from .e import RuleFileNotFoundError, RulePermissionError
-from .guard_envs import LearnEnviron
+from .guard_envs import LearnEnviron, expanduser
 from .guard_wraps import guard_wraps
 from .learning import LearnFileRule, add_learning_rule, is_learning_mode
 from .main_logger import ErrorMsg, format_ruleref
@@ -298,7 +298,7 @@ def parse_rules(
                 continue
             s_path = value
             try:
-                resolved = Path(Path(s_path).expanduser()).resolve().absolute()
+                resolved = Path(expanduser(Path(s_path))).resolve().absolute()
             except (OSError, ValueError, RuntimeError):
                 errors.append(
                     (
@@ -544,7 +544,8 @@ def generate_rules(
                 parent_level[parent] = parent_level.get(parent, False)
 
     result: set[str] = set()
-    home = Path.home().absolute()
+    home_value = _learn_env._original_envs.get("HOME")
+    home = Path(home_value).absolute() if home_value else Path.home().absolute()
 
     allready_added: list[LearnFileRule] = []
     for path in sorted(parent_level.keys()):
