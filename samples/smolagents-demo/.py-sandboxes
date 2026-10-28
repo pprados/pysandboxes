@@ -124,3 +124,5 @@ remote-result-mode=data-only
 # Standard Python
 python-import=_ast, _ast_unparse, compression
 
+
+python-import=decimal

@@ -141,3 +141,6 @@ python-import=_socket
 # Standard Python
 python-import=_colorize, _hmac, annotationlib, compression, glob
 
+
+python-import=joserfc
+python-import=yaml

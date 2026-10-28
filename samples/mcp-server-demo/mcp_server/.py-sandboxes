@@ -455,3 +455,6 @@ eval-timeout=2s
 # and import rules only; subprocess is the default isolated Python process provider.
 # Add rules (2026/10/07 at 16:48)
 remote-result-mode=data-only
+
+python-import=joserfc
+python-import=yaml

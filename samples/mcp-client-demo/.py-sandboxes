@@ -22,6 +22,7 @@ env=MY_IP=${MY_IP:-127.0.0.1}
 # An MCP client on a stdio transport starts its servers itself: the spawn is the
 # transport. Granted call by call, not by category.
 python-import=subprocess
+python-api=ALLOW:_posixsubprocess.fork_exec
 python-api=ALLOW:subprocess.Popen
 python-api=ALLOW:threading.Thread.start
 # CPython renamed the internal entry point: 3.13+ uses
@@ -113,3 +114,6 @@ expose-ro=.
 
 firejail.seccomp=@chown,@clock,@debug,@keyring,@memlock,@module,@mount,@obsolete,@privileged,@raw-io,@reboot,@resources,@setuid,@swap,@sync
 firejail.net=br0  # Use specific brige ? Else, use docker0 if exist
+
+python-import=joserfc
+python-import=yaml

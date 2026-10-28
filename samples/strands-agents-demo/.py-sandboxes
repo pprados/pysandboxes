@@ -112,3 +112,6 @@ remote-result-mode=data-only
 # Standard Python
 python-import=compression
 
+
+python-import=_sqlite3, sqlite3
+python-import=h2, hpack, hyperframe

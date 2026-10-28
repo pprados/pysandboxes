@@ -92,3 +92,6 @@ eval-namespace=closed
 eval-syntax=arith, compare
 eval-max-iterations=100_000
 eval-timeout=2s
+
+python-import=joserfc
+python-import=yaml

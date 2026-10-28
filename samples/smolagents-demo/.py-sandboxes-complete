@@ -122,3 +122,5 @@ python-import=_socket, reprlib
 # Standard Python
 python-import=_ast, _ast_unparse, _hmac, annotationlib, compression
 
+
+python-import=decimal
