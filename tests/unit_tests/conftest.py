@@ -1,14 +1,18 @@
 import logging
 from typing import Iterator
 
+import deal
 import pytest  # type: ignore[import-untyped]
 
+import pysandboxes._contracts  # noqa: F401  # its import disables deal: import it before enabling
 from pysandboxes.guard_import import framework_imports
 
 from .guard.test_guard_io import (
     _activate_guard_import_for_tests,
     _deactivate_all_rules,
 )
+
+deal.enable(warn=False)
 
 
 def init_log_level() -> None:

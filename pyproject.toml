@@ -129,6 +129,7 @@ test = [
     "pyyaml>=6.0",
     "speckit>=1.0.1",
     "pytestarch>=4.0.1",
+    "deal>=4.24.6",
 ]
 lint = [
     "mypy>=1.8",

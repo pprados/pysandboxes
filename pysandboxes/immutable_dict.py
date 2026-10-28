@@ -23,6 +23,8 @@ from typing import (
     cast,
 )
 
+from pysandboxes._contracts import ensure, post, raises
+
 KeyType = TypeVar("KeyType", bound=Hashable)
 ValueType = TypeVar("ValueType")
 
@@ -54,6 +56,8 @@ class ImmutableDict(
     __slots__ = ()
 
     # construction accepts either a Mapping or an iterable of (key, value) pairs
+    @post(lambda result: len(result._keys) == len(result._values) == len(set(result._keys)))
+    @raises(TypeError, ValueError)
     def __new__(
         cls,
         data: Mapping[KeyType, ValueType] | Iterable[tuple[KeyType, ValueType]],
@@ -113,6 +117,8 @@ class ImmutableDict(
         return tuple.__getitem__(self, 1)  # type: ignore[index]
 
     # Mapping kind
+    @ensure(lambda self, key, result: result is self._values[self._keys.index(key)])
+    @raises(KeyError)
     def __getitem__(self, key: KeyType) -> ValueType:  # type: ignore[override]
         """Get value by key.
 
@@ -139,6 +145,7 @@ class ImmutableDict(
         """
         return iter(self._keys)
 
+    @post(lambda result: result >= 0)
     def __len__(self) -> int:
         """Get number of key-value pairs.
 
@@ -147,6 +154,7 @@ class ImmutableDict(
         """
         return len(self._keys)
 
+    @ensure(lambda self, key, result: result == (key in self._keys))
     def __contains__(self, key: object) -> bool:
         """Check if key exists in dictionary.
 
@@ -173,6 +181,7 @@ class ImmutableDict(
         """Negate `__eq__`, which tuple's own `__ne__` would bypass."""
         return not self.__eq__(other)
 
+    @raises(TypeError)
     def __hash__(self) -> int:
         """Hash consistently with `__eq__`, whatever the insertion order."""
         return hash(frozenset(self.items()))

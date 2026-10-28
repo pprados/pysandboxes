@@ -2,14 +2,23 @@
 # License: Apache V2
 import pickle
 
+import deal
 import pytest  # type: ignore[import-untyped]
 from hypothesis import given
 from hypothesis import strategies as st
 
+from pysandboxes._contracts import HAS_DEAL
 from pysandboxes.immutable_dict import ImmutableDict
 
 keys = st.one_of(st.integers(), st.text(max_size=5))
 mappings = st.dictionaries(keys, st.integers(), max_size=8)
+
+
+def test_deal_is_armed() -> None:
+    """Negative control: a violated contract must raise, otherwise every test below proves nothing."""
+    assert HAS_DEAL
+    with pytest.raises(deal.PostContractError):
+        deal.post(lambda result: result >= 0)(lambda: -1)()
 
 
 @given(mappings)
