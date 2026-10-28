@@ -483,11 +483,19 @@ EXPORT_AUDIT=--format requirements-txt --no-emit-project --no-hashes --no-annota
 PIP_AUDIT_IGNORE_crewai = --ignore-vuln PYSEC-2026-311 --ignore-vuln PYSEC-2026-3813 \
 	--ignore-vuln PYSEC-2026-3814 --ignore-vuln PYSEC-2026-3815 \
 	--ignore-vuln CVE-2026-59951 --ignore-vuln PYSEC-2026-4321
-## Report the runtime dependencies with a known security vulnerability, samples included
+
+# google-adk, up to 2.13.0, pins opentelemetry-api<=1.44, before the CVE-2026-114603 fix (1.45.1): no release of
+# google-adk can take it. The advisory is a regular-expression slowdown in TraceState.from_header, reached by
+# parsing an inbound W3C `tracestate` header. The sample is a command-line tool: it serves no HTTP and reads none.
+# Drop this ignore once google-adk allows opentelemetry-api>=1.45.1, then relock the sample:
+#   uv lock --project samples/google-adk-demo --upgrade-package opentelemetry-api
+PIP_AUDIT_IGNORE_google-adk = --ignore-vuln CVE-2026-114603
+## Report the runtime dependencies with a known security vulnerability, samples included; the test and dev groups
+## are reported, without failing, by pip-audit-all
 pip-audit:
 	@unset VIRTUAL_ENV; status=0; \
 	echo "== pysandboxes"; \
-	uv export $(EXPORT_AUDIT) --no-dev | uv run pip-audit -r /dev/stdin || status=1; \
+	uv export $(EXPORT_AUDIT) --no-dev --no-default-groups | uv run pip-audit -r /dev/stdin || status=1; \
 	$(foreach s,$(SAMPLES), \
 		echo "== samples/$(s)-demo"; \
 		uv export $(EXPORT_AUDIT) --frozen --no-dev --project samples/$(s)-demo --no-emit-package pysandboxes \
