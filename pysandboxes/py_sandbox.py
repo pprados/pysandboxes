@@ -218,7 +218,7 @@ def _parse_include(
             if "/" not in raw_filename:
                 filename = root_path / filename
             try:
-                filename = filename.expanduser().absolute()
+                filename = guard_envs.expanduser(filename).absolute()
             except RuntimeError as e:
                 raise ConfigSyntaxError(
                     "Syntax error in config files.",

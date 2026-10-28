@@ -7,6 +7,7 @@ error messages, file paths, and configuration references throughout the framewor
 """
 
 import logging
+import os
 import sys
 from pathlib import Path
 from typing import Sequence
@@ -40,8 +41,11 @@ def make_relative_path(path: Path | str | None) -> str:
     except ValueError:
         # File not relative to cwd
         try:
-            path.absolute().relative_to(Path.home())
-            rel_path = "~" + str(path.absolute())[len(str(Path.home())) :]
+            original_env = getattr(os.environ, "_original_envs", os.environ)
+            home = original_env.get("HOME") or original_env.get("USERPROFILE")
+            home_path = Path(home) if home else Path.home()
+            path.absolute().relative_to(home_path)
+            rel_path = "~" + str(path.absolute())[len(str(home_path)) :]
         except (ValueError, RuntimeError):
             # File not in home, or no home at all (a qemu guest has neither HOME nor a
             # passwd entry, and Path.home() raises RuntimeError there)

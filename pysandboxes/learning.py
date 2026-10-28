@@ -15,8 +15,11 @@ import os
 import re
 import secrets
 import shutil
+import sys
 import threading
+from collections import Counter
 from datetime import datetime
+from types import FrameType
 
 # Python 3.10+ only
 from importlib import resources
@@ -30,9 +33,16 @@ logger = logging.getLogger(__name__)
 
 _lock = threading.Lock()
 _learning: Set[Any] = set()
+_learning_origins: dict[Any, Counter[tuple[str, ...]]] = {}
 
 _learning_path: Path | None = None
 _learning_mode: bool = False
+
+
+class LearnEnvRule(NamedTuple):
+    """Environment variable read observed during learning."""
+
+    key: str
 
 
 class LearnFileRule(NamedTuple):
@@ -174,6 +184,9 @@ def generate_config_from_learning() -> None:
 
         replaces["learning_remote_result"] = _update_remote_result_mode(all_lines, learning, header, learning_path)
 
+        if pysandboxes_logger.isEnabledFor(logging.INFO):
+            _log_learning_summary(replaces, learning)
+
         # Insert new rules in the file
         pattern: str
         if not DEBUG:
@@ -249,6 +262,127 @@ def _write_atomic(path: Path, content: str) -> None:
     except BaseException:
         tmp_path.unlink(missing_ok=True)
         raise
+
+
+def _capture_learning_stack() -> tuple[str, ...]:
+    """Return source frames for a learned privilege, without frame locals."""
+    frame: FrameType | None = sys._getframe(1)
+    cwd = Path.cwd()
+    result: list[str] = []
+    stdlib_frames = 0
+    package_frames: Counter[str] = Counter()
+    while frame is not None and len(result) < 64:
+        code = frame.f_code
+        filename = code.co_filename.replace("\\", "/")
+        name = Path(filename).name
+        if filename.startswith("<") or name in {"learning.py", "guard_eval.py"}:
+            frame = frame.f_back
+            continue
+        if "/pysandboxes/remote/" in filename:
+            frame = frame.f_back
+            continue
+        if "/pysandboxes/" in filename and not name.startswith("guard_"):
+            frame = frame.f_back
+            continue
+        if "/pysandboxes/" in filename:
+            filename = "pysandboxes/" + filename.partition("/pysandboxes/")[2]
+        if "/site-packages/" in filename:
+            package = filename.partition("/site-packages/")[2].split("/", 1)[0]
+            package_frames[package] += 1
+            if package_frames[package] > 4:
+                frame = frame.f_back
+                continue
+            filename = package + "/" + filename.partition("/site-packages/")[2].partition("/")[2]
+        elif "/lib/python" in filename and "/site-packages/" not in filename:
+            stdlib_frames += 1
+            if stdlib_frames > 2:
+                frame = frame.f_back
+                continue
+            filename = name
+        try:
+            filename = str(Path(filename).relative_to(cwd))
+        except ValueError:
+            pass
+        result.append(f"{filename}:{frame.f_lineno} in {code.co_name}")
+        frame = frame.f_back
+    result.reverse()
+    collapsed = [frame for index, frame in enumerate(result) if index == 0 or frame != result[index - 1]]
+    if len(collapsed) > 16:
+        collapsed = collapsed[:3] + ["..."] + collapsed[-12:]
+    return tuple(collapsed)
+
+
+def _log_learning_summary(replaces: dict[str, str], learning: set[Any]) -> None:
+    with _lock:
+        origins = {rule: traces.copy() for rule, traces in _learning_origins.items()}
+    section_types = {
+        "learning_guard_import": "LearnImportRule",
+        "learning_guard_files": "LearnFileRule",
+        "learning_guard_socket": "LearnSocketRule",
+        "learning_guard_api": "LearnApiRule",
+        "learning_guard_eval": ("LearnEvalRule", "LearnEvalContext"),
+    }
+    lines = ["Learning rule provenance:"]
+    for section, generated in replaces.items():
+        rules = [line for line in generated.splitlines() if line and not line.startswith("#")]
+        if not rules:
+            continue
+        lines.extend((f"[{section}]", *(f"  generated: {rule}" for rule in rules)))
+        source_type = section_types.get(section)
+        if isinstance(source_type, str):
+            sources = [rule for rule in learning if type(rule).__name__ == source_type]
+        elif isinstance(source_type, tuple):
+            sources = [rule for rule in learning if type(rule).__name__ in source_type]
+        else:
+            sources = []
+        if section == "learning_remote_result":
+            sources = [rule for rule in learning if isinstance(rule, str) and rule.startswith("remote-result-mode=")]
+        if section == "learning_guard_envs":
+            keys = {line.partition("=")[2].partition("=")[0] for line in rules}
+            sources = [rule for rule in origins if isinstance(rule, LearnEnvRule) and rule.key in keys]
+            missing = sorted(keys - {rule.key for rule in sources})
+            if missing:
+                sample = ", ".join(missing[:8])
+                suffix = f" and {len(missing) - 8} more" if len(missing) > 8 else ""
+                lines.append(f"  origin not captured at INFO: {sample}{suffix}")
+        if section == "learning_guard_import":
+            modules = {module.strip() for rule in rules for module in rule.partition("=")[2].split(",")}
+            sources = [rule for rule in sources if getattr(rule, "name", None) in modules]
+            missing = sorted(modules - {rule.name for rule in sources})
+            if missing:
+                sample = ", ".join(missing[:8])
+                suffix = f" and {len(missing) - 8} more" if len(missing) > 8 else ""
+                lines.append(f"  origin not captured at INFO: {sample}{suffix}")
+        if not sources:
+            if section not in {"learning_guard_envs", "learning_guard_import"}:
+                lines.append("  origin not captured at INFO")
+            continue
+        grouped: dict[tuple[str, ...], list[tuple[Any, int]]] = {}
+        missing_sources = []
+        for source in sources:
+            traces = origins.get(source)
+            if not traces:
+                missing_sources.append(repr(source))
+                continue
+            for trace, count in traces.items():
+                grouped.setdefault(trace, []).append((source, count))
+        ordered_traces = sorted(
+            grouped.items(),
+            key=lambda item: sum(count for _, count in item[1]),
+            reverse=True,
+        )
+        for trace, observed in ordered_traces[:12]:
+            labels = ", ".join(f"{source!r} ({count} observations)" for source, count in observed[:5])
+            if len(observed) > 5:
+                labels += f", and {len(observed) - 5} more rules"
+            lines.append(f"  source: {labels}: {' -> '.join(trace)}")
+        if len(grouped) > 12:
+            lines.append(f"  and {len(grouped) - 12} more distinct stacks")
+        if missing_sources:
+            sample = ", ".join(sorted(missing_sources)[:5])
+            suffix = f" and {len(missing_sources) - 5} more" if len(missing_sources) > 5 else ""
+            lines.append(f"  origin not captured at INFO: {sample}{suffix}")
+    pysandboxes_logger.info("\n".join(lines))
 
 
 def _manage_olds_file(learning_path: Path) -> tuple[Path, Path | None]:
@@ -384,8 +518,18 @@ def add_learning_rule(rule: Any) -> None:
         rule: The rule to add to the learning collection.
     """
 
+    if not is_learning_mode():
+        return
     with _lock:
-
-        if is_learning_mode() and rule not in _learning:
+        if rule not in _learning:
             _learning.add(rule)
             pysandboxes_logger.debug(repr(rule))
+    record_learning_origin(rule)
+
+
+def record_learning_origin(rule: Any) -> None:
+    """Record the source stack for a privilege stored outside the learning set."""
+    if is_learning_mode() and pysandboxes_logger.isEnabledFor(logging.INFO):
+        trace = _capture_learning_stack()
+        with _lock:
+            _learning_origins.setdefault(rule, Counter())[trace] += 1

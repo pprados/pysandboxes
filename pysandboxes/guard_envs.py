@@ -16,8 +16,10 @@ import sys
 import threading
 from typing import Any, Callable, Generator, Iterator, NamedTuple, cast
 from weakref import WeakKeyDictionary
+from pathlib import Path
 
 from .guard_wraps import guard_wraps
+from .learning import LearnEnvRule, record_learning_origin
 from .main_logger import ErrorMsg, format_ruleref
 from .sb_types import ConfigLine, ConfigLines, Envs
 from .tools import Environ, GlobPattern, resolve_env_variables
@@ -222,6 +224,7 @@ class LearnEnviron(os._Environ):
         """Learn a read, unless the code wrote the key itself before."""
         if key not in self._written:
             self._keys_used.add(key)
+            record_learning_origin(LearnEnvRule(key))
 
     def learn_write(self, key: str) -> None:
         """Note a key the code set or removed: the rules never have to grant it."""
@@ -321,6 +324,16 @@ class LearnEnviron(os._Environ):
             return True
         except KeyError:
             return False
+
+
+def expanduser(path: Path) -> Path:
+    """Expand the current user's home without learning PySandboxes' own lookup."""
+    original_env = getattr(os.environ, "_original_envs", os.environ)
+    if path.parts and path.parts[0] == "~":
+        home = original_env.get("HOME") or original_env.get("USERPROFILE")
+        if home:
+            return Path(home).joinpath(*path.parts[1:])
+    return path.expanduser()
 
 
 class LearnEnvironBytes(os._Environ):
