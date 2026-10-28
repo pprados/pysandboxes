@@ -37,6 +37,7 @@ the Python layer with `subprocess`; kernel-backed providers are Linux technologi
 
 ### Fixed
 
+- `eval-max-alloc` with an out-of-range value, such as `infMB`, is reported as a configuration error instead of crashing the profile parser.
 - `shutil.disk_usage()` now obeys file access rules.
 - Learn module source access found by `importlib`, so `python-sb -m package.module` works after learning without granting project-root reads.
 - `python-sb app/script.py` runs again under a profile that exposes only `./app`, such as a learned one.

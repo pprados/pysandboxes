@@ -45,8 +45,8 @@ def enter() -> None:
 def leave() -> None:
     """Undo one :func:`enter`."""
     global _entered
+    assert _entered > 0
     _entered -= 1
-    assert _entered >= 0
 
 
 def is_in_sandbox() -> bool:

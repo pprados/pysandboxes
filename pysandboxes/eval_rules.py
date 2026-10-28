@@ -161,7 +161,10 @@ def parse_scalar(key: str, value: str) -> int | float | str:
     if key in _SIZE_KEYS:
         for suffix, factor in _SIZE_SUFFIX.items():
             if raw.upper().endswith(suffix):
-                return int(float(raw[: -len(suffix)]) * factor)
+                try:
+                    return int(float(raw[: -len(suffix)]) * factor)
+                except OverflowError:
+                    raise ValueError(f"{key}: {value!r} is too large.") from None
         return int(raw)
     return int(raw)
 

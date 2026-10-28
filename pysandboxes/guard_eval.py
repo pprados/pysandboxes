@@ -436,8 +436,8 @@ def _interrupt(state: EvalState, timeout: float) -> None:
         state: The budget object the worker's helpers read on every tick.
         timeout: The elapsed budget, named in the refusal message.
     """
-    state.interrupted = True
     state.reason = f"eval-timeout={timeout}s"
+    state.interrupted = True
 
 
 def _raise_parse_overflow(source_ref: str, source: str) -> NoReturn:
