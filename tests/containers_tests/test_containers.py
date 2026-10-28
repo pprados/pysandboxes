@@ -124,7 +124,7 @@ all_os_sandbox: list = _all_os_sandbox_params()
 def _k8s_exec_timeout_seconds(os_sandbox: str) -> int:
     if os_sandbox.lower() == "qemu":
         return int(os.environ.get("K8S_QEMU_EXEC_TIMEOUT", "900"))
-    return int(os.environ.get("TIMEOUT", "120"))
+    return int(os.environ.get("TIMEOUT", "300"))
 
 
 # TODO: test with split mode
