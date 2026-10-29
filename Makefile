@@ -279,7 +279,7 @@ linux-vm-clean:
 # checkout: the profiles expose the checkout read-only, which a writable data directory inside it would contradict.
 ## Report test coverage
 coverage:
-	set -a && if [ -f .env ]; then source .env; fi && unset VIRTUAL_ENV && export COVERAGE_FILE=$${TMPDIR:-/tmp}/pysandboxes-coverage/.coverage && rm -rf $$(dirname $$COVERAGE_FILE) && mkdir -p $$(dirname $$COVERAGE_FILE) && uv run pytest tests/integration_tests tests/unit_tests --cov=pysandboxes --cov-branch --cov-report=term --cov-report=html
+	set -a && if [ -f .env ]; then source .env; fi && unset VIRTUAL_ENV && export COVERAGE_FILE=$${TMPDIR:-/tmp}/pysandboxes-coverage/.coverage && rm -rf $$(dirname $$COVERAGE_FILE) && mkdir -p $$(dirname $$COVERAGE_FILE) && uv run pytest -m "not slow" tests/integration_tests tests/unit_tests --cov=pysandboxes --cov-branch --cov-report=term --cov-report=html
 
 # Each mutant runs the whole TESTS list: point TESTS at the module's own tests to go faster.
 MUTATION_TESTS ?= tests/unit_tests
