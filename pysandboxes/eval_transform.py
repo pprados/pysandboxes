@@ -19,6 +19,7 @@ import logging
 from importlib import resources
 from typing import NamedTuple
 
+from ._contracts import ensure, post, raises
 from .e import EvalSyntaxRejected
 from .eval_rules import SYNTAX_GROUPS, EvalRules
 
@@ -77,6 +78,7 @@ class Violation(NamedTuple):
     warning: str = ""
 
 
+@post(lambda result: result >= 1)
 def _depth(node: ast.AST) -> int:
     """Return the static nesting depth of `node`, counting itself as one.
 
@@ -211,6 +213,7 @@ class _Validator(ast.NodeVisitor):
         self.generic_visit(node)
 
 
+@ensure(lambda tree, rules, result: result == sorted(result, key=lambda v: (v.lineno, v.col)))
 def validate(tree: ast.AST, rules: EvalRules) -> list[Violation]:
     """Return every way `tree` leaves the sub-language `rules` describes.
 
@@ -237,6 +240,8 @@ def validate(tree: ast.AST, rules: EvalRules) -> list[Violation]:
     return sorted(validator.violations, key=lambda v: (v.lineno, v.col))
 
 
+@ensure(lambda source, violation, result: result.startswith(f"  line {violation.lineno}, col {violation.col}: "))
+@ensure(lambda source, violation, result: f"add: {violation.remedy}" in result)
 def render_violation(source: str, violation: Violation) -> str:
     """Render one violation as its own block, caret line included."""
     lines = source.splitlines()
@@ -252,17 +257,22 @@ def render_violation(source: str, violation: Violation) -> str:
     return "\n".join(block)
 
 
+@post(lambda result: result.split(" ")[1] in ("rule", "rules"))
 def _headline(source_ref: str, violations: list[Violation]) -> str:
     """Name how many rules were violated, in the singular for one."""
     return f"{len(violations)} {'rule' if len(violations) == 1 else 'rules'} violated in {source_ref}"
 
 
+@ensure(lambda source_ref, source, violations, result: result.startswith(_headline(source_ref, violations)))
+@ensure(lambda source_ref, source, violations, result: result.count("\n\n") >= len(violations))
 def render_report(source_ref: str, source: str, violations: list[Violation]) -> str:
     """Render the spec's one-report-every-violation block."""
     header = _headline(source_ref, violations)
     return "\n\n".join([header] + [render_violation(source, v) for v in violations])
 
 
+@raises(EvalSyntaxRejected)
+@ensure(lambda source_ref, source, violations, result: not violations)
 def raise_if_rejected(source_ref: str, source: str, violations: list[Violation]) -> None:
     """Raise `EvalSyntaxRejected` when there is anything to report.
 
@@ -295,15 +305,18 @@ def raise_if_rejected(source_ref: str, source: str, violations: list[Violation])
 _GUARDED_BINOPS: dict[type, str] = {ast.Pow: "**", ast.Mult: "*", ast.Add: "+", ast.LShift: "<<", ast.Mod: "%"}
 
 
+@post(lambda result: isinstance(result.func, ast.Name) and result.keywords == [])
 def _call(name: str, args: list[ast.expr]) -> ast.Call:
     """Build a call on one of the `__sb_` helpers."""
     return ast.Call(func=ast.Name(id=name, ctx=ast.Load()), args=args, keywords=[])
 
 
+@post(lambda result: isinstance(result.ctx, ast.Load))
 def _load(name: str) -> ast.Name:
     return ast.Name(id=name, ctx=ast.Load())
 
 
+@post(lambda result: isinstance(result.ctx, ast.Store))
 def _store(name: str) -> ast.Name:
     return ast.Name(id=name, ctx=ast.Store())
 
