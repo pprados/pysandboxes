@@ -67,7 +67,8 @@ from typing import (
     cast,
 )
 
-from .e import RuleSocketConnectionRefusedError
+from ._contracts import ensure, post, raises
+from .e import RulePermissionError, RuleSocketConnectionRefusedError
 from .guard_files import _apply_dest_to_src_rules
 from .guard_wraps import guard_wraps
 from .immutable_dict import ImmutableDict
@@ -214,6 +215,14 @@ _LOOPBACK_HOSTS: dict[str, tuple[str, ...]] = {
 }
 
 
+@post(lambda result: len(result) % 2 == 0)
+@post(lambda result: all(info[1] in (socket.SOCK_STREAM, socket.SOCK_DGRAM) for info in result))
+@post(
+    lambda result: all(
+        (info[1], info[2]) in ((socket.SOCK_STREAM, socket.IPPROTO_TCP), (socket.SOCK_DGRAM, socket.IPPROTO_UDP))
+        for info in result
+    )
+)
 def _addr_infos_from_ips(ips: Iterable[IPv4Address | IPv6Address]) -> list[AddrInfoType]:
     """Build addrinfo entries for known IPs, without asking a resolver.
 
@@ -237,6 +246,7 @@ def _addr_infos_from_ips(ips: Iterable[IPv4Address | IPv6Address]) -> list[AddrI
     return infos
 
 
+@post(lambda result: all(info[1] != 0 for info in result))
 def _typed_addr_infos(infos: Iterable[AddrInfoType]) -> list[AddrInfoType]:
     """Split each untyped resolver entry into its stream and datagram forms.
 
@@ -266,6 +276,8 @@ _TRANSIENT_GAI_ERRNOS = frozenset(
 _RESOLVE_RETRY_DELAYS = (0.2, 0.4)
 
 
+@post(lambda result: isinstance(result, bool))
+@ensure(lambda error, result: error.errno is not None or result is False)
 def _is_transient_gai_error(error: socket.gaierror) -> bool:
     """Whether a resolution failure is worth retrying while parsing a configuration.
 
@@ -279,6 +291,8 @@ def _is_transient_gai_error(error: socket.gaierror) -> bool:
     return error.errno in _TRANSIENT_GAI_ERRNOS
 
 
+@post(lambda result: len(result) > 0)
+@raises(socket.gaierror)
 def _resolve_with_retry(host: str) -> list[AddrInfoType]:
     """Resolve a hostname for a `net=` rule, retrying a transient resolver failure.
 
@@ -528,6 +542,9 @@ def _parse_rule(rule: ConfigLine, errors: list[tuple[str, Path, int]], pin_dns: 
         return None
 
 
+@post(lambda result: len(result[0]) == len(set(result[0])))
+@post(lambda result: not any(line.rule.startswith("net=") for line in result[1]))
+@ensure(lambda rules, errors, result: set(result[1]) <= set(rules))
 def parse_rules(rules: ConfigLines, errors: list[ErrorMsg]) -> tuple[SocketRules, ConfigLines, PinDNS]:
     """Parse network access rules from configuration.
 
@@ -571,6 +588,15 @@ def parse_rules(rules: ConfigLines, errors: list[ErrorMsg]) -> tuple[SocketRules
     return tuple(sorted_rules), ignore_rules, pin_dns
 
 
+@raises(AssertionError)
+@ensure(
+    lambda input_ports, result: all(
+        port in result for element in input_ports if isinstance(element, int) for port in (element,)
+    )
+)
+@ensure(
+    lambda input_ports, result: all(set(element) <= result for element in input_ports if isinstance(element, range))
+)
 def _flatten_ports(input_ports: set[int | range]) -> set[int]:
     """Convert port ranges to individual port numbers.
 
@@ -592,6 +618,11 @@ def _flatten_ports(input_ports: set[int | range]) -> set[int]:
     return result
 
 
+@raises(ValueError)
+@post(lambda result: all(0 <= port <= 65535 for port in result))
+@post(lambda result: isinstance(result, range) or result == tuple(sorted(set(result))))
+@ensure(lambda syntax, result: syntax.strip() != "*" or result == range(65536))
+@ensure(lambda syntax, result: syntax != "" or result == ())
 def _convert_ports_range(syntax: str) -> tuple[int, ...] | range:
     """Convert port specification string to port numbers or range.
 
@@ -715,6 +746,10 @@ def getaddrinfo(
 _IPV4_COMPATIBLE_EXCLUDED = (IPv6Address("::"), IPv6Address("::1"))
 
 
+@post(lambda result: result is None or isinstance(result, IPv4Address))
+@ensure(lambda addr, result: result is None or result.packed == addr.packed[12:16])
+@ensure(lambda addr, result: addr.ipv4_mapped is None or result == addr.ipv4_mapped)
+@ensure(lambda addr, result: addr not in (IPv6Address("::"), IPv6Address("::1")) or result is None)
 def _embedded_ipv4(addr: IPv6Address) -> IPv4Address | None:
     """The IPv4 address ``addr`` carries, under any legacy or transitional IPv6 encoding of it.
 
@@ -741,6 +776,8 @@ def _embedded_ipv4(addr: IPv6Address) -> IPv4Address | None:
     return None
 
 
+@post(lambda result: len(result) >= 1)
+@raises(RuleSocketConnectionRefusedError, ValueError)
 def _check_address_with_rules(
     socket_rules: SocketRules,
     socket_kind: Kind,
@@ -907,6 +944,8 @@ def _check_address_with_rules(
     return unique_ips
 
 
+@raises(RuleSocketConnectionRefusedError)
+@post(lambda result: False)
 def _refuse_by_default_policy(
     hostname: str, destination_port: int, unique_ips: list[IPv4Address | IPv6Address], log: bool
 ) -> None:
@@ -926,6 +965,8 @@ def _refuse_by_default_policy(
     )
 
 
+@raises(RuleSocketConnectionRefusedError, RulePermissionError)
+@ensure(lambda address, write, operation, result: not address.startswith("\x00"))
 def _check_unix_socket(address: str, *, write: bool, operation: str) -> None:
     """Authorize an AF_UNIX address against the file rules.
 
@@ -980,6 +1021,8 @@ _RetAddress: TypeAlias = Any
 _pin_dns: ImmutableDict[str, tuple[AddrInfoType, ...]] = ImmutableDict({})
 
 
+@raises(AssertionError)
+@ensure(lambda dns, result: set(_pin_dns) == set(dns))
 def set_pin_dns(dns: ImmutableDict[str, tuple[AddrInfoType, ...]]) -> None:
     global _pin_dns
     assert not _pin_dns
@@ -994,6 +1037,7 @@ def set_pin_dns(dns: ImmutableDict[str, tuple[AddrInfoType, ...]]) -> None:
 
 
 # Not used
+@raises(RuleSocketConnectionRefusedError)
 def _refuse_a_name_no_rule_can_allow(name: str) -> None:
     """Refuse, before any DNS query, a name that no ALLOW rule could reach.
 
