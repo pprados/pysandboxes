@@ -21,6 +21,7 @@ from pysandboxes.remote.sandbox_exec_daemon import (
     _build_profile,
     _feed_profile,
     _ignore_paths,
+    _network_ports,
     _network_rules,
     _symlink_directories,
 )
@@ -397,3 +398,107 @@ def test_specific_deny_suppresses_a_wider_allow_for_the_same_port(tmp_path: Path
     profile = _profile(tmp_path, sockets=(allowed, denied))
 
     assert '(allow network-outbound (remote tcp "*:*"))' not in profile
+
+
+def _ports(ports: tuple[int, ...] | range, *, deny: bool = False) -> tuple[str, ...]:
+    return _network_ports(
+        _net(Action.DENY if deny else Action.ALLOW, (Kind.TCP,), "0.0.0.0/0", ports, Direction.OUT), deny=deny
+    )
+
+
+def test_the_whole_port_range_is_one_wildcard() -> None:
+    assert _ports(range(0, 65536)) == ("*",)
+
+
+def test_a_range_not_starting_at_zero_is_expanded_or_refused_not_wildcarded() -> None:
+    assert _ports(range(1, 65536)) == ()
+    assert _ports(range(0, 65535)) == ()
+
+
+def test_a_port_list_exactly_at_the_limit_is_expanded() -> None:
+    assert _ports(range(1, _MAX_PROFILE_PORTS + 1)) == tuple(str(port) for port in range(1, _MAX_PROFILE_PORTS + 1))
+
+
+def test_the_parents_of_a_symlinked_python_directory_are_readable_as_metadata_only(tmp_path: Path) -> None:
+    install = tmp_path / "install"
+    (install / "bin").mkdir(parents=True)
+    (install / "bin" / "python3").write_text("", encoding="utf-8")
+    elsewhere = tmp_path / "elsewhere"
+    elsewhere.mkdir()
+    (elsewhere / "alias").symlink_to(install, target_is_directory=True)
+    venv_bin = tmp_path / "venv" / "bin"
+    venv_bin.mkdir(parents=True)
+    (venv_bin / "python").symlink_to(elsewhere / "alias" / "bin" / "python3")
+
+    profile = _build_profile(
+        EmptyRules,
+        temp_dir=tmp_path / "runtime",
+        scratch_dir=tmp_path / "scratch",
+        python_executable=str(venv_bin / "python"),
+        python_paths=(),
+        sse_port=45678,
+    )
+
+    assert f'(allow file-read-metadata (subpath "{elsewhere}")' in profile
+    assert f'(allow file-read* (subpath "{elsewhere}")' not in profile
+
+
+def test_an_ignore_rule_does_not_stop_the_rules_that_follow_it(tmp_path: Path) -> None:
+    exposed = tmp_path / "project"
+    ignored = tmp_path / "secret.txt"
+    profile = _profile(
+        tmp_path,
+        files=(
+            IgnoreRule(str(ignored), _line(f"ignore={ignored}")),
+            FSExposeRule(str(exposed), True, _line(f"expose-rw={exposed}")),
+        ),
+    )
+
+    assert f'(allow file-write* (subpath "{exposed.resolve()}")' in profile
+
+
+def test_the_profile_pipe_is_switched_to_blocking_writes(tmp_path: Path) -> None:
+    pipe = tmp_path / "seatbelt.sb"
+    os.mkfifo(pipe, 0o600)
+    with patch("pysandboxes.remote.sandbox_exec_daemon.os.set_blocking", wraps=os.set_blocking) as set_blocking:
+        threading.Thread(target=_feed_profile, args=(pipe, "(version 1)\n"), daemon=True).start()
+        with open(pipe, encoding="utf-8") as reader:
+            reader.read()
+        deadline = time.monotonic() + 5
+        while not set_blocking.called and time.monotonic() < deadline:
+            time.sleep(0.01)
+
+    assert set_blocking.call_args.args[1] is True
+
+
+def test_feeding_a_pipe_that_is_already_gone_does_not_raise(tmp_path: Path) -> None:
+    _feed_profile(tmp_path / "missing.sb", "(version 1)\n", timeout=0.1)
+
+
+@pytest.mark.parametrize(
+    ("is_file", "executable", "reason"),
+    [
+        (True, True, None),
+        (True, False, "/usr/bin/sandbox-exec is missing or not executable"),
+        (False, True, "/usr/bin/sandbox-exec is missing or not executable"),
+    ],
+)
+def test_the_binary_must_be_a_file_and_executable(is_file: bool, executable: bool, reason: str | None) -> None:
+    with (
+        patch("pysandboxes.remote.sandbox_exec_daemon.sys.platform", "darwin"),
+        patch("pysandboxes.remote.sandbox_exec_daemon.os.path.isfile", return_value=is_file),
+        patch("pysandboxes.remote.sandbox_exec_daemon.os.access", return_value=executable),
+    ):
+        assert SandboxExecSSEDaemon.unavailable_reason() == reason
+
+
+def test_the_profile_writer_thread_is_a_daemon_thread(tmp_path: Path) -> None:
+    daemon = SandboxExecSSEDaemon("token")
+    daemon.port = 45678
+    run_dir = tmp_path / "run"
+    run_dir.mkdir()
+    with patch("pysandboxes.remote.sandbox_exec_daemon.threading.Thread") as thread:
+        daemon.subprocess_cmd(EmptyRules, {}, run_dir / "pipe", run_dir)
+    daemon.release_sandbox_temp()
+
+    assert thread.call_args.kwargs["daemon"] is True
