@@ -144,6 +144,9 @@ Grade risks with `pysandboxes-review-rules`. Trace each whole-suite candidate th
 
 Approval to run learning does not approve profile changes. Report all candidates and ask once; add every candidate only if the user accepts the full set, otherwise add none. Put rules in the profile matching their owner. Never infer rules from strict denials. If strict verification needs an absent rule, report the denial and stop. Batch `python-import` modules by destination and owner; keep criticality comments on their own rule lines. Avoid duplicates; preserve existing rules. Report unresolved ownership, but still show each rule and its risk. Never copy the whole learn file into a profile without assigning destinations.
 
+After every successful learning run, propose integrating reviewed application rules into `.py-sandboxes`. In full mode, propose runner and test-data rules for `.py-sandboxes.tests`; in partial mode, keep host-side test and fixture rules out of application profiles. Show exact rules, destination, and risk. Ask once before editing profiles. On acceptance, integrate the approved set and run strict verification; on rejection, keep candidates in the learning file and change no profile. A strict run that passes the learning file validates it for the observed run; still offer promotion into `.py-sandboxes`.
+
+
 Report only new `.py-sandboxes.learn` candidates. Do not repeat test-framework baseline rules already reviewed into `.py-sandboxes.tests`. After justified test rules are added, app rules are approved, and strict verification passes, delete `.py-sandboxes.learn` and `.py-sandboxes.learn.old`. Keep only `.py-sandboxes` and `.py-sandboxes.tests` as profiles.
 
 ## 6. Verify strict
