@@ -3,7 +3,7 @@ import pickle
 
 import pytest  # type: ignore[import-untyped]
 
-from pysandboxes.immutable_dict import ImmutableDict
+from pysandboxes.immutable_dict import ImmutableDict, _restore_pickle
 
 
 def test_immutable_dict() -> None:
@@ -26,6 +26,20 @@ def test_immutable_dict() -> None:
     # Check immutability
     with pytest.raises(TypeError):
         my_immutable_dict["a"] = 10  # type: ignore[index]
+
+
+@pytest.mark.parametrize(
+    "keys, values",
+    [
+        (("a", "a"), (1, 2)),
+        (("a", "b"), (1,)),
+        (["a"], (1,)),
+        (("a",), [1]),
+    ],
+)
+def test_a_forged_state_is_refused(keys: object, values: object) -> None:
+    with pytest.raises(ValueError, match="Invalid ImmutableDict state"):
+        _restore_pickle(keys, values)  # type: ignore[arg-type]
 
 
 def test_pickle_and_deepcopy_keep_order_and_values() -> None:
