@@ -91,8 +91,8 @@ def generate_config_from_learning() -> None:
         learning_path, old_learning_path = _manage_olds_file(learning_path)
         logger.debug(
             "generate_config_from_learning(%s,%s)",
-            make_relative_path(learning_path),
-            make_relative_path(old_learning_path),
+            str(make_relative_path(learning_path)),
+            str(make_relative_path(old_learning_path)),
         )
 
         # Manage api rules
@@ -384,7 +384,8 @@ def _log_learning_summary(replaces: dict[str, str], learning: set[Any]) -> None:
             sample = ", ".join(sorted(missing_sources)[:5])
             suffix = f" and {len(missing_sources) - 5} more" if len(missing_sources) > 5 else ""
             lines.append(f"  origin not captured at INFO: {sample}{suffix}")
-    pysandboxes_logger.info("\n".join(lines))
+    if len(lines) > 1:
+        pysandboxes_logger.info("\n".join(lines))
 
 
 def _manage_olds_file(learning_path: Path) -> tuple[Path, Path | None]:
