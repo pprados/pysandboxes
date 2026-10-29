@@ -570,3 +570,55 @@ def test_sendmsg_still_judges_the_address_behind_extra_trailing_args() -> None:
 
     with pytest.raises(RuleSocketConnectionRefusedError, match="unsupported address"):
         wrapped(sock, [b"x"], [], 0, 12345, "extra")
+
+
+# %% Mutants of the pinned resolution, the wildcard host and the platform switches
+
+
+def _pin(monkeypatch: pytest.MonkeyPatch, *entries: tuple[Any, ...]) -> None:
+    monkeypatch.setattr(gs, "_pin_dns", ImmutableDict({"pinned.test": entries}))
+
+
+def _unreachable_resolver(name: str, *args: Any, **kwargs: Any) -> str:
+    raise AssertionError("a pinned name must not reach the resolver")
+
+
+def test_gethostbyname_prefers_the_af_inet_entry_over_an_earlier_ipv4_looking_one(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The family decides first, whatever the type of the number holding it (a plain int, not the enum)."""
+    _pin(monkeypatch, (10, 1, 6, "", ("10.0.0.9", 0)), (2, 1, 6, "", ("10.0.0.3", 0)))
+
+    assert gs._wrap_socket_gethostbyname(_unreachable_resolver)("pinned.test") == "10.0.0.3"
+
+
+def test_gethostbyname_skips_a_pin_entry_without_a_sockaddr(monkeypatch: pytest.MonkeyPatch) -> None:
+    """An entry of 3 or 4 fields has no sockaddr to read: the lookup fails cleanly instead of an IndexError."""
+    _pin(monkeypatch, (10, 1, 6, ""), (10, 1, 6))
+
+    with pytest.raises(socket.gaierror):
+        gs._wrap_socket_gethostbyname(_unreachable_resolver)("pinned.test")
+
+
+def test_an_empty_bind_host_follows_the_family_even_when_it_is_a_plain_number() -> None:
+    class Sock:
+        family = int(socket.AF_INET6)
+
+    assert gs._resolve_wildcard_host(Sock(), ("", 80)) == ("::", 80)
+
+
+def test_socketpair_is_guarded_on_windows_only(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(sys, "platform", "win32")
+    assert "socket.socketpair" in gs.patch_rules(learn=False)
+    monkeypatch.setattr(sys, "platform", "zzz")
+    assert "socket.socketpair" not in gs.patch_rules(learn=False)
+
+
+def test_an_unknown_platform_reads_no_hosts_file(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    """Only win32 looks under SystemRoot: a platform sorting after it must not."""
+    hosts = tmp_path / "System32\\drivers\\etc\\hosts"
+    hosts.write_text("10.0.0.1 somewhere.test\n")
+    monkeypatch.setenv("SystemRoot", str(tmp_path))
+    monkeypatch.setattr(sys, "platform", "zzz")
+
+    assert gs._read_host_file() == ({}, {})
