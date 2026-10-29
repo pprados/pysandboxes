@@ -1,0 +1,10 @@
+{
+  "version": 1,
+  "skills": {
+    "adr-backfill": {
+      "source": "liza-mas/liza",
+      "sourceType": "github",
+      "computedHash": "25f20f417ad52489a88c51be05e7b5627858f1a88120ec0067d28b37b3586a0e"
+    }
+  }
+}
