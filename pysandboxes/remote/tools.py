@@ -43,6 +43,7 @@ from pathlib import Path
 from types import ModuleType
 from typing import Any, cast
 
+from .._contracts import ensure, post, raises
 from ..e import RestrictedUnpicklingError, SandBoxProtocolError, set_sandbox_denials
 
 logger = logging.getLogger(__name__)
@@ -69,6 +70,7 @@ _TRANSIENT_CONNECTION_ERRNOS = frozenset(
 )
 
 
+@post(lambda result: isinstance(result, bool))
 def is_transient_connection_error(error: OSError) -> bool:
     """Whether a connection error is worth retrying during startup.
 
@@ -131,6 +133,8 @@ def get_venv() -> str | None:
         return os.environ.get("VIRTUAL_ENV")
 
 
+@post(lambda result: result in (logging.ERROR, logging.WARNING, logging.INFO, logging.DEBUG, logging.NOTSET))
+@ensure(lambda verbose_count, result: verbose_count != 0 or result == logging.ERROR)
 def configure_logging_level(verbose_count: int) -> int:
     """Configure logging level based on verbose flag count.
 
@@ -160,6 +164,7 @@ def configure_logging_level(verbose_count: int) -> int:
     return log_level
 
 
+@ensure(lambda package_name, result: package_name in result)
 def suggest_package_installation(package_name: str) -> str:
     """Suggest package installation command based on detected OS.
 
@@ -237,6 +242,7 @@ def suggest_package_installation(package_name: str) -> str:
             """).strip()  # noqa: E501
 
 
+@post(lambda result: result in ("", "-v", "-vv", "-vvv"))
 def return_level_parameter(log_level: int) -> str:
     """Convert logging level to verbose parameter string.
 
@@ -295,6 +301,7 @@ _pickle_loads = pickle.loads
 _PICKLE_PROTOCOL = 5
 
 
+@post(lambda result: result.isascii())
 def to_b85(obj: Any) -> str:
     """Serialize object to base85-encoded string.
 
@@ -557,6 +564,8 @@ _DENIED_BUILTINS = frozenset(
 )
 
 
+@raises(SandBoxProtocolError)
+@ensure(lambda line, result: len(line) <= _SSE_LINE_LIMIT)
 def check_sse_line(line: str) -> None:
     """Refuse a reply line the parent's HTTP reader would not accept.
 
@@ -582,6 +591,8 @@ def check_sse_line(line: str) -> None:
         )
 
 
+@raises(RestrictedUnpicklingError)
+@ensure(lambda data, result: len(data) <= _MAX_BYTES)
 def _prescan(data: bytes) -> None:
     """Reject a pickle stream on opcode alphabet or size before any execution.
 
@@ -646,6 +657,7 @@ def _prescan(data: bytes) -> None:
         raise RestrictedUnpicklingError(f"unparsable pickle stream: {exc}") from exc
 
 
+@post(lambda result: isinstance(result, bool))
 def result_requires_objects(b85: str) -> bool:
     """Return whether a result pickle holds more than the values ``data-only`` accepts."""
     try:
@@ -793,6 +805,8 @@ def descriptor_predicate(module: str, name: str, obj: Any) -> bool:
     return module == "tblib" or module.startswith("tblib.")
 
 
+@ensure(lambda exception, denials, result: result[2] == str(exception))
+@ensure(lambda exception, denials, result: result[3] == list(denials))
 def describe_exception(exception: BaseException, denials: list[str]) -> tuple[str, str, str, list[str]]:
     """Reduce an exception to primitives, for the fallback channel (child side).
 
@@ -859,6 +873,7 @@ def rebuild_from_descriptor(
     return exception
 
 
+@raises(RestrictedUnpicklingError)
 def from_b85_restricted(
     b85: str,
     predicate: Callable[[str, str, Any], bool] | None,
@@ -919,6 +934,7 @@ def _load_b85_restricted(b85: str, predicate: Callable[[str, str, Any], bool] | 
     return _RestrictedUnpickler(data, predicate).load()
 
 
+@raises(RestrictedUnpicklingError)
 def _validate_data_only(value: Any, seen: set[int] | None = None, depth: int = 0) -> None:
     """Refuse reconstructed values outside the primitive result grammar."""
     if depth > _MAX_MARK_DEPTH:  # pragma: no mutate
