@@ -64,6 +64,7 @@ from pathlib import Path
 from typing import Any, Callable, NoReturn, cast
 
 from . import guard_api, guard_files
+from ._contracts import ensure, post, raises
 from .e import EvalInterrupted, RuleApiPermissionError
 from .eval_rules import CAPABILITY_BUILTINS, DEFAULT_RULES, EvalProfiles, EvalRules, LearnEvalContext, LearnEvalRule
 from .eval_runtime import (
@@ -126,6 +127,7 @@ def _reset_context_warnings() -> None:
     _warned.clear()
 
 
+@post(lambda result: result in ("strong", "weak", ""))
 def classify_context_value(value: Any) -> str:
     """Grade one name a caller put in an eval context.
 
@@ -194,6 +196,7 @@ def warn_about_context(context: dict[str, Any], source_ref: str) -> None:
         )
 
 
+@ensure(lambda rules, result: all(name in dir(builtins) and rules.call.allows(name) for name in result))
 def _builtins_from(rules: EvalRules) -> dict[str, Any]:
     """Build `__builtins__` from `eval-call`, and from nothing else.
 
@@ -213,6 +216,7 @@ def _builtins_from(rules: EvalRules) -> dict[str, Any]:
     return allowed
 
 
+@post(lambda result: "__builtins__" in result and all(name in result for name in HELPERS))
 def build_namespace(
     rules: EvalRules,
     *,
@@ -333,6 +337,7 @@ _leak_lock = threading.Lock()
 _inline = False
 
 
+@ensure(lambda profiles, learn=False, result=None: _profiles is profiles)
 def activate_guard(profiles: EvalProfiles, *, learn: bool = False) -> None:
     """Install the parsed profiles, just like the other guards.
 
@@ -350,6 +355,7 @@ def activate_guard(profiles: EvalProfiles, *, learn: bool = False) -> None:
     logger.debug("guard_eval: %d profile(s)", len(profiles))
 
 
+@post(lambda result: result >= 0)
 def leaked_threads() -> int:
     """Return how many uncooperative workers are still burning CPU."""
     with _leak_lock:
@@ -358,6 +364,8 @@ def leaked_threads() -> int:
         return len(_leaked)
 
 
+@raises(ValueError)
+@post(lambda result: result is not None)
 def resolve_profile(profile: str) -> EvalRules:
     """Return the rules for `profile`.
 
