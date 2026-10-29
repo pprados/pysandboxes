@@ -43,6 +43,7 @@ from typing import (
     cast,
 )
 
+from ._contracts import ensure, post, raises
 from .e import RuleModuleNotFoundError
 from .guard_wraps import guard_wraps
 from .immutable_dict import ImmutableDict
@@ -91,6 +92,14 @@ class LearnImportRule(NamedTuple):
     name: str
 
 
+@post(lambda result: all("." not in module for module in result))
+@ensure(lambda patch_rules, result: sum(len(rules) for rules in result.values()) == len(patch_rules))
+@ensure(
+    lambda patch_rules, result: {
+        f"{module}.{rule.code_path}" if rule.code_path else module for module, rules in result.items() for rule in rules
+    }
+    == set(patch_rules)
+)
 def _conv_patch_rules(patch_rules: dict[str, Callable]) -> PatchRules:
     """Convert patch rules dictionary to structured patch rules.
 
@@ -175,6 +184,16 @@ def user_code() -> Iterator[None]:
         _user_scope.reset(token)
 
 
+@post(lambda result: isinstance(result, bool))
+@ensure(lambda module_name, result: not (_rules[:1] == ("*",)) or result)
+@ensure(lambda module_name, result: module_name != "pysandboxes" or result)
+@ensure(
+    lambda module_name, result: not _user_scope.get()
+    or module_name in _rules
+    or module_name == "pysandboxes"
+    or _rules[:1] == ("*",)
+    or not result
+)
 def _is_import_allowed(module_name: str) -> bool:
     """Whether ``module_name`` may be imported under the active rules.
 
@@ -213,6 +232,8 @@ _KEPT_MODULES = frozenset(
 )
 
 
+@raises(RuleModuleNotFoundError)
+@ensure(lambda name, result: name not in _KEPT_MODULES or result is None)
 def _judge_user_import(name: str) -> None:
     """Refuse, or record in learning mode, an import by the user's code that the rules do not grant.
 
@@ -247,6 +268,9 @@ _IMPORT_MACHINERY = frozenset({"importlib._bootstrap", "importlib._bootstrap_ext
 _KEPT_LIBRARIES = _KEPT_MODULES - {"__main__"}
 
 
+@post(lambda result: isinstance(result, str) and not result.startswith("."))
+@ensure(lambda name, globals_, level, result: result.endswith(name))
+@raises(ImportError)
 def _absolute_name(name: str, globals_: Any, level: int) -> str:
     """The absolute name a relative ``__import__`` resolves to, from the same globals the import used."""
     # The resolution __import__ itself applies: __package__, then __spec__.parent, then __name__.
@@ -293,6 +317,10 @@ def _wrap_import_module(func: Callable[..., Any]) -> Callable[..., Any]:
     return wrapper
 
 
+@post(lambda result: "*" not in result[0] or result[0] == ("*",))
+@post(lambda result: not any(line.rule.startswith("python-import=") for line in result[1]))
+@post(lambda result: all(name == name.strip() for name in result[0]))
+@ensure(lambda config, errors, result: set(result[1]) <= set(config))
 def parse_rules(
     config: ConfigLines,
     errors: list[ErrorMsg],
