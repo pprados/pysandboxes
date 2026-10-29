@@ -83,6 +83,8 @@ def resolve_env_variables(s: str, envs: Environ | Envs) -> str:
     return restore(s)
 
 
+@raises(ValueError)
+@ensure(lambda lines, env_vars, result: len(result) == len(lines))
 def substitute_env_vars(lines: list[str], env_vars: Environ | Envs) -> list[str]:
     """Substitute environment variables in a list of strings.
 
@@ -96,6 +98,7 @@ def substitute_env_vars(lines: list[str], env_vars: Environ | Envs) -> list[str]
     return [resolve_env_variables(line, env_vars) for line in lines]
 
 
+@ensure(lambda lines, env_vars, result: [(x.path, x.ln) for x in result] == [(x.path, x.ln) for x in lines])
 def substitute_config_env_vars(lines: ConfigLines, env_vars: Environ) -> ConfigLines:
     """Substitute environment variables in configuration lines.
 
@@ -169,6 +172,8 @@ def remove_comments(config: list[str]) -> list[str]:
     return processed_lines
 
 
+@post(lambda result: result == result.rstrip())
+@ensure(lambda line, result: line.startswith(result))
 def _remove_comment(line: str) -> str:
     """Remove comments from a line while respecting quotes.
 
@@ -215,6 +220,7 @@ def _remove_comment(line: str) -> str:
 # %% -----------------------
 
 
+@post(lambda result: isinstance(result, bool))
 def is_in_sandbox() -> bool:
     """Check if currently executing inside a sandbox.
 
@@ -266,6 +272,7 @@ def exit_status(e: SystemExit, report: bool = False) -> int:
     return 1
 
 
+@ensure(lambda module, config_name, result: result is None or result.name == config_name)
 def find_config_for_module(module: str, config_name: str) -> Path | None:
     import importlib.util
 
@@ -294,6 +301,7 @@ def find_config_for_module(module: str, config_name: str) -> Path | None:
 SyncOrAsyncFunc = Callable[[], None] | Callable[[], Awaitable[None]]
 
 
+@post(lambda result: len(result) == 2 and all(x is None or isinstance(x, str) for x in result))
 def get_callable_info(func: Callable[..., Any]) -> tuple[str | None, str | None]:
     """
     Retrieves the module name and the fully qualified name of a callable.
@@ -346,6 +354,7 @@ mixed_sync_and_async_error = (
 )
 
 
+@raises(RuntimeError)
 def check_mixte_async_async() -> None:
     """Check for mixed synchronous and asynchronous execution contexts.
 
@@ -362,6 +371,8 @@ def check_mixte_async_async() -> None:
             raise
 
 
+@raises(RuntimeError)
+@ensure(lambda executable, all_paths, result: result is all_paths)
 def follow_links_executable(executable: Path, all_paths: set[Path]) -> set[Path]:
     """Follow symlinks for executable paths and add to paths set.
 
