@@ -9,10 +9,9 @@ name: Nightly
 
 on:
   schedule:
-    # 03:17 UTC (05:17 in Paris in summer): the quietest hours of the hosted runners, between the American evening
-    # and the European morning; off the hour, when scheduled runs pile up. GitHub once fired a schedule 5h30 late
-    # (2026-09-30): such a run ends in the working day instead of before it.
-    - cron: "17 3 * * *"
+    # 18:30 UTC (19:30 in Paris in winter, 20:30 in summer: a cron is in UTC and ignores daylight saving time): off the
+    # hour, when scheduled runs pile up. GitHub fires this schedule late, by up to about 6 hours.
+    - cron: "30 18 * * *"
   workflow_dispatch:
 
 permissions:

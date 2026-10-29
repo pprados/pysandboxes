@@ -333,7 +333,7 @@ FULL_GATE_WORKFLOW = WORKFLOW.parent / "full-gate.yml"
 
 
 def test_the_nightly_cron_lives_in_the_trigger_so_that_it_follows_the_default_branch() -> None:
-    assert _workflow(NIGHTLY_WORKFLOW)[True]["schedule"] == [{"cron": "17 3 * * *"}]
+    assert _workflow(NIGHTLY_WORKFLOW)[True]["schedule"] == [{"cron": "30 18 * * *"}]
     assert "schedule" not in _workflow(FULL_GATE_WORKFLOW)[True]
 
 

@@ -34,7 +34,7 @@ alias python-sb='uvx --prerelease allow \
 It takes the highest version found on pypi.org and on these two test.pypi.org pages. `--find-links` limits
 test.pypi.org to the two packages: every dependency still comes from pypi.org, where nobody can squat its name.
 
-Tag a commit the nightly already proved, when you can. The nightly (`nightly-trigger.yml` starts `full-gate.yml` on `develop` at 03:17 UTC) runs the
+Tag a commit the nightly already proved, when you can. The nightly (`nightly-trigger.yml` starts `full-gate.yml` on `develop` at 18:30 UTC) runs the
 integration, sample, container and macOS and Windows provider suites; a tag on the same code reuses that run instead
 of repeating it. The lookup walks back over the release commit and over commits that touch only documentation, so a
 final version tagged right after a green nightly reuses it. A tag on any other code runs the suites itself, without the `qemu-tcg` rows, which
