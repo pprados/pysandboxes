@@ -27,6 +27,8 @@ Planned work, in no committed order:
     - [X] sub process
     - [X] ~~sub interpreter~~ (rejected: isolating one interpreter from another is not possible)
     - [X] Landlock
+    - [ ] seccomp-bpf alone (without Landlock)
+    - [ ] Capsicum (FreeBSD)
   - [ ] Sandbox utilities
     - [X] firejail
     - [X] unshare
@@ -85,6 +87,10 @@ Planned work, in no committed order:
   - [ ] Compile a part of code
   - [ ] Propagate the tracability id
   - [ ] Use anyio
+  - [ ] Other transports between the parent and the sandbox (SSE over local HTTP is used: portable to every provider)
+    - [ ] Pipe or Unix socket (not portable to a VM)
+    - [ ] gRPC
+    - [ ] WebSocket
   - [ ] Use [Condon JIT](https://docs.exaloop.io/integrations/python/codon-from-python/#using-codonjit)
   - [ ] DevContainer
 
