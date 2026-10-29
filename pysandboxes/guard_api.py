@@ -13,6 +13,7 @@ import os
 import sys
 from typing import Any, Callable, NamedTuple
 
+from ._contracts import ensure, post
 from .e import RuleApiPermissionError
 from .guard_wraps import guard_wraps
 from .immutable_dict import ImmutableDict
@@ -438,6 +439,7 @@ a typo is still caught while a version difference is not a false alarm.
 """
 
 
+@post(lambda result: result <= set(_CATEGORY_OF))
 def _not_applicable() -> frozenset[str]:
     """Return the entries this interpreter must not patch.
 
@@ -460,11 +462,18 @@ _CATEGORY_OF: dict[str, str] = {
 }
 
 
+@post(lambda result: len(result) == len(set(result)) and len(result) > 0)
+@post(lambda result: all("." in qualname for qualname in result))
 def all_qualnames() -> tuple[str, ...]:
     """Return every qualified name of the registry, in category order."""
     return tuple(_CATEGORY_OF)
 
 
+@post(lambda result: "." not in result[0])
+@ensure(
+    lambda qualname, result: (result[0] + "." + result[1] if result[1] else result[0]) == qualname
+    or "." not in qualname
+)
 def split_qualname(qualname: str) -> tuple[str, str]:
     """Split ``module.attr`` into its module and its attribute path.
 
@@ -492,6 +501,7 @@ class ApiRule(NamedTuple):
 ApiRules = tuple[ApiRule, ...]
 
 
+@ensure(lambda errors, rule, detail, result: errors[-1][1:] == (rule.path, rule.ln) and detail in errors[-1][0])
 def _add_error(errors: list[ErrorMsg], rule: ConfigLine, detail: str) -> None:
     errors.append(
         (
@@ -502,6 +512,14 @@ def _add_error(errors: list[ErrorMsg], rule: ConfigLine, detail: str) -> None:
     )
 
 
+@post(lambda result: not any(line.rule.startswith(_PREFIX) for line in result[1]))
+@post(lambda result: all(rule.is_category == (rule.target in CATEGORIES) for rule in result[0]))
+@post(
+    lambda result: all(
+        rule.target == "*" or rule.target in CATEGORIES or rule.target in _CATEGORY_OF for rule in result[0]
+    )
+)
+@ensure(lambda config, errors, result: set(result[1]) <= set(config))
 def parse_rules(
     config: ConfigLines,
     errors: list[ErrorMsg],
@@ -579,6 +597,7 @@ def parse_rules(
 _allowed: ImmutableDict[str, bool] = ImmutableDict({})
 
 
+@ensure(lambda rules, result: set(_allowed) == set(all_qualnames()))
 def activate_guard(rules: ApiRules) -> None:
     """Apply the decision per registered function that `resolve` gives."""
     global _allowed
@@ -590,6 +609,13 @@ def activate_guard(rules: ApiRules) -> None:
     )
 
 
+@post(lambda result: set(result) == set(all_qualnames()))
+@post(lambda result: all(isinstance(allowed, bool) for allowed in result.values()))
+@ensure(
+    lambda rules, result: all(
+        not result[r.target] for r in rules if not r.is_category and r.target != "*" and not r.allow
+    )
+)
 def resolve(rules: ApiRules) -> dict[str, bool]:
     """Flatten the rules into a decision per registered function.
 
@@ -618,6 +644,8 @@ def resolve(rules: ApiRules) -> dict[str, bool]:
     return decisions
 
 
+@post(lambda result: isinstance(result, bool))
+@ensure(lambda qualname, result: qualname in _allowed or result is False)
 def is_allowed(qualname: str) -> bool:
     """Return whether a registered function may be called."""
     return _allowed.get(qualname, False)
@@ -649,6 +677,14 @@ _CATEGORY_HELP: dict[str, str] = {
 }
 
 
+@post(lambda result: all(line.startswith(("# ", "python-api=ALLOW:")) for line in result))
+@ensure(
+    lambda learn, result: all(
+        f"python-api=ALLOW:{r.qualname}" in result or f"python-api=ALLOW:{_CATEGORY_OF[r.qualname]}" in result
+        for r in learn
+        if isinstance(r, LearnApiRule)
+    )
+)
 def generate_rules(learn: set[Any]) -> list[str]:
     """Emit ``python-api=`` lines for the calls seen in learning mode.
 
@@ -738,6 +774,9 @@ if sys.platform == "win32":
 _OWNED_ELSEWHERE = frozenset(SENSITIVE_API["dynamic-code"])
 
 
+@post(lambda result: all(callable(factory) for factory in result.values()))
+@post(lambda result: not (set(result) & _OWNED_ELSEWHERE))
+@post(lambda result: not (set(result) & _not_applicable()))
 def patch_rules(learn: bool) -> dict[str, Callable[..., Any]]:
     """Return the patch table for every registered function.
 
