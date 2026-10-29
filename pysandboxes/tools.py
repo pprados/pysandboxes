@@ -335,19 +335,9 @@ def get_callable_info(func: Callable[..., Any]) -> tuple[str | None, str | None]
         callable_name = func.__qualname__
     elif hasattr(func, "__name__"):
         callable_name = func.__name__
-    elif inspect.ismethod(func):
-        # For bound methods, func.__func__ gives the underlying function
-        if hasattr(func.__func__, "__qualname__"):
-            callable_name = func.__func__.__qualname__
-        elif hasattr(func.__func__, "__name__"):
-            callable_name = func.__func__.__name__
-    elif isinstance(func, type):  # It's a class
-        callable_name = func.__qualname__
     elif callable(func):
         # It's an instance of a class with a __call__ method
-        callable_name = func.__class__.__qualname__
-        if callable_name:
-            callable_name += ".__call__"
+        callable_name = func.__class__.__qualname__ + ".__call__"
     return module_name, callable_name
 
 

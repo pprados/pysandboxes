@@ -121,3 +121,16 @@ def test_a_system_interpreter_adds_no_path_to_expose(monkeypatch: pytest.MonkeyP
         follow_links_executable(tmp_path / "python3", paths)
 
         assert not paths
+
+
+def test_a_bound_method_and_a_class_are_named_by_their_qualified_name() -> None:
+    """Both always carry a `__qualname__`: no other lookup is needed to name them."""
+
+    class Holder:
+        def method(self) -> None: ...
+
+    assert (
+        get_callable_info(Holder().method)[1]
+        == "test_a_bound_method_and_a_class_are_named_by_their_qualified_name.<locals>.Holder.method"
+    )
+    assert get_callable_info(Holder)[1].endswith("<locals>.Holder")  # type: ignore[union-attr]
