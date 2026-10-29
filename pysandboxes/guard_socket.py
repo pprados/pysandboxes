@@ -691,7 +691,7 @@ def _convert_ports_range(syntax: str) -> tuple[int, ...] | range:
         first = next(iter(ports))
         if isinstance(first, range):
             return first
-    return tuple(sorted(cast(set[int], ports)))
+    return tuple(sorted(_flatten_ports(ports)))
 
 
 @functools.lru_cache(maxsize=1000)

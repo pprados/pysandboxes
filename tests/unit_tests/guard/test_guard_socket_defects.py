@@ -475,6 +475,20 @@ def test_port_number_looks_up_the_udp_service_for_a_datagram_socket(monkeypatch:
     assert calls == [("domain", "udp")]
 
 
+def test_port_number_looks_up_the_tcp_service_for_any_other_socket_type(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Only a datagram socket reads the UDP service database: a raw socket type is above SOCK_DGRAM, not equal."""
+    calls: list[tuple[str, str]] = []
+
+    def fake_getservbyname(name: str, proto: str) -> int:
+        calls.append((name, proto))
+        return 80
+
+    monkeypatch.setattr(gs.socket, "getservbyname", fake_getservbyname)
+
+    assert gs._port_number("http", socktype=int(socket.SOCK_RAW)) == 80
+    assert calls == [("http", "tcp")]
+
+
 def test_bind_to_af_unix_needs_write_access_not_read_only(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     """Binding creates a filesystem entry: an ``expose-ro=`` rule must not be enough."""
     errors: list[ErrorMsg] = []

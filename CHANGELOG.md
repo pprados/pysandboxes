@@ -43,6 +43,7 @@ the Python layer with `subprocess`; kernel-backed providers are Linux technologi
 - `python-sb app/script.py` runs again under a profile that exposes only `./app`, such as a learned one.
 - The samples' partial-mode tests run under the provider named by `OS_SANDBOX` instead of always under `subprocess`, so
   `make sample-tests` now exercises that provider in both modes.
+- A `net=` port list with a range followed by a single port, such as `80-90,85`, no longer fails with a `TypeError`.
 
 ## [0.7.0] - 2026-10-22
 

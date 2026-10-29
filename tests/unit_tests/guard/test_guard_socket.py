@@ -440,6 +440,9 @@ def test_socket_type_any_allows_different_types(mock_getaddrinfo: Mock) -> None:
         (" ", ()),  # String with only spaces
         (",", ()),  # Only a comma
         ("80, ,443", (80, 443)),  # Empty element in the middle
+        ("80-82,85", (80, 81, 82, 85)),  # A single port after a range
+        ("80-82,81", (80, 81, 82)),  # A port already inside the range
+        ("10-11,20-21", (10, 11, 20, 21)),  # Two ranges
     ],
 )
 def test_convert_ports_range_valid_cases(port_spec: str, expected_output: Union[int, Tuple[int, ...], range]) -> None:
