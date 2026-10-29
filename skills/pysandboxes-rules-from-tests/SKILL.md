@@ -15,7 +15,7 @@ Modes:
 Mode unclear from request/code => ask. Never mix modes. Never call a module marker a sandbox boundary.
 
 ## Learning logs (required)
-Every learning run: set `Pysandboxes` logger to `DEBUG` before tests. Keep live pytest logs at `INFO`. DEBUG shows each observed rule; pytest INFO shows progress. Apply to the test-framework baseline, full-suite, and partial runs. Full mode: set logger with `python-sb -c` before `pytest.main`. Partial mode: set it before sandbox entry. Never use default logging.
+Every learning run: set `PYSANDBOXES_LOG_LEVEL=INFO` on the `python-sb` command. Keep live pytest logs at `INFO`. INFO summarizes the call stack that produced each learned rule; pytest INFO shows progress. Apply to the test-framework baseline, full-suite, and partial runs. Full mode: the variable on the command line. Partial mode: set the `Pysandboxes` logger to `INFO` before sandbox entry. Never use default logging.
 
 ## 1. Inspect
 Read `.py-sandboxes`, entry point, test config, deps, existing `.py-sandboxes.tests` / `.py-sandboxes.learn`. Keep existing profile rules and backups. Learning `.old` files are disposable; remove them. `learn=false` (included lock) => stop, explain, never remove lock. Test failure from code bug => fix before learning. Run every full-mode command with the working directory at the project root (the directory containing `pyproject.toml`); never change to `tests/`. Pass test paths explicitly, such as `tests/test_pysandboxes_empty.py` or `tests`.
@@ -59,7 +59,7 @@ Pick a fresh test-framework baseline output path and create it empty. Pass the t
 
 ```bash
 touch .py-sandboxes.baseline.learn
-uvx --with pytest --with <project-and-test-dependencies> python-sb --pysandboxes-config=.py-sandboxes.tests --learn=.py-sandboxes.baseline.learn -c 'import logging; logging.getLogger("Pysandboxes").setLevel(logging.DEBUG); import pytest; raise SystemExit(pytest.main(["-q", "-o", "log_cli=true", "--log-cli-level=INFO", "tests/test_pysandboxes_empty.py"]))'
+PYSANDBOXES_LOG_LEVEL=INFO uvx --with pytest --with <project-and-test-dependencies> python-sb --pysandboxes-config=.py-sandboxes.tests --learn=.py-sandboxes.baseline.learn -c 'import pytest; raise SystemExit(pytest.main(["-q", "-o", "log_cli=true", "--log-cli-level=INFO", "tests/test_pysandboxes_empty.py"]))'
 ```
 
 Prefer the project's environment when it contains `python-sb`, pytest, and all dependencies. Otherwise include pytest and project/test dependencies with `uvx --with`. Learning permits accesses and gives no OS sandbox boundary. Run trusted code only. When the task requests learning, do not ask for run approval.
@@ -83,7 +83,7 @@ From the project root, create `.py-sandboxes.learn` as a new empty file after cl
 
 ```bash
 touch .py-sandboxes.learn
-uvx --with pytest --with <project-and-test-dependencies> python-sb --pysandboxes-config=.py-sandboxes.tests --learn=.py-sandboxes.learn -c 'import logging; logging.getLogger("Pysandboxes").setLevel(logging.DEBUG); import pytest; raise SystemExit(pytest.main(["-q", "-o", "log_cli=true", "--log-cli-level=INFO", "tests"]))'
+PYSANDBOXES_LOG_LEVEL=INFO uvx --with pytest --with <project-and-test-dependencies> python-sb --pysandboxes-config=.py-sandboxes.tests --learn=.py-sandboxes.learn -c 'import pytest; raise SystemExit(pytest.main(["-q", "-o", "log_cli=true", "--log-cli-level=INFO", "tests"]))'
 ```
 
 Replace `pytest` with the project's configured test runner, include required project/test dependencies, and pass the test root explicitly when needed; or run the project's `python-sb` from its virtual environment. Verify collection and success before treating output as valid; never treat a missing import or collection failure as completed learning.
@@ -94,12 +94,12 @@ Because `.py-sandboxes.tests` contains accepted test-framework baseline rules, `
 
 ### Learning log detail
 
-Commands set `Pysandboxes` to `DEBUG` and pytest live logs to `INFO`. Use `-c` to set the logger before pytest; `python-sb` runs `-c` inside its sandbox. Use a fresh learning output path each run.
+Commands set `PYSANDBOXES_LOG_LEVEL=INFO` and pytest live logs to `INFO`. `python-sb` passes the level to its sandboxed process. Use a fresh learning output path each run.
 
-DEBUG logs each observed rule. If source stays unclear, capture stdout and stderr, then trace the operation in source. Logs show operation and resource, not always caller.
+INFO logs the call stack that produced each learned rule, grouped by stack. If the source stays unclear, capture stdout and stderr, then trace the operation in source.
 
 ```bash
-uv run --locked python-sb --pysandboxes-config=.py-sandboxes.tests --learn=.py-sandboxes.debug.learn -c 'import logging; logging.getLogger("Pysandboxes").setLevel(logging.DEBUG); import pytest; raise SystemExit(pytest.main(["-q", "-o", "log_cli=true", "--log-cli-level=INFO", "tests"]))'
+PYSANDBOXES_LOG_LEVEL=INFO uv run --locked python-sb --pysandboxes-config=.py-sandboxes.tests --learn=.py-sandboxes.debug.learn -c 'import pytest; raise SystemExit(pytest.main(["-q", "-o", "log_cli=true", "--log-cli-level=INFO", "tests"]))'
 ```
 
 Replace `tests` with the project's test root. Use a fresh output path each rerun.
@@ -189,7 +189,7 @@ def pytest_configure(config: pytest.Config) -> None:
 def sandbox_profile(request: pytest.FixtureRequest) -> Iterator[None]:
     learning = os.environ.get("SANDBOX_LEARN") and request.node.get_closest_marker("sandbox_learn")
     if learning:
-        logging.getLogger("Pysandboxes").setLevel(logging.DEBUG)
+        logging.getLogger("Pysandboxes").setLevel(logging.INFO)
         with sandboxes(sandboxes_config=PROFILE, learn=str(LEARNED)):
             yield
     else:

@@ -6,6 +6,7 @@ Each case starts ``python -m pysandboxes.python_sb`` as the user does. QEMU boot
 that only prove the command line leave it out: ``test_guards_with_providers`` already runs it end to end.
 """
 
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -19,7 +20,12 @@ _ROWS = [row for row in os_sandbox_params() if not str(row.values[0]).startswith
 
 
 def _python_sb(
-    os_sandbox: str, profile_lines: str, args: list[str], tmp_path: Path, stdin: str | None = None
+    os_sandbox: str,
+    profile_lines: str,
+    args: list[str],
+    tmp_path: Path,
+    stdin: str | None = None,
+    env: dict[str, str] | None = None,
 ) -> "subprocess.CompletedProcess[str]":
     profile = tmp_path / "cli.profile"
     exposed = "".join(f"expose-ro={path}\n" for path in (str(tmp_path), *_INTERPRETER_PATHS))
@@ -30,6 +36,7 @@ def _python_sb(
         [sys.executable, "-m", "pysandboxes.python_sb", f"--pysandboxes-config={profile}", *args],
         cwd=ROOT_DIR,
         input=stdin,
+        env={**os.environ, **env} if env else None,
         capture_output=True,
         text=True,
         timeout=_TIMEOUT_SECONDS,
@@ -118,3 +125,35 @@ def test_a_locked_profile_refuses_a_rule_on_the_command_line(tmp_path: Path) -> 
     assert done.returncode != 0
     assert "locks the rules" in done.stderr
     assert "ran" not in done.stdout
+
+
+_LOG_PROBE = "import logging; logging.getLogger('Pysandboxes').info('probe-info'); print(logging.getLogger().level)"
+
+
+@pytest.mark.parametrize("os_sandbox", _ROWS)
+def test_the_log_level_of_the_environment_reaches_the_sandbox(os_sandbox: str, tmp_path: Path) -> None:
+    _skip_unavailable(os_sandbox)
+
+    done = _python_sb(
+        os_sandbox, "python-import=*\n", ["-c", _LOG_PROBE], tmp_path, env={"PYSANDBOXES_LOG_LEVEL": "info"}
+    )
+
+    assert done.returncode == 0, done.stderr
+    assert done.stdout.strip() == "20"
+    assert "probe-info" in done.stderr
+
+
+def test_no_log_level_leaves_the_sandbox_quiet(tmp_path: Path) -> None:
+    done = _python_sb("subprocess", "python-import=*\n", ["-c", _LOG_PROBE], tmp_path)
+
+    assert done.returncode == 0, done.stderr
+    assert "probe-info" not in done.stderr
+
+
+def test_an_unknown_log_level_is_refused(tmp_path: Path) -> None:
+    done = _python_sb(
+        "subprocess", "python-import=*\n", ["-c", "pass"], tmp_path, env={"PYSANDBOXES_LOG_LEVEL": "LOUD"}
+    )
+
+    assert done.returncode != 0
+    assert "PYSANDBOXES_LOG_LEVEL: unknown log level 'LOUD'" in done.stderr

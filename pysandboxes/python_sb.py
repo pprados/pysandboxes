@@ -104,6 +104,21 @@ def _debug_log() -> None:
     )
 
 
+LOG_LEVEL_ENV = "PYSANDBOXES_LOG_LEVEL"
+
+
+def _apply_log_level_env() -> None:
+    """Set the root log level from ``PYSANDBOXES_LOG_LEVEL``; the sandboxed process inherits it."""
+    name = os.environ.get(LOG_LEVEL_ENV)
+    if not name:
+        return
+    level = logging.getLevelNamesMapping().get(name.upper())
+    if level is None:
+        print(f"{LOG_LEVEL_ENV}: unknown log level {name!r}", file=sys.stderr)
+        sys.exit(-1)
+    config_log(level)
+
+
 def main() -> int:
     """
     Parses command-line arguments and run the cpython in sandbox
@@ -127,6 +142,8 @@ def _load_rules(config_path: Path, extra_rules: dict[str, set[str]]) -> AllRules
 def _main(stack: ExitStack) -> int:
     if DEBUG:
         _debug_log()
+    else:
+        _apply_log_level_env()
 
     python_parsed_args, sandboxes_args, python_cmd, config_path = parse_python_cmd_line(sys.argv[1:])
 

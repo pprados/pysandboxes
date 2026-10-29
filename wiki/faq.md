@@ -7,6 +7,11 @@ logging.getLogger("Pysandboxes").setLevel(logging.INFO)
 ```
 `Pysandboxes` logs the main runtime events.
 
+With the `python-sb` command line, set `PYSANDBOXES_LOG_LEVEL` instead (`DEBUG`, `INFO`, `WARNING`...); the sandboxed process inherits it:
+```bash
+PYSANDBOXES_LOG_LEVEL=INFO python-sb -m my_module
+```
+
 For debug details, enable:
 ```python
 logging.getLogger("pysandboxes").setLevel(logging.DEBUG)

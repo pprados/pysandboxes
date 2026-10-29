@@ -104,7 +104,7 @@ def pytest_configure(config: pytest.Config) -> None:
 def sandbox_profile(request: pytest.FixtureRequest) -> Iterator[None]:
     learning = os.environ.get("SANDBOX_LEARN") and request.node.get_closest_marker("sandbox_learn")
     if learning:
-        logging.getLogger("Pysandboxes").setLevel(logging.DEBUG)
+        logging.getLogger("Pysandboxes").setLevel(logging.INFO)
         with sandboxes(sandboxes_config=PROFILE, learn=str(LEARNED)):
             yield
     else:
