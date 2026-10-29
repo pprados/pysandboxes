@@ -21,6 +21,14 @@
   "skipped": 940,
   "source": "756ccc02f44c"
  },
+ "pysandboxes/guard_socket.py": {
+  "commit": "v0.7.0-66-ge9920a4",
+  "date": "2026-10-29",
+  "killed": 532,
+  "skipped": 5639,
+  "source": "006ea2279763",
+  "survived": 49
+ },
  "pysandboxes/guard_wraps.py": {
   "commit": "166b245",
   "date": "2026-10-14",
