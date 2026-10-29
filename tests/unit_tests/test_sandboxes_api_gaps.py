@@ -3,6 +3,7 @@
 """Behaviour of `@sandbox` and `sandboxes` that the other API tests leave unobserved."""
 
 import asyncio
+import logging
 import os
 import signal
 import threading
@@ -199,3 +200,33 @@ def test_inside_a_sandbox_the_asynchronous_manager_starts_nothing_and_stops_noth
                 stop.assert_not_called()
 
     asyncio.run(scenario())
+
+
+@pytest.fixture
+def restored_root_level() -> Iterator[int]:
+    level = logging.root.level
+    yield level
+    logging.root.setLevel(level)
+
+
+def test_the_log_level_variable_sets_the_root_level(monkeypatch: pytest.MonkeyPatch, restored_root_level: int) -> None:
+    from pysandboxes.sandboxes_api import _apply_log_level_env
+
+    monkeypatch.setenv("PYSANDBOXES_LOG_LEVEL", "error")
+
+    _apply_log_level_env()
+
+    assert logging.root.level == logging.ERROR
+
+
+def test_without_the_log_level_variable_the_root_level_is_left_alone(
+    monkeypatch: pytest.MonkeyPatch, restored_root_level: int
+) -> None:
+    from pysandboxes.sandboxes_api import _apply_log_level_env
+
+    monkeypatch.delenv("PYSANDBOXES_LOG_LEVEL", raising=False)
+    logging.root.setLevel(logging.CRITICAL)
+
+    _apply_log_level_env()
+
+    assert logging.root.level == logging.CRITICAL
