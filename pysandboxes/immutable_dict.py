@@ -8,6 +8,7 @@ where immutability ensures configuration integrity.
 """
 
 import collections.abc
+import copy
 from typing import (
     Any,
     Callable,
@@ -28,17 +29,33 @@ ValueType = TypeVar("ValueType")
 
 
 def _restore_pickle(
-    data: dict[KeyType, ValueType],
+    keys: tuple[KeyType, ...],
+    values: tuple[ValueType, ...],
 ) -> "ImmutableDict[KeyType,ValueType]":
-    """Restore ImmutableDict from pickled data.
+    """Restore ImmutableDict from its pickled keys and values.
+
+    The tuples are stored as they are: a stream that does not come from `__reduce__` must not build a dictionary
+    the constructor would refuse, so the shape is checked first.
 
     Args:
-        data: Dictionary data to restore from.
+        keys: Keys of the dictionary.
+        values: Values of the dictionary, in the order of the keys.
 
     Returns:
         New ImmutableDict instance with the provided data.
+
+    Raises:
+        ValueError: The arguments are not two tuples of the same length, or a key is repeated.
+
+    post: __return__._keys == keys
+    post: __return__._values == values
+    raises: ValueError
     """
-    return ImmutableDict(data)
+    if not (isinstance(keys, tuple) and isinstance(values, tuple)) or len(keys) != len(values):
+        raise ValueError("Invalid ImmutableDict state: keys and values must be two tuples of the same length")
+    if len(set(keys)) != len(keys):
+        raise ValueError("Invalid ImmutableDict state: a key is repeated")
+    return cast("ImmutableDict[KeyType, ValueType]", tuple.__new__(ImmutableDict, (keys, values)))
 
 
 class ImmutableDict(
@@ -86,13 +103,26 @@ class ImmutableDict(
         obj = tuple.__new__(cls, (keys, values))
         return obj
 
+    def __deepcopy__(self, memo: dict[int, Any]) -> "ImmutableDict[KeyType, ValueType]":
+        """Copy the keys and the values, which already satisfy what `_restore_pickle` checks of a stream.
+
+        Args:
+            memo: The memo of `copy.deepcopy`.
+
+        Returns:
+            New ImmutableDict instance holding copies of the keys and the values.
+        """
+        keys = copy.deepcopy(self._keys, memo)
+        values = copy.deepcopy(self._values, memo)
+        return cast("ImmutableDict[KeyType, ValueType]", tuple.__new__(ImmutableDict, (keys, values)))
+
     def __reduce__(self) -> tuple[Callable[..., Any], tuple[Any, ...]]:
         """Support for pickle serialization.
 
         Returns:
             Tuple for pickle reconstruction.
         """
-        return (_restore_pickle, (dict(self),))
+        return (_restore_pickle, (self._keys, self._values))
 
     @property
     def _keys(self) -> tuple[KeyType, ...]:
@@ -124,6 +154,9 @@ class ImmutableDict(
 
         Raises:
             KeyError: If key is not found.
+
+        pre: key in self._keys
+        post: __return__ is self._values[self._keys.index(key)]
         """
         try:
             idx = self._keys.index(key)
@@ -144,6 +177,9 @@ class ImmutableDict(
 
         Returns:
             Number of items in the dictionary.
+
+        post: __return__ >= 0
+        post: __return__ == len(self._values)
         """
         return len(self._keys)
 
@@ -155,6 +191,8 @@ class ImmutableDict(
 
         Returns:
             True if key exists, False otherwise.
+
+        post: __return__ == (key in self._keys)
         """
         try:
             self._keys.index(key)  # type: ignore[arg-type]

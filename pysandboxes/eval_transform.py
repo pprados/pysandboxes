@@ -82,6 +82,8 @@ def _depth(node: ast.AST) -> int:
 
     Iterative: the tree is measured before any recursive visit, so a source nested deeper than the interpreter's
     recursion limit is refused instead of raising `RecursionError`.
+
+    post: __return__ >= 1
     """
     deepest = 0
     pending = [(node, 1)]

@@ -83,6 +83,9 @@ def format_error_list(errors: Sequence[str]) -> str:
 
     Returns:
         A formatted string with proper conjunction usage.
+
+        pre: len(errors) > 0
+        post: all(e in __return__ for e in errors)
     """
     errors = sorted(errors)
     return errors[0] if len(errors) == 1 else ", ".join(errors[:-1]) + " and " + errors[-1]  # pragma: no mutate

@@ -161,12 +161,19 @@ def _dir_path(path: str) -> str:
     """Return ``path`` ending with the native separator, the form directory rules are stored in.
 
     A literal '/' would never prefix a Windows rule such as 'D:\\a\\'.
+
+    post: __return__.endswith(('/', os.sep))
+    post: __return__.startswith(path)
     """
     return path if path.endswith(("/", os.sep)) else path + os.sep
 
 
 def _link_target(target: str) -> str:
-    """Return a ``readlink`` answer without the ``\\\\?\\`` prefix Windows adds, which no rule spells."""
+    """Return a ``readlink`` answer without the ``\\\\?\\`` prefix Windows adds, which no rule spells.
+
+    post: len(__return__) <= len(target)
+    post: target.endswith(__return__)
+    """
     if sys.platform == "win32" and target.startswith("\\\\?\\"):
         return target[4:]
     return target
@@ -247,7 +254,11 @@ def is_special_file(path: Path) -> bool:
 
 
 def _rule_covers(rule_path: str, canon_path: str) -> bool:
-    """Tell whether an expose rule covers ``canon_path``: a directory rule its tree, a file rule that file only."""
+    """Tell whether an expose rule covers ``canon_path``: a directory rule its tree, a file rule that file only.
+
+    post: not rule_path.endswith('/') or not canon_path.startswith(rule_path) or __return__
+    post: not rule_path or rule_path.endswith(('/', os.sep)) or canon_path != rule_path or __return__
+    """
     if not rule_path or rule_path.endswith(("/", os.sep)):
         return canon_path.startswith(rule_path) or canon_path == rule_path[:-1]
     return canon_path.rstrip("/" + os.sep) == rule_path
@@ -608,7 +619,10 @@ def generate_rules(
 
 
 def _without_ntfs_streams(path: str) -> str:
-    """Drop the ``:stream`` suffix NTFS accepts on any component: ``d::$INDEX_ALLOCATION\\f`` opens ``d\\f``."""
+    """Drop the ``:stream`` suffix NTFS accepts on any component: ``d::$INDEX_ALLOCATION\\f`` opens ``d\\f``.
+
+    post: len(__return__) <= len(path)
+    """
     drive, rest = ntpath.splitdrive(path)
     return drive + "".join(part.split(":", 1)[0] for part in re.split(r"([\\/])", rest))
 

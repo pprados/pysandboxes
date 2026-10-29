@@ -61,6 +61,8 @@ class NameSet(NamedTuple):
 
         ``DENY`` wins, always: a reader resolves any name by asking one
         question and never by looking at where a line sits in the file.
+
+        post: name not in self.deny or not __return__
         """
         if name in self.deny or any(p.match(name) for p in self.deny_patterns):
             return False
@@ -145,6 +147,10 @@ def parse_scalar(key: str, value: str) -> int | float | str:
 
     Raises:
         ValueError: The value is malformed for this key.
+
+        post: key == 'eval-namespace' or not isinstance(__return__, str)
+        post: key != 'eval-namespace' or __return__ == value
+        raises: ValueError
     """
     if value.startswith("DENY:") or "*" in value:
         raise ValueError(f"{key}: `DENY:` and patterns apply to list keys only.")
@@ -274,6 +280,8 @@ def compile_pattern(pattern: str) -> GlobPattern:
     matches over the whole subject, so `get*` grants `getattr` and not
     `forget_me`; the previous regex needed a trailing `\\Z` to say the same,
     because `re.match()` anchors the start only.
+
+    post: __return__.glob == pattern
     """
     return GlobPattern(pattern)
 
@@ -289,7 +297,11 @@ _DEPRECATED_NODES = frozenset(
 
 
 def _is_node(token: str) -> bool:
-    """Tell whether `token` names an AST node class, not a helper of the `ast` module (`parse`, `NodeVisitor`)."""
+    """Tell whether `token` names an AST node class, not a helper of the `ast` module (`parse`, `NodeVisitor`).
+
+    post: token not in _DEPRECATED_NODES or not __return__
+    post: not __return__ or token in vars(ast)
+    """
     node = vars(ast).get(token)
     return isinstance(node, type) and issubclass(node, ast.AST) and token not in _DEPRECATED_NODES
 
@@ -498,6 +510,11 @@ def _condense_syntax(names: set[str]) -> list[str]:
 
     Returns:
         Group names for the groups fully covered, then the leftover nodes.
+
+        pre: not set(names) & set(SYNTAX_GROUPS)
+        post: len(set(__return__)) == len(__return__)
+        post: set(__return__) <= set(names) | set(SYNTAX_GROUPS)
+        post: all(set(SYNTAX_GROUPS[t]) <= set(names) for t in __return__ if t in SYNTAX_GROUPS)
     """
     remaining = set(names)
     tokens: list[str] = []

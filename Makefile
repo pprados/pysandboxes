@@ -1,5 +1,5 @@
 SHELL=/bin/bash
-.PHONY: all format format_diff lint lint_diff claude-lint coverage security-corpus fuzz \
+.PHONY: all format format_diff lint lint_diff claude-lint coverage security-corpus fuzz crosshair \
 	unit-tests integration-tests container-tests sample-tests sample-tests-matrix all-tests gh-tests gh-all-tests \
 	spell_check spell_fix pip-audit pip-audit-all clean extra-clean help \
 	api_docs_build api_docs_clean api_docs_linkcheck \
@@ -291,6 +291,14 @@ mutation:
 ## Last recorded mutation run of every module, and whether its code changed since: make mutation-status
 mutation-status:
 	uv run python scripts/mutation.py --status
+
+CROSSHAIR_MODULES ?= pysandboxes/tools.py pysandboxes/netfilter.py pysandboxes/eval_rules.py pysandboxes/main_logger.py \
+	pysandboxes/guard_import.py pysandboxes/guard_files.py pysandboxes/guard_socket.py pysandboxes/guard_api.py \
+	pysandboxes/guard_envs.py pysandboxes/eval_transform.py pysandboxes/guard_eval.py pysandboxes/immutable_dict.py
+CROSSHAIR_TIMEOUT ?= 10
+## Look for counterexamples to the PEP 316 contracts of the docstrings (crosshair): make crosshair [CROSSHAIR_MODULES="pysandboxes/tools.py"] [CROSSHAIR_TIMEOUT=10]
+crosshair:
+	uv run crosshair check --per_condition_timeout=$(CROSSHAIR_TIMEOUT) $(CROSSHAIR_MODULES) --extra_plugin scripts/crosshair_plugin.py
 
 # Uncomment a sample only once it satisfies the acceptance criteria of its
 # design spec.

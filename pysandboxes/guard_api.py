@@ -471,6 +471,11 @@ def split_qualname(qualname: str) -> tuple[str, str]:
     ``"threading.Thread.start"`` yields ``("threading",
     "Thread.start")``. The module is always the leading segment, matching
     ``guard_import._conv_patch_rules``.
+
+    post: '.' not in __return__[0]
+    post: __return__[0] == qualname.split('.')[0]
+    post: '.' in qualname or __return__ == (qualname, '')
+    post: '.' not in qualname or __return__[0] + '.' + __return__[1] == qualname
     """
     module_name, _, attribute_path = qualname.partition(".")
     return module_name, attribute_path

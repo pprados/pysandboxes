@@ -867,6 +867,8 @@ def _group_by_width(items: Iterable[str], max_width: int) -> list[str]:
 
     Returns:
         List of comma-separated grouped strings.
+
+        post: all(line for line in __return__)
     """
     if not items:
         return []
