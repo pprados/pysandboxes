@@ -14,10 +14,11 @@ import logging
 import os
 import sys
 import threading
+from pathlib import Path
 from typing import Any, Callable, Generator, Iterator, NamedTuple, cast
 from weakref import WeakKeyDictionary
-from pathlib import Path
 
+from ._contracts import ensure, post, raises
 from .guard_wraps import guard_wraps
 from .learning import LearnEnvRule, record_learning_origin
 from .main_logger import ErrorMsg, format_ruleref
@@ -47,6 +48,8 @@ EnvsRules = tuple[EnvRule, ...]
 _rules: EnvsRules = cast(EnvsRules, ())
 
 
+@post(lambda result: isinstance(result, GlobPattern))
+@ensure(lambda key_pattern, result: result.glob == key_pattern)
 def _compile_key_pattern(key_pattern: str) -> GlobPattern:
     """Compile an environment key pattern, anchored on both ends.
 
@@ -58,6 +61,13 @@ def _compile_key_pattern(key_pattern: str) -> GlobPattern:
     return GlobPattern(key_pattern)
 
 
+@post(lambda result: not any(line.rule.startswith(("env=", "unenv=")) for line in result[2]))
+@ensure(lambda rules, source_vars, errors, result: set(result[2]) <= set(rules))
+@ensure(
+    lambda rules, source_vars, errors, result: not any(
+        rule.pattern.match(key) for rule in result[0] if rule.config.rule.startswith("unenv=") for key in result[1]
+    )
+)
 def parse_rules(
     rules: ConfigLines,
     source_vars: Environ,
@@ -220,12 +230,14 @@ class LearnEnviron(os._Environ):
 
         return _catch_for_all()
 
+    @ensure(lambda self, key, result: key in self._written or key in self._keys_used)
     def learn_read(self, key: str) -> None:
         """Learn a read, unless the code wrote the key itself before."""
         if key not in self._written:
             self._keys_used.add(key)
             record_learning_origin(LearnEnvRule(key))
 
+    @ensure(lambda self, key, result: key in self._written)
     def learn_write(self, key: str) -> None:
         """Note a key the code set or removed: the rules never have to grant it."""
         self._written.add(key)
@@ -272,6 +284,7 @@ class LearnEnviron(os._Environ):
             self._unsure.pop(t, None)  # The whole scan was read back
         return result
 
+    @ensure(lambda self, key, value, result: key in self._written)
     def __setitem__(self, key: str, value: str) -> None:
         """Set environment variable, and note it is the code's own.
 
@@ -282,6 +295,8 @@ class LearnEnviron(os._Environ):
         super(LearnEnviron, self).__setitem__(key, value)
         self.learn_write(key)
 
+    @ensure(lambda self, key, result: key in self._written)
+    @raises(KeyError)
     def __delitem__(self, key: str) -> None:
         super(LearnEnviron, self).__delitem__(key)
         self.learn_write(key)
@@ -310,6 +325,7 @@ class LearnEnviron(os._Environ):
         except KeyError:
             return default
 
+    @post(lambda result: isinstance(result, bool))
     def _has(self, key: str) -> Any:
         """Check if environment variable exists.
 
@@ -326,6 +342,8 @@ class LearnEnviron(os._Environ):
             return False
 
 
+@post(lambda result: isinstance(result, Path))
+@raises(RuntimeError)
 def expanduser(path: Path) -> Path:
     """Expand the current user's home without learning PySandboxes' own lookup."""
     original_env = getattr(os.environ, "_original_envs", os.environ)
@@ -361,6 +379,8 @@ class LearnEnvironBytes(os._Environ):
         del os.environ[os.fsdecode(key)]
 
 
+@post(lambda result: all(line.startswith("env=") and "=${" in line for line in result))
+@post(lambda result: result == sorted(result))
 def generate_rules() -> list[str]:
     """Generate environment variable rules from learning data.
 
@@ -385,6 +405,7 @@ def generate_rules() -> list[str]:
     return result
 
 
+@ensure(lambda rules, result: _rules is rules)
 def activate_guard(rules: EnvsRules) -> None:
     """Activate environment variable guard with specified rules.
 
