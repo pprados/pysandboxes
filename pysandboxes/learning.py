@@ -26,7 +26,7 @@ from importlib import resources
 from pathlib import Path
 from typing import Any, NamedTuple, Set
 
-from ._contracts import ensure
+from ._contracts import ensure, post
 from .config import DEBUG
 from .main_logger import make_relative_path, pysandboxes_logger
 
@@ -236,6 +236,7 @@ def generate_config_from_learning() -> None:
         _save_learning_done = True
 
 
+@ensure(lambda path, content, result: path.read_text(encoding="utf-8") == content)
 def _write_atomic(path: Path, content: str) -> None:
     """Write ``content`` to ``path`` so a reader never observes a partial file.
 
@@ -388,6 +389,9 @@ def _log_learning_summary(replaces: dict[str, str], learning: set[Any]) -> None:
     pysandboxes_logger.info("\n".join(lines))
 
 
+@ensure(lambda learning_path, result: result[0] == learning_path)
+@ensure(lambda learning_path, result: result[1] is None or not result[1].exists())
+@ensure(lambda learning_path, result: result[1] is None or result[1].parent == learning_path.parent)
 def _manage_olds_file(learning_path: Path) -> tuple[Path, Path | None]:
     """Manage backup files for configuration updates.
 
@@ -414,6 +418,11 @@ def _manage_olds_file(learning_path: Path) -> tuple[Path, Path | None]:
     return learning_path, old_learning_path
 
 
+@ensure(
+    lambda lines, learning, date_header, learning_path=None, *, result: (
+        result in ("", "remote-result-mode=data-only") or result.startswith("# WARNING")
+    )
+)
 def _update_remote_result_mode(
     lines: list[str], learning: set[Any], date_header: str, learning_path: Path | None = None
 ) -> str:
@@ -451,6 +460,7 @@ def _update_remote_result_mode(
     return ""
 
 
+@post(lambda result: all(mode == mode.lower() for mode in result))
 def _included_remote_result_modes(learning_path: Path, lines: list[str]) -> list[str]:
     """Return the result modes set by the files the profile includes."""
     from .py_sandbox import _parse_include
@@ -466,12 +476,14 @@ def _included_remote_result_modes(learning_path: Path, lines: list[str]) -> list
     ]
 
 
+@ensure(lambda learning, result: all(f"remote-result-mode={mode}" in learning for mode in result))
 def _observed_remote_result_modes(learning: set[Any]) -> set[str]:
     return {
         rule.split("=", 1)[1] for rule in learning if isinstance(rule, str) and rule.startswith("remote-result-mode=")
     }
 
 
+@post(lambda result: "WARNING: observed return pickles reconstruct application objects." in result)
 def _remote_result_warning() -> str:
     return (
         "# WARNING: observed return pickles reconstruct application objects. "
@@ -479,6 +491,8 @@ def _remote_result_warning() -> str:
     )
 
 
+@ensure(lambda lines, result: all(0 <= index < len(lines) for index, _ in result))
+@ensure(lambda lines, result: [index for index, _ in result] == sorted(index for index, _ in result))
 def _active_remote_result_rules(lines: list[str]) -> list[tuple[int, str]]:
     """Return active result-mode rules in the profile and generated block."""
     rules = []
@@ -489,6 +503,7 @@ def _active_remote_result_rules(lines: list[str]) -> list[tuple[int, str]]:
     return rules
 
 
+@ensure(lambda learning_path, result: _learning_path == learning_path)
 def set_learning_path(learning_path: Path) -> None:
     """Activate learning mode for the specified configuration file.
 
@@ -499,6 +514,7 @@ def set_learning_path(learning_path: Path) -> None:
     _learning_path = learning_path
 
 
+@post(lambda result: isinstance(result, bool))
 def is_learning_mode() -> bool:
     """Check if learning mode is currently active.
 
