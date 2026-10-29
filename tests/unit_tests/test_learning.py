@@ -6,6 +6,7 @@ import sys
 import tempfile
 import textwrap
 from pathlib import Path
+from typing import Any
 from unittest.mock import Mock, patch
 
 import pytest
@@ -790,3 +791,98 @@ def test_info_summary_groups_other_generated_rule_families_with_sources(
     assert "eval-call=open" in caplog.text
     assert "remote-result-mode=objects" in caplog.text
     assert all(repr(source) in caplog.text for source in sources)
+
+
+def _summary(
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+    replaces: dict[str, str],
+    learning: set[Any],
+    origins: dict[Any, dict[tuple[str, ...], int]],
+) -> str:
+    from pysandboxes import learning as learning_module
+
+    monkeypatch.setattr(learning_module, "_learning_origins", origins, raising=False)
+    with caplog.at_level(logging.INFO, logger="pysandboxes"):
+        learning_module._log_learning_summary(replaces, learning)
+    return caplog.text
+
+
+@pytest.mark.parametrize(("count", "elided"), [(8, False), (9, True)])
+def test_summary_lists_at_most_eight_imports_without_an_origin(
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture, count: int, elided: bool
+) -> None:
+    names = [f"mod{index}" for index in range(count)]
+    text = _summary(monkeypatch, caplog, {"learning_guard_import": "python-import=" + ",".join(names)}, set(), {})
+    assert "origin not captured at INFO: mod0, mod1, mod2, mod3, mod4, mod5, mod6, mod7" in text
+    assert (" more" in text) is elided
+
+
+@pytest.mark.parametrize(("count", "elided"), [(8, False), (9, True)])
+def test_summary_lists_at_most_eight_env_variables_without_an_origin(
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture, count: int, elided: bool
+) -> None:
+    keys = [f"VAR{index}" for index in range(count)]
+    generated = "\n".join(f"env={key}=${{{key}}}" for key in keys)
+    text = _summary(monkeypatch, caplog, {"learning_guard_envs": generated}, set(), {})
+    assert "origin not captured at INFO: VAR0, VAR1, VAR2, VAR3, VAR4, VAR5, VAR6, VAR7" in text
+    assert (" more" in text) is elided
+
+
+@pytest.mark.parametrize(("count", "elided"), [(5, False), (6, True)])
+def test_summary_names_five_rules_per_stack_and_counts_the_rest(
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture, count: int, elided: bool
+) -> None:
+    from pysandboxes.eval_rules import LearnEvalRule
+
+    rules = [LearnEvalRule("eval-call", f"fn{index}") for index in range(count)]
+    text = _summary(
+        monkeypatch,
+        caplog,
+        {"learning_guard_eval": "eval-call=x"},
+        set(rules),
+        {rule: {("a.py:1 in f",): 1} for rule in rules},
+    )
+    assert (" more rules" in text) is elided
+    assert text.count("observations)") == 5
+
+
+@pytest.mark.parametrize(("count", "elided"), [(12, False), (13, True)])
+def test_summary_shows_twelve_stacks_and_counts_the_rest(
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture, count: int, elided: bool
+) -> None:
+    from pysandboxes.eval_rules import LearnEvalRule
+
+    rule = LearnEvalRule("eval-call", "len")
+    traces: dict[tuple[str, ...], int] = {(f"a.py:{index} in f",): 1 for index in range(count)}
+    text = _summary(monkeypatch, caplog, {"learning_guard_eval": "eval-call=len"}, {rule}, {rule: traces})
+    assert (" more distinct stacks" in text) is elided
+    assert text.count("  source: ") == 12
+
+
+@pytest.mark.parametrize(("count", "elided"), [(5, False), (6, True)])
+def test_summary_names_five_sources_without_a_stack_and_keeps_reading_after_one(
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture, count: int, elided: bool
+) -> None:
+    from pysandboxes.eval_rules import LearnEvalRule
+
+    bare = [LearnEvalRule("eval-call", f"bare{index}") for index in range(count)]
+    seen = LearnEvalRule("eval-call", "seen")
+    text = _summary(
+        monkeypatch,
+        caplog,
+        {"learning_guard_eval": "eval-call=x"},
+        {*bare, seen},
+        {seen: {("a.py:1 in f",): 2}},
+    )
+    assert "LearnEvalRule(key='eval-call', name='seen') (2 observations)" in text
+    assert "origin not captured at INFO: " in text
+    assert (" more" in text) is elided
+
+
+def test_summary_marks_a_section_without_any_source(
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    text = _summary(monkeypatch, caplog, {"learning_guard_api": "python-api=ALLOW:os.system"}, set(), {})
+    assert "[learning_guard_api]" in text
+    assert text.count("origin not captured at INFO") == 1
