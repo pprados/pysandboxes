@@ -5,6 +5,7 @@ from collections import defaultdict
 from pathlib import Path
 from typing import Any, List, Tuple, cast
 
+from ._contracts import ensure, post
 from .config import CONFIG_NAME
 from .main_logger import ErrorMsg, format_error_list, format_ruleref
 from .sb_types import ConfigLine, ConfigLines
@@ -12,6 +13,9 @@ from .sb_types import ConfigLine, ConfigLines
 logger = logging.getLogger(__name__)
 
 
+@ensure(lambda rules, result: result is None or result in rules)
+@ensure(lambda rules, result: result is None or result.rule.startswith("learn="))
+@ensure(lambda rules, result: result is None or result.path != Path("."))
 def learn_lock(rules: ConfigLines) -> ConfigLine | None:
     """Return the `learn=false` line of a rule file, which forbids the learning mode, or None."""
     for rule in rules:
@@ -21,6 +25,16 @@ def learn_lock(rules: ConfigLines) -> ConfigLine | None:
     return None
 
 
+@post(lambda result: result[0] >= -1)
+@post(lambda result: not result[4] or result[2])
+@ensure(lambda config_path, rules, errors, result: set(result[7]) <= set(rules))
+@ensure(lambda config_path, rules, errors, result: (result[1] == "error") == (len(errors) > 0))
+@ensure(
+    lambda config_path, rules, errors, result: not any(
+        line.rule.startswith(("os-sandbox=", "py-sandbox=", "remote-result-guard=", "remote-result-mode=", "port="))
+        for line in result[7]
+    )
+)
 def parse_rules(
     config_path: Path,
     rules: ConfigLines,
