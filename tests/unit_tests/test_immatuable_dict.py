@@ -1,3 +1,6 @@
+import copy
+import pickle
+
 import pytest  # type: ignore[import-untyped]
 
 from pysandboxes.immutable_dict import ImmutableDict
@@ -23,3 +26,12 @@ def test_immutable_dict() -> None:
     # Check immutability
     with pytest.raises(TypeError):
         my_immutable_dict["a"] = 10  # type: ignore[index]
+
+
+def test_pickle_and_deepcopy_keep_order_and_values() -> None:
+    original = ImmutableDict({"b": [1], "a": 2})
+    for clone in (pickle.loads(pickle.dumps(original)), copy.deepcopy(original)):
+        assert isinstance(clone, ImmutableDict)
+        assert list(clone.items()) == list(original.items())
+        assert clone == original
+    assert copy.deepcopy(original)["b"] is not original["b"]

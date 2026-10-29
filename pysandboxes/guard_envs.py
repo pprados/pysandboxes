@@ -14,9 +14,9 @@ import logging
 import os
 import sys
 import threading
+from pathlib import Path
 from typing import Any, Callable, Generator, Iterator, NamedTuple, cast
 from weakref import WeakKeyDictionary
-from pathlib import Path
 
 from .guard_wraps import guard_wraps
 from .learning import LearnEnvRule, record_learning_origin
@@ -54,6 +54,8 @@ def _compile_key_pattern(key_pattern: str) -> GlobPattern:
     ``*_API_KEY`` does not forward ``ANY_API_KEY_AND_MORE``; the previous regex
     needed a trailing ``\\Z`` to say the same, because ``re.match()`` anchors the
     start only.
+
+    post: __return__.glob == key_pattern
     """
     return GlobPattern(key_pattern)
 

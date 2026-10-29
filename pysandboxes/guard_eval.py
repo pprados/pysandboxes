@@ -132,6 +132,10 @@ def classify_context_value(value: Any) -> str:
     Returns:
         `"strong"` when the value grants what the guard closes elsewhere,
         `"weak"` when it runs code the application chose, `""` for data.
+
+        post: __return__ in ('strong', 'weak', '')
+        post: not isinstance(value, types.ModuleType) or __return__ == 'strong'
+        post: not isinstance(value, _SCALARS) or callable(value) or __return__ == ''
     """
     if isinstance(value, types.ModuleType):
         return "strong"

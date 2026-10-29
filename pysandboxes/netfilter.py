@@ -46,6 +46,11 @@ _MULTIPORT_MAX = 15
 
 
 def _build_port(rule_ports_list: Union[Iterable[int], range]) -> str:
+    """One ``--dports`` value: ``start:end`` for a range, "" for every port, else the comma-joined list.
+
+    post: not isinstance(rule_ports_list, range) or rule_ports_list == range(65536) or ':' in __return__
+    post: rule_ports_list != range(65536) or __return__ == ''
+    """
     if isinstance(rule_ports_list, range):
         if rule_ports_list != range(65536):
             s_port = f"{rule_ports_list.start}:{rule_ports_list.stop - 1} "
@@ -58,7 +63,11 @@ def _build_port(rule_ports_list: Union[Iterable[int], range]) -> str:
 
 def _build_ports(rule_ports_list: Union[Iterable[int], range]) -> list[str]:
     """The ``--dports`` values of a rule: none for an empty port field, which matches no port, as in the Python
-    layer; else lists of at most 15 ports, or a range ("" for every port)."""
+    layer; else lists of at most 15 ports, or a range ("" for every port).
+
+    post: isinstance(rule_ports_list, range) or all(p.count(',') < _MULTIPORT_MAX for p in __return__)
+    post: isinstance(rule_ports_list, range) or len(rule_ports_list) > 0 or __return__ == []
+    """
     if isinstance(rule_ports_list, range):
         return [_build_port(rule_ports_list)]
     ports = list(rule_ports_list)
@@ -70,6 +79,9 @@ def _build_network(network_obj: Union[IPv4Network, IPv6Network], ipv6: bool, loc
 
     ``local`` is for an IN rule, whose network is the local address a socket binds: the wildcard address then
     stands for every local address.
+
+    post: __return__ == '' or __return__.endswith(' ')
+    post: isinstance(network_obj, IPv6Network) == ipv6 or __return__ == ''
     """
     network = ""
     any_address = ("0.0.0.0/0", "0.0.0.0/32") if local else ("0.0.0.0/0",)

@@ -28,17 +28,24 @@ ValueType = TypeVar("ValueType")
 
 
 def _restore_pickle(
-    data: dict[KeyType, ValueType],
+    keys: tuple[KeyType, ...],
+    values: tuple[ValueType, ...],
 ) -> "ImmutableDict[KeyType,ValueType]":
-    """Restore ImmutableDict from pickled data.
+    """Restore ImmutableDict from its pickled keys and values.
+
+    The tuples are stored as they are, so no key is hashed or compared again.
 
     Args:
-        data: Dictionary data to restore from.
+        keys: Keys of the dictionary.
+        values: Values of the dictionary, in the order of the keys.
 
     Returns:
         New ImmutableDict instance with the provided data.
+
+    post: __return__._keys == keys
+    post: __return__._values == values
     """
-    return ImmutableDict(data)
+    return cast("ImmutableDict[KeyType, ValueType]", tuple.__new__(ImmutableDict, (keys, values)))
 
 
 class ImmutableDict(
@@ -92,7 +99,7 @@ class ImmutableDict(
         Returns:
             Tuple for pickle reconstruction.
         """
-        return (_restore_pickle, (dict(self),))
+        return (_restore_pickle, (self._keys, self._values))
 
     @property
     def _keys(self) -> tuple[KeyType, ...]:
@@ -124,6 +131,9 @@ class ImmutableDict(
 
         Raises:
             KeyError: If key is not found.
+
+        pre: key in self._keys
+        post: __return__ is self._values[self._keys.index(key)]
         """
         try:
             idx = self._keys.index(key)
@@ -144,6 +154,9 @@ class ImmutableDict(
 
         Returns:
             Number of items in the dictionary.
+
+        post: __return__ >= 0
+        post: __return__ == len(self._values)
         """
         return len(self._keys)
 
@@ -155,6 +168,8 @@ class ImmutableDict(
 
         Returns:
             True if key exists, False otherwise.
+
+        post: __return__ == (key in self._keys)
         """
         try:
             self._keys.index(key)  # type: ignore[arg-type]

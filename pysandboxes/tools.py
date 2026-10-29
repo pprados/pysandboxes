@@ -88,6 +88,9 @@ def substitute_env_vars(lines: list[str], env_vars: Environ | Envs) -> list[str]
 
     Returns:
         List of strings with environment variables resolved.
+
+        post: len(__return__) == len(lines)
+        raises: ValueError
     """
     return [resolve_env_variables(line, env_vars) for line in lines]
 
@@ -101,6 +104,10 @@ def substitute_config_env_vars(lines: ConfigLines, env_vars: Environ) -> ConfigL
 
     Returns:
         Configuration lines with environment variables resolved.
+
+        pre: all('${' not in l.rule and '' not in l.rule and '' not in l.rule for l in lines)
+        post: len(__return__) == len(lines)
+        post: all(r.path == l.path and r.ln == l.ln for r, l in zip(__return__, lines))
     """
     resolved: ConfigLines = []
     for line in lines:
@@ -122,6 +129,9 @@ def remove_config_comments(config: ConfigLines) -> ConfigLines:
 
     Returns:
         Configuration lines with comments and templates removed.
+
+        post: len(__return__) <= len(config)
+        post: all(r.rule and not r.rule.startswith(('{', '#')) for r in __return__)
     """
     processed_lines: ConfigLines = []
 
@@ -146,6 +156,9 @@ def remove_comments(config: list[str]) -> list[str]:
 
     Returns:
         List of strings with comments removed.
+
+        post: len(__return__) <= len(config)
+        post: all(l and not l.startswith('#') and l == l.strip() for l in __return__)
     """
     processed_lines: list[str] = []
 
@@ -168,6 +181,10 @@ def _remove_comment(line: str) -> str:
 
     Returns:
         Line without comment.
+
+        post: line.startswith(__return__)
+        post: __return__ == __return__.rstrip()
+        post: '#' in line or __return__ == line.rstrip()
     """
     result: list[str] = []
     in_quotes: bool = False
@@ -229,7 +246,12 @@ def set_is_in_sandbox(value: bool) -> None:
 
 def shell_status(returncode: int) -> int:
     """The exit status a shell reports for a child: `128 + signum` for one killed by a signal, whose asyncio
-    return code is `-signum`."""
+    return code is `-signum`.
+
+    post: returncode < 0 or __return__ == returncode
+    post: returncode >= 0 or __return__ == 128 - returncode
+    post: __return__ >= 0
+    """
     return returncode if returncode >= 0 else 128 - returncode
 
 
@@ -242,6 +264,9 @@ def exit_status(e: SystemExit, report: bool = False) -> int:
 
     Returns:
         The exit status.
+
+        post: e.code is not None or __return__ == 0
+        post: not isinstance(e.code, int) or __return__ == e.code
     """
     if e.code is None:
         return 0
@@ -434,6 +459,10 @@ class GlobPattern(NamedTuple):
         ``*`` stands for any run of characters other than a newline, which is what
         ``.`` did under the previous regex: widening it here would grant a name the
         whitelist used to refuse.
+
+        post: '*' in self.glob or __return__ == (subject == self.glob)
+        post: self.glob != '*' or '\n' in subject or __return__
+        post: self.glob != '' or __return__ == (subject == '')
         """
         glob = self.glob
         subject_at = glob_at = 0

@@ -588,6 +588,10 @@ def _flatten_ports(input_ports: set[int | range]) -> set[int]:
 
     Returns:
         Set of individual port numbers.
+
+        pre: all(isinstance(e, (int, range)) for e in input_ports)
+        post: all(e in __return__ for e in input_ports if isinstance(e, int))
+        post: all(p in __return__ for e in input_ports if isinstance(e, range) for p in e)
     """
     result: set[int] = set()
     for element in input_ports:
@@ -614,6 +618,11 @@ def _convert_ports_range(syntax: str) -> tuple[int, ...] | range:
 
     Raises:
         ValueError: For invalid port syntax.
+
+    post: isinstance(__return__, range) or all(0 <= p <= 65535 for p in __return__)
+    post: isinstance(__return__, range) or list(__return__) == sorted(set(__return__))
+    post: not isinstance(__return__, range) or len(__return__) >= 1
+    raises: ValueError
     """
     """
     Converts a port specification string (e.g., "80,443,8000-8080,*")
@@ -1192,6 +1201,9 @@ def _resolve_wildcard_host(self: Any, address: tuple[str, int]) -> tuple[str, in
 
 
 def _is_loopback(host: str) -> bool:
+    """
+    post: not __return__ or len(host) >= 3
+    """
     try:
         return ip_address(host).is_loopback
     except ValueError:
