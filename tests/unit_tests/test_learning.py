@@ -681,6 +681,41 @@ def test_stack_capture_does_not_load_source_lines(monkeypatch: pytest.MonkeyPatc
     assert any("test_stack_capture_does_not_load_source_lines" in frame for frame in stack)
 
 
+def _stack_through_a_chain(tmp_path: Path, depth: int) -> tuple[str, ...]:
+    """Capture the stack under `depth` distinct functions, in a thread so the frames above are fixed."""
+    import importlib.util
+    import threading
+
+    from pysandboxes import learning
+
+    source = "".join(f"def f{i}():\n    return f{i + 1}()\n\n\n" for i in range(depth - 1))
+    source += f"def f{depth - 1}():\n    return capture()\n"
+    path = tmp_path / f"chain{depth}.py"
+    path.write_text(source)
+    spec = importlib.util.spec_from_file_location(f"chain{depth}", path)
+    assert spec and spec.loader
+    module = importlib.util.module_from_spec(spec)
+    module.capture = learning._capture_learning_stack  # type: ignore[attr-defined]
+    spec.loader.exec_module(module)
+    result: list[tuple[str, ...]] = []
+    thread = threading.Thread(target=lambda: result.append(module.f0()))
+    thread.start()
+    thread.join()
+    return result[0]
+
+
+def test_a_stack_of_sixteen_frames_is_kept_whole_and_a_longer_one_is_elided(tmp_path: Path) -> None:
+    base = len(_stack_through_a_chain(tmp_path, 1)) - 1
+    whole = _stack_through_a_chain(tmp_path, 16 - base)
+    longer = _stack_through_a_chain(tmp_path, 17 - base)
+
+    assert len(whole) == 16
+    assert "..." not in whole
+    assert len(longer) == 16
+    assert longer[3] == "..."
+    assert longer[-1].endswith("in f%d" % (16 - base))
+
+
 def test_info_summary_marks_generated_rules_without_a_captured_stack(
     tmp_path: Path, caplog: pytest.LogCaptureFixture, monkeypatch: pytest.MonkeyPatch
 ) -> None:

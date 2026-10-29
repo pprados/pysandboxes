@@ -88,6 +88,66 @@ def test_windows_disk_usage_calls_the_guarded_nt_function(monkeypatch: pytest.Mo
     assert "nt._getdiskusage" in guard_files.patch_rules(learn=False)
 
 
+# %% re-entrancy flags
+
+
+def _seen_flag(variable: Any) -> tuple[Callable[..., str], list[bool]]:
+    seen: list[bool] = []
+
+    def probe(*args: Any, **kwargs: Any) -> str:
+        seen.append(variable.get())
+        return "probe"
+
+    return probe, seen
+
+
+def test_the_absolute_path_helper_flags_the_real_working_directory_while_it_runs(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    probe, seen = _seen_flag(guard_files._realpath_cwd)
+    monkeypatch.setattr(guard_files, "_os_path_abspath_unguarded", probe)
+
+    guard_files._os_path_abspath("x")
+
+    assert seen == [True]
+    assert guard_files._realpath_cwd.get() is False
+
+
+def test_realpath_flags_the_real_working_directory_while_it_runs() -> None:
+    probe, seen = _seen_flag(guard_files._realpath_cwd)
+
+    guard_files._wrap_os_path_realpath(probe)("x")
+
+    assert seen == [True]
+    assert guard_files._realpath_cwd.get() is False
+
+
+def test_the_canonical_helpers_flag_the_canonicalization_while_they_run(monkeypatch: pytest.MonkeyPatch) -> None:
+    realpath, realpath_seen = _seen_flag(guard_files._canonicalizing)
+    islink, islink_seen = _seen_flag(guard_files._canonicalizing)
+    monkeypatch.setattr(guard_files, "_os_path_realpath", realpath)
+    monkeypatch.setattr(guard_files.os.path, "islink", islink)
+
+    guard_files._safe_realpath("x")
+    guard_files._is_link("x")
+
+    assert realpath_seen == [True]
+    assert islink_seen == [True]
+    assert guard_files._canonicalizing.get() is False
+
+
+def test_getcwd_reports_the_remapped_directory_except_inside_realpath(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(guard_files, "_apply_src_to_dest_rules", lambda path: ("/virtual/", None))
+    wrapper = guard_files._wrap_os_getcwd(lambda: "/real")
+
+    assert wrapper() == "/virtual"
+    token = guard_files._realpath_cwd.set(True)
+    try:
+        assert wrapper() == "/real"
+    finally:
+        guard_files._realpath_cwd.reset(token)
+
+
 # %% parse_rules
 
 
@@ -101,6 +161,40 @@ def test_parse_rules_rejects_a_path_that_is_a_file(tmp_path: Path) -> None:
     assert len(errors) == 1
     assert "must be a directory" in errors[0][0]
     assert not any(isinstance(r, FSExposeRule) and r.config.rule.startswith("expose-") for r in file_rules)
+
+
+@pytest.mark.parametrize("bad", ["file", "missing", "null-byte"])
+def test_parse_rules_keeps_reading_the_rules_after_an_invalid_one(tmp_path: Path, bad: str) -> None:
+    plain_file = tmp_path / "f.txt"
+    plain_file.write_text("x")
+    good = tmp_path / "good"
+    good.mkdir()
+    bad_path = {"file": str(plain_file), "missing": str(tmp_path / "nope"), "null-byte": "a\x00b"}[bad]
+    errors: list[ErrorMsg] = []
+
+    file_rules, _ = parse_rules(
+        [ConfigLine(f"expose-ro={bad_path}", Path(), 0), ConfigLine(f"expose-ro={good}", Path(), 1)], errors
+    )
+
+    assert len(errors) == 1
+    assert str(good) + os.sep in [r.path for r in file_rules if isinstance(r, FSExposeRule)]
+
+
+def test_generate_rules_skips_a_safe_device_without_dropping_the_other_paths(tmp_path: Path) -> None:
+    dirs = []
+    for index in range(40):
+        directory = tmp_path / f"d{index}"
+        directory.mkdir()
+        dirs.append(directory)
+
+    with (
+        patch.dict("pysandboxes.guard_files._special_env", {}, clear=True),
+        patch.dict("pysandboxes.guard_files._special_home", {}, clear=True),
+    ):
+        rules = generate_rules({LearnFileRule(Path("/dev/null"), True), *(LearnFileRule(d, False) for d in dirs)})
+
+    assert not any("/dev/null" in r for r in rules)
+    assert sorted(rules) == sorted(f"expose-ro={d}" for d in dirs)
 
 
 def test_parse_rules_rejects_a_path_with_an_embedded_null_byte() -> None:
@@ -1203,8 +1297,8 @@ def test_generate_rules_keeps_a_nested_paths_own_rule_when_write_mode_differs(
 
     expected = sorted(
         {
-            f'{"expose-rw" if allready_write else "expose-ro"}={parent}',
-            f'{"expose-rw" if write else "expose-ro"}={child}',
+            f"{'expose-rw' if allready_write else 'expose-ro'}={parent}",
+            f"{'expose-rw' if write else 'expose-ro'}={child}",
         }
     )
     assert rules == expected

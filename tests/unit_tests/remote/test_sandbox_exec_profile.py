@@ -15,7 +15,15 @@ import pytest
 from pysandboxes.all_rules import EmptyRules
 from pysandboxes.guard_files import FSExposeRule, IgnoreRule
 from pysandboxes.guard_socket import Action, Direction, Kind, SocketMask, SocketRule
-from pysandboxes.remote.sandbox_exec_daemon import SandboxExecSSEDaemon, _build_profile, _feed_profile
+from pysandboxes.remote.sandbox_exec_daemon import (
+    _MAX_PROFILE_PORTS,
+    SandboxExecSSEDaemon,
+    _build_profile,
+    _feed_profile,
+    _ignore_paths,
+    _network_rules,
+    _symlink_directories,
+)
 from pysandboxes.sb_types import ConfigLine
 
 
@@ -164,6 +172,100 @@ def test_remote_host_loss_warns_when_python_guards_are_disabled(
 
     assert '(allow network-outbound (remote tcp "*:443"))' in profile
     assert any("remote network hosts" in record.message.lower() for record in caplog.records)
+
+
+def _net(
+    action: Action, kinds: tuple[Kind, ...], network: str, ports: tuple[int, ...] | range, direction: Direction
+) -> SocketRule:
+    return SocketRule(
+        action,
+        SocketMask(kinds, ip_network(network), ports),
+        (direction,),
+        _line(f"net={action.name}"),
+    )
+
+
+def _network(rules: tuple[SocketRule, ...], *, use_py_sandbox: bool = True) -> list[str]:
+    return _network_rules(EmptyRules._replace(socket_rules=rules, use_py_sandbox=use_py_sandbox))
+
+
+def test_a_deny_in_the_other_direction_does_not_remove_an_allow() -> None:
+    allow = _net(Action.ALLOW, (Kind.TCP,), "0.0.0.0/0", (443,), Direction.OUT)
+    deny = _net(Action.DENY, (Kind.TCP,), "0.0.0.0/0", (443,), Direction.IN)
+
+    assert _network((allow, deny)) == ['(allow network-outbound (remote tcp "*:443"))']
+
+
+def test_a_deny_too_wide_to_expand_removes_the_allows_it_may_cover() -> None:
+    allow = _net(Action.ALLOW, (Kind.TCP,), "0.0.0.0/0", (443,), Direction.OUT)
+    deny = _net(Action.DENY, (Kind.TCP,), "0.0.0.0/0", range(1, _MAX_PROFILE_PORTS + 2), Direction.OUT)
+
+    assert _network((allow, deny)) == []
+
+
+@pytest.mark.parametrize(
+    ("allow_network", "deny_network"),
+    [("0.0.0.0/0", "127.0.0.1/32"), ("127.0.0.1/32", "0.0.0.0/0"), ("127.0.0.1/32", "127.0.0.1/32")],
+)
+def test_a_deny_removes_an_allow_when_either_scope_is_any_host_or_both_match(
+    allow_network: str, deny_network: str
+) -> None:
+    allow = _net(Action.ALLOW, (Kind.TCP,), allow_network, (443,), Direction.OUT)
+    deny = _net(Action.DENY, (Kind.TCP,), deny_network, (443,), Direction.OUT)
+
+    assert _network((allow, deny)) == []
+
+
+def test_a_deny_of_one_kind_leaves_the_other_kinds_of_the_allow() -> None:
+    allow = _net(Action.ALLOW, (Kind.TCP, Kind.UDP), "0.0.0.0/0", (443,), Direction.OUT)
+    deny = _net(Action.DENY, (Kind.TCP,), "0.0.0.0/0", (443,), Direction.OUT)
+
+    assert _network((allow, deny)) == ['(allow network-outbound (remote udp "*:443"))']
+
+
+def test_a_rule_for_any_host_does_not_warn_about_widening(caplog: pytest.LogCaptureFixture) -> None:
+    _network((_net(Action.ALLOW, (Kind.TCP,), "0.0.0.0/0", (443,), Direction.OUT),))
+
+    assert not any("remote network hosts" in record.message for record in caplog.records)
+
+
+def test_the_widening_warning_names_the_disabled_python_guard_only_when_it_is(caplog: pytest.LogCaptureFixture) -> None:
+    host = (_net(Action.ALLOW, (Kind.TCP,), "203.0.113.7/32", (443,), Direction.OUT),)
+
+    _network(host, use_py_sandbox=True)
+    guarded = [r.message for r in caplog.records if "remote network hosts" in r.message]
+    caplog.clear()
+    _network(host, use_py_sandbox=False)
+    unguarded = [r.message for r in caplog.records if "remote network hosts" in r.message]
+
+    assert len(guarded) == 1 and "py-sandbox=false" not in guarded[0]
+    assert len(unguarded) == 1 and "py-sandbox=false disables that guard" in unguarded[0]
+
+
+def test_an_ignore_rule_is_absolute_or_relative_to_each_exposed_directory(tmp_path: Path) -> None:
+    exposed = FSExposeRule(str(tmp_path), False, _line("expose-ro"))
+    absolute = IgnoreRule("/a/../b", _line("ignore"))
+    relative = IgnoreRule("x.txt", _line("ignore"))
+
+    assert list(_ignore_paths(EmptyRules._replace(file_rules=(exposed, absolute)))) == ["/b"]
+    assert list(_ignore_paths(EmptyRules._replace(file_rules=(relative,)))) == []
+    assert list(_ignore_paths(EmptyRules._replace(file_rules=(exposed, relative)))) == [
+        os.path.join(os.path.realpath(str(tmp_path)), "x.txt")
+    ]
+
+
+def test_a_chain_of_relative_directory_symlinks_is_followed_to_the_end(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    (tmp_path / "real" / "bin").mkdir(parents=True)
+    monkeypatch.chdir(tmp_path / "real" / "bin")  # a link read as relative to the cwd would find nothing
+    (tmp_path / "real" / "bin" / "python").write_text("", encoding="utf-8")
+    os.symlink("real", tmp_path / "link2")
+    os.symlink("link2", tmp_path / "link1")
+
+    aliases = _symlink_directories(str(tmp_path / "link1" / "bin" / "python"))
+
+    assert {str(tmp_path / "link1"), str(tmp_path / "link2")} <= aliases
 
 
 def test_dns_permission_grants_the_system_resolver_socket_and_no_udp(

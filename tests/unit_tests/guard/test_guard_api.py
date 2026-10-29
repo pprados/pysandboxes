@@ -27,6 +27,7 @@ from pysandboxes.guard_api import (
     is_allowed,
     parse_rules,
     patch_rules,
+    resolve,
 )
 from pysandboxes.guard_eval import classify_context_value
 from pysandboxes.lifecycle import arm, is_armed
@@ -104,6 +105,20 @@ def test_wildcards() -> None:
     parsed, errors = _parse("python-api=ALLOW:*", "python-api=DENY:*")
     assert not errors
     assert [r.target for r in parsed] == ["*", "*"]
+
+
+def test_a_wildcard_is_not_a_category_and_leaves_the_other_targets_of_its_line_parsed() -> None:
+    parsed, errors = _parse("python-api=ALLOW:*, os.system, threads")
+    assert not errors
+    assert [(r.target, r.is_category) for r in parsed] == [("*", False), ("os.system", False), ("threads", True)]
+
+
+def test_a_wildcard_decides_every_function_and_a_function_rule_overrides_it() -> None:
+    parsed, _ = _parse("python-api=ALLOW:*", "python-api=DENY:os.system")
+    decisions = resolve(parsed)
+    assert "*" not in decisions
+    assert decisions["os.system"] is False
+    assert all(allowed for name, allowed in decisions.items() if name != "os.system")
 
 
 def test_other_directives_are_returned_untouched() -> None:
