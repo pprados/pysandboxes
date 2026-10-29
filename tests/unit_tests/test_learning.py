@@ -717,6 +717,62 @@ def test_a_stack_of_sixteen_frames_is_kept_whole_and_a_longer_one_is_elided(tmp_
     assert longer[-1].endswith("in f%d" % (16 - base))
 
 
+def _capture_through(*frames: tuple[str, str]) -> tuple[str, ...]:
+    """Capture the stack under one function per (file name, module name), outermost first, in a thread."""
+    import threading
+
+    from pysandboxes import learning
+
+    call: Any = learning._capture_learning_stack
+    for filename, module in reversed(frames):
+        namespace: dict[str, Any] = {"__name__": module, "inner": call}
+        exec(compile("def f():\n    return inner()\n", filename, "exec"), namespace)
+        call = namespace["f"]
+    result: list[tuple[str, ...]] = []
+    thread = threading.Thread(target=lambda: result.append(call()))
+    thread.start()
+    thread.join()
+    return result[0]
+
+
+def test_a_learned_stack_keeps_the_application_frames_and_drops_the_framework_ones() -> None:
+    stack = _capture_through(
+        ("/p/kept.py", "app"),
+        ("/p/skip_root.py", "pysandboxes"),
+        ("/p/skip_remote.py", "pysandboxes.remote.daemon"),
+        ("/p/skip_helper.py", "pysandboxes.sb_types"),
+        ("<frozen app>", "app"),
+        ("/p/learning.py", "app"),
+        ("/p/guard_eval.py", "app"),
+        ("/p/low.py", "aaa"),
+        ("/elsewhere/guard_files.py", "pysandboxes.guard_files"),
+    )
+
+    assert stack[-3:] == ("/p/kept.py:2 in f", "/p/low.py:2 in f", "pysandboxes/guard_files.py:2 in f")
+    dropped = ("skip_", "<frozen", "/p/learning.py", "/p/guard_eval.py")
+    assert not [frame for frame in stack if any(mark in frame for mark in dropped)]
+
+
+def test_a_learned_stack_keeps_four_frames_per_installed_package_and_goes_on_above_them() -> None:
+    packaged = [(f"/venv/lib/python3.14/site-packages/pkg/m{i}.py", f"pkg.m{i}") for i in range(6)]
+
+    stack = _capture_through(("/app.py", "app"), *packaged)
+
+    assert stack[-5:] == (
+        "/app.py:2 in f",
+        "pkg/m2.py:2 in f",
+        "pkg/m3.py:2 in f",
+        "pkg/m4.py:2 in f",
+        "pkg/m5.py:2 in f",
+    )
+
+
+def test_a_learned_stack_goes_back_at_most_sixty_four_frames() -> None:
+    stack = _capture_through(*((f"/p/m{i}.py", f"app{i}") for i in range(70)))
+
+    assert stack[0] == "/p/m6.py:2 in f"
+
+
 def test_info_summary_marks_generated_rules_without_a_captured_stack(
     tmp_path: Path, caplog: pytest.LogCaptureFixture, monkeypatch: pytest.MonkeyPatch
 ) -> None:
