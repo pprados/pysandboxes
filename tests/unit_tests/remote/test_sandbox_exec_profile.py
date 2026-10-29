@@ -12,6 +12,7 @@ from unittest.mock import patch
 
 import pytest
 
+from pysandboxes import guard_files
 from pysandboxes.all_rules import EmptyRules
 from pysandboxes.guard_files import FSExposeRule, IgnoreRule
 from pysandboxes.guard_socket import Action, Direction, Kind, SocketMask, SocketRule
@@ -260,6 +261,8 @@ def test_a_chain_of_relative_directory_symlinks_is_followed_to_the_end(
 ) -> None:
     (tmp_path / "real" / "bin").mkdir(parents=True)
     monkeypatch.chdir(tmp_path / "real" / "bin")  # a link read as relative to the cwd would find nothing
+    # The file guard armed under pytest answers readlink with an absolute path: use the system one.
+    monkeypatch.setattr(os, "readlink", guard_files._os_readlink)
     (tmp_path / "real" / "bin" / "python").write_text("", encoding="utf-8")
     os.symlink("real", tmp_path / "link2")
     os.symlink("link2", tmp_path / "link1")

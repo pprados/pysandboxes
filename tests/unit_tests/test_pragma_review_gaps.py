@@ -112,6 +112,14 @@ class TestRichHandlerDetection:
 
         assert client_daemon.use_rich_handler() is True
 
+    def test_the_other_handlers_are_not_taken_for_it(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        root = client_daemon.logging.getLogger()
+        monkeypatch.setattr(
+            root, "handlers", [client_daemon.logging.NullHandler(), client_daemon.logging.StreamHandler()]
+        )
+
+        assert client_daemon.use_rich_handler() is False
+
 
 class TestApiTools:
     def test_a_line_longer_than_the_small_int_cache_is_scanned_to_its_end(self) -> None:
