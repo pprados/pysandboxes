@@ -22,12 +22,14 @@
   "source": "756ccc02f44c"
  },
  "pysandboxes/guard_socket.py": {
-  "commit": "v0.7.0-66-ge9920a4",
+  "commit": "v0.7.0-68-gc642d90",
   "date": "2026-10-29",
-  "killed": 532,
+  "equivalent": 40,
+  "killed": 541,
+  "note": "survivors killed or judged equivalent afterwards, mutation not re-run",
   "skipped": 5639,
-  "source": "006ea2279763",
-  "survived": 49
+  "source": "8df037edec67",
+  "survived": 0
  },
  "pysandboxes/guard_wraps.py": {
   "commit": "166b245",

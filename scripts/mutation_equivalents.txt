@@ -88,3 +88,43 @@ pysandboxes/remote/client_subprocess_sse_daemon.py | ReplaceComparisonOperator_E
 pysandboxes/remote/client_subprocess_sse_daemon.py | ReplaceTrueWithFalse | debug_tmp.mkdir(parents=True, exist_ok=True)
 pysandboxes/remote/python_in_sb.py | ReplaceComparisonOperator_Gt_NotEq | if len(python_cmd) > 1:
 pysandboxes/remote/python_in_sb.py | ReplaceComparisonOperator_Eq_Is | elif python_cmd[0] == "-":
+pysandboxes/guard_socket.py | ReplaceComparisonOperator_Eq_GtE | if ip.version == 6:
+pysandboxes/guard_socket.py | ReplaceFalseWithTrue | yield ip_network(ip, strict=False)
+pysandboxes/guard_socket.py | ReplaceComparisonOperator_NotEq_Lt | if len(rule_components) != 5:
+pysandboxes/guard_socket.py | ReplaceComparisonOperator_Gt_NotEq | if len(kind_input) > 1:
+pysandboxes/guard_socket.py | ReplaceComparisonOperator_Eq_LtE | if action == Action.ALLOW.name:
+pysandboxes/guard_socket.py | ReplaceComparisonOperator_Eq_Is | if syntax.strip() == "*":
+pysandboxes/guard_socket.py | ReplaceComparisonOperator_Eq_GtE | if len(limits) == 2:
+pysandboxes/guard_socket.py | ReplaceComparisonOperator_Eq_LtE | if len(limits) == 2:
+pysandboxes/guard_socket.py | ReplaceComparisonOperator_Eq_Is | if end_str == "":  # Handles open-ended ranges like "8000-"
+pysandboxes/guard_socket.py | ReplaceComparisonOperator_Eq_LtE | if end_str == "":  # Handles open-ended ranges like "8000-"
+pysandboxes/guard_socket.py | ReplaceComparisonOperator_LtE_Lt | elif start <= end:
+pysandboxes/guard_socket.py | ReplaceComparisonOperator_Eq_GtE | if packed[:10] == b"\x00" * 10 and packed[10:12] == b"\xff\xff":
+pysandboxes/guard_socket.py | ReplaceComparisonOperator_Eq_LtE | if packed[:10] == b"\x00" * 10 and packed[10:12] == b"\xff\xff":
+pysandboxes/guard_socket.py | ReplaceComparisonOperator_Eq_GtE | if packed[:8] == b"\x00" * 8 and packed[8:10] == b"\xff\xff" and packed[10:12] == b"\x00\x00":
+pysandboxes/guard_socket.py | ReplaceComparisonOperator_Eq_LtE | if packed[:8] == b"\x00" * 8 and packed[8:10] == b"\xff\xff" and packed[10:12] == b"\x00\x00":
+pysandboxes/guard_socket.py | ReplaceComparisonOperator_Eq_LtE | if packed[:8] == b"\x00" * 8 and packed[8:10] == b"\xff\xff" and packed[10:12] == b"\x00\x00":
+pysandboxes/guard_socket.py | ReplaceComparisonOperator_Eq_LtE | if packed[:12] == b"\x00" * 12 and addr not in _IPV4_COMPATIBLE_EXCLUDED:
+pysandboxes/guard_socket.py | ReplaceComparisonOperator_Eq_GtE | if action == rule_type_to_check:
+pysandboxes/guard_socket.py | ReplaceComparisonOperator_Eq_Is | if action == rule_type_to_check:
+pysandboxes/guard_socket.py | ReplaceComparisonOperator_Eq_GtE | if action == Action.DENY:
+pysandboxes/guard_socket.py | ReplaceComparisonOperator_Eq_Is | if action == Action.DENY:
+pysandboxes/guard_socket.py | ReplaceComparisonOperator_Eq_GtE | elif action == Action.ALLOW:
+pysandboxes/guard_socket.py | ReplaceComparisonOperator_Eq_Is | elif action == Action.ALLOW:
+pysandboxes/guard_socket.py | ReplaceComparisonOperator_Eq_LtE | elif action == Action.ALLOW:
+pysandboxes/guard_socket.py | ReplaceComparisonOperator_Eq_Is | if rule.action == Action.ALLOW and Direction.OUT in rule.directions:
+pysandboxes/guard_socket.py | ReplaceComparisonOperator_Eq_LtE | if rule.action == Action.ALLOW and Direction.OUT in rule.directions:
+pysandboxes/guard_socket.py | ReplaceComparisonOperator_NotEq_Gt | if rule.mask.network.num_addresses != 1 or rule.mask.network.network_address not in pinned:
+pysandboxes/guard_socket.py | ReplaceComparisonOperator_Eq_LtE | if ip_address(addr_info[4][0]).version == 4:
+pysandboxes/guard_socket.py | ReplaceComparisonOperator_NotEq_Gt | if family != 0:
+pysandboxes/guard_socket.py | ReplaceComparisonOperator_NotEq_Gt | if type != 0:
+pysandboxes/guard_socket.py | ReplaceComparisonOperator_NotEq_Gt | if proto != 0:
+pysandboxes/guard_socket.py | ReplaceComparisonOperator_Eq_Is | result = [r for r in result if r[2] == proto]
+pysandboxes/guard_socket.py | ReplaceComparisonOperator_Eq_Is | if hostname == "":
+pysandboxes/guard_socket.py | ReplaceComparisonOperator_Eq_LtE | if hostname == "":
+pysandboxes/guard_socket.py | ReplaceComparisonOperator_Eq_LtE | unbound = self.getsockname()[1] == 0
+pysandboxes/guard_socket.py | ReplaceComparisonOperator_Eq_LtE | if ip.version == 4:
+pysandboxes/guard_socket.py | ReplaceComparisonOperator_Eq_GtE | elif ip.version == 6:
+pysandboxes/guard_socket.py | ReplaceComparisonOperator_Eq_LtE | elif ip.version == 6:
+pysandboxes/guard_socket.py | ReplaceComparisonOperator_Is_Eq | if learn_rule.direction is Direction.IN:
+pysandboxes/guard_socket.py | ReplaceComparisonOperator_Is_LtE | if learn_rule.direction is Direction.IN:
