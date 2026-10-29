@@ -275,6 +275,7 @@ EvalProfiles = ImmutableDict[str, EvalRules]
 """Profiles by name, with `""` for the default profile."""
 
 
+@post(lambda result: isinstance(result, GlobPattern))
 def compile_pattern(pattern: str) -> GlobPattern:
     """Compile a list-key glob, anchored on both ends.
 
@@ -286,6 +287,8 @@ def compile_pattern(pattern: str) -> GlobPattern:
     return GlobPattern(pattern)
 
 
+@ensure(lambda errors, rule, detail, result: detail in errors[-1][0])
+@ensure(lambda errors, rule, detail, result: errors[-1][1:] == (rule.path, rule.ln))
 def _add_error(errors: list[ErrorMsg], rule: ConfigLine, detail: str) -> None:
     errors.append((f"{format_ruleref(rule)}: In {rule.rule!r}, {detail}", rule.path, rule.ln))
 
@@ -296,12 +299,15 @@ _DEPRECATED_NODES = frozenset(
 )
 
 
+@ensure(lambda token, result: not result or token not in _DEPRECATED_NODES)
 def _is_node(token: str) -> bool:
     """Tell whether `token` names an AST node class, not a helper of the `ast` module (`parse`, `NodeVisitor`)."""
     node = vars(ast).get(token)
     return isinstance(node, type) and issubclass(node, ast.AST) and token not in _DEPRECATED_NODES
 
 
+@ensure(lambda token, known, result: bool(known) or result == "")
+@post(lambda result: result == "" or result.startswith(", closest known token is "))
 def _suggest(token: str, known: list[str]) -> str:
     """Return `, closest known token is 'x'` when one is close enough."""
     close = difflib.get_close_matches(token, known, n=1)
@@ -423,6 +429,8 @@ def _parse_list_value(
         (acc.deny if deny else acc.allow)[field].add(token)
 
 
+@ensure(lambda config, errors, result: len(result[1]) == sum(not r.rule.startswith(EVAL_PREFIX) for r in config))
+@ensure(lambda config, errors, result: all(not r.rule.startswith(EVAL_PREFIX) for r in result[1]))
 def parse_rules(
     config: ConfigLines,
     errors: list[ErrorMsg],
@@ -495,6 +503,8 @@ _RUNTIME_OBSERVED = ("eval-attribute", "eval-magic")
 _EMIT_ORDER = ("eval-syntax", "eval-import", "eval-call", "eval-attribute", "eval-magic")
 
 
+@ensure(lambda names, result: all(t in names or set(SYNTAX_GROUPS[t]) <= names for t in result))
+@ensure(lambda names, result: names <= {n for t in result for n in SYNTAX_GROUPS.get(t, (t,))})
 def _condense_syntax(names: set[str]) -> list[str]:
     """Replace a group's nodes by the group name, only when all were seen.
 
@@ -516,6 +526,8 @@ def _condense_syntax(names: set[str]) -> list[str]:
     return sorted(tokens) + sorted(remaining)
 
 
+@ensure(lambda learn, result: all(line.startswith(("eval-", "#")) for line in result))
+@ensure(lambda learn, result: result or not any(isinstance(e, (LearnEvalRule, LearnEvalContext)) for e in learn))
 def generate_rules(learn: set[Any]) -> list[str]:
     """Emit the `eval-*` lines for what the evaluated code actually needed.
 
