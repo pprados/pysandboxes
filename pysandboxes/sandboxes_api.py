@@ -32,6 +32,7 @@ from typing import (
     overload,
 )
 
+from ._contracts import raises
 from ._os_sandbox import async_shutdown_daemon
 from .base_daemon import BaseDaemon, FakeDaemon
 from .e import ConfigSyntaxError
@@ -54,6 +55,7 @@ logger = logging.getLogger(__name__)
 importlib.import_module("multiprocessing.synchronize")
 
 
+@raises(ConfigSyntaxError)
 def _refuse_locked_extra_rules(all_rules: "AllRules", extra_rules: dict[str, Any]) -> None:
     """Refuse the directives given to the API when the rule file holds `learn=false`.
 
