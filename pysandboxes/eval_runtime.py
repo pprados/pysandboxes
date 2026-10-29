@@ -21,6 +21,7 @@ import string
 import threading
 from typing import Any, Callable, Iterator
 
+from ._contracts import ensure, post, raises
 from .e import EvalInterrupted, RuleEvalPermissionError
 from .eval_rules import EvalRules
 
@@ -118,6 +119,7 @@ class EvalState:
 _current = threading.local()
 
 
+@ensure(lambda state, result: current_state() is state)
 def push_state(state: EvalState) -> None:
     """Make `state` the one the helpers read on this thread."""
     stack: list[EvalState] = getattr(_current, "stack", [])
@@ -125,12 +127,15 @@ def push_state(state: EvalState) -> None:
     _current.stack = stack
 
 
+@post(lambda result: isinstance(result, EvalState))
 def pop_state() -> EvalState:
     """Drop the innermost state and return it."""
     stack: list[EvalState] = _current.stack
     return stack.pop()
 
 
+@raises(RuntimeError)
+@post(lambda result: isinstance(result, EvalState))
 def current_state() -> EvalState:
     """Return the state in force on this thread.
 
@@ -144,6 +149,7 @@ def current_state() -> EvalState:
     return stack[-1]
 
 
+@post(lambda result: isinstance(result, bool))
 def in_evaluation() -> bool:
     """Return whether a guarded evaluation is in progress on this thread."""
     return bool(getattr(_current, "stack", None))
@@ -212,6 +218,7 @@ def __sb_func__(fn: Callable[..., Any]) -> Callable[..., Any]:
     return wrapper
 
 
+@ensure(lambda name, result: not (name in FRAME_CAPTURE and result))
 def _attr_allowed(name: str) -> bool:
     """Return whether `name` would pass the attribute rules, silently.
 
@@ -266,6 +273,17 @@ _DIGITS = re.compile(r"\d+")
 _PRINTF_SPEC = re.compile(r"%(?:\([^)]*\))?[-#0 +]*(\*|\d+)?(?:\.(\*|\d+))?")
 
 
+def _is_int(value: Any) -> bool:
+    return isinstance(value, int) and not isinstance(value, bool)
+
+
+def _within_budget(number: str | int) -> bool:
+    budget = current_state().rules.max_alloc
+    return len(str(number)) <= len(str(budget)) and int(number) <= budget
+
+
+@raises(RuleEvalPermissionError)
+@post(lambda result: result is None)
 def _check_width(number: str | int, spec: Any) -> None:
     """Refuse a width or precision that pads the result past `eval-max-alloc`.
 
@@ -279,6 +297,8 @@ def _check_width(number: str | int, spec: Any) -> None:
         _refuse_alloc(f"the format {spec!r} pads past eval-max-alloc={budget}")
 
 
+@raises(RuleEvalPermissionError)
+@ensure(lambda spec, result: all(_within_budget(number) for number in _DIGITS.findall(spec)))
 def check_format_spec(spec: str) -> None:
     """Check every number of a format spec (`>10.3f`): a fill digit is small, so only a width or a precision can
     exceed the budget.
@@ -290,6 +310,7 @@ def check_format_spec(spec: str) -> None:
         _check_width(number, spec)
 
 
+@raises(RuleEvalPermissionError)
 def _check_printf(template: str | bytes | bytearray, values: Any) -> None:
     """Check the widths and precisions of a `%` template, `*` ones read from the values."""
     text = template if isinstance(template, str) else bytes(template).decode("latin-1")
@@ -306,6 +327,8 @@ def _check_printf(template: str | bytes | bytearray, values: Any) -> None:
                 _check_width(value, text)
 
 
+@raises(RuleEvalPermissionError)
+@ensure(lambda args, kwargs, template, result: all(_within_budget(v) for v in (*args, *kwargs.values()) if _is_int(v)))
 def _check_format_args(args: Any, kwargs: Any, template: str) -> None:
     """Check the integers a nested spec field (`{:{}}`) can take its width from."""
     for value in (*args, *kwargs.values()):
@@ -313,6 +336,8 @@ def _check_format_args(args: Any, kwargs: Any, template: str) -> None:
             _check_width(value, template)
 
 
+@raises(RuleEvalPermissionError, ValueError)
+@post(lambda result: isinstance(result, bool))
 def _validate_format_template(template: str) -> bool:
     """Run every attribute access a format template performs past `_check_attr`.
 
@@ -341,6 +366,7 @@ def _validate_format_template(template: str) -> bool:
     return nested
 
 
+@raises(RuleEvalPermissionError, ValueError)
 def check_format_field(field: str) -> None:
     """Run the attribute accesses of one format field (`0.a.b`) past `_check_attr`.
 
@@ -552,6 +578,7 @@ _REGEX_ENGINE_ATTRS = frozenset(
 _warned_regex: set[str] = set()
 
 
+@post(lambda result: not _warned_regex)
 def _reset_regex_warnings() -> None:
     """Clear the deduplication set. Test hook only."""
     _warned_regex.clear()
@@ -592,6 +619,7 @@ def _warn_about_regex(obj: Any, name: str) -> None:
     )
 
 
+@raises(RuleEvalPermissionError)
 def _refuse_alloc(detail: str) -> None:
     raise RuleEvalPermissionError(detail, "eval-max-alloc")
 
