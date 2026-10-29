@@ -238,6 +238,33 @@ def test_unix_connect_passes_with_write_access(short_tmp_path: Path, monkeypatch
             client.connect(path)
 
 
+@pytest.mark.skipif(sys.platform == "win32", reason="Windows has no AF_UNIX")
+@requires_unix_sockets
+@pytest.mark.parametrize("operation", ["bind", "connect_ex", "sendto"])
+def test_every_unix_operation_needs_write_access_to_the_socket(
+    short_tmp_path: Path, monkeypatch: pytest.MonkeyPatch, operation: str
+) -> None:
+    """bind creates the socket file, connect_ex and sendto reach it as connect does: read-only is refused."""
+    path = str(short_tmp_path / "s")
+    kind = socket.SOCK_DGRAM if operation == "sendto" else socket.SOCK_STREAM
+    with socket.socket(socket.AF_UNIX, kind) as server:
+        if operation != "bind":
+            server.bind(path)
+        errors: list[ErrorMsg] = []
+        file_rules, _ = gf.parse_rules([ConfigLine(f"expose-ro={short_tmp_path}", Path(), 1)], errors)
+        assert not errors
+        monkeypatch.setattr(gf, "_rules", file_rules)
+        with socket.socket(socket.AF_UNIX, kind) as client:
+            with pytest.raises(SandBoxError) as refused:
+                if operation == "bind":
+                    client.bind(path)
+                elif operation == "connect_ex":
+                    client.connect_ex(path)
+                else:
+                    client.sendto(b"x", path)
+            assert sandbox_denials(refused.value)
+
+
 @pytest.mark.skipif(sys.platform != "linux", reason="abstract AF_UNIX addresses are a Linux-only namespace")
 @requires_unix_sockets
 def test_connect_to_an_abstract_unix_address_is_refused_not_crashed() -> None:
