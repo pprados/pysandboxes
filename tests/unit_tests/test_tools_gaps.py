@@ -3,16 +3,22 @@
 """Behaviour of `pysandboxes.tools` helpers that the other tests leave unobserved."""
 
 import asyncio
+import functools
+import importlib.util
 import sys
 from pathlib import Path
 
 import pytest
 
+from pysandboxes.sb_types import ConfigLine
 from pysandboxes.tools import (
     GlobPattern,
     check_mixte_async_async,
+    find_config_for_module,
     follow_links_executable,
+    get_callable_info,
     remove_comments,
+    remove_config_comments,
     resolve_env_variables,
 )
 
@@ -70,3 +76,48 @@ def test_a_glob_longer_than_the_small_integer_cache_matches() -> None:
     assert GlobPattern("*" + long_name + "*").match("b" + long_name + "b")
     assert not GlobPattern(long_name).match(long_name + "b")
     assert not GlobPattern(long_name + "b").match(long_name)
+
+
+def test_template_lines_are_dropped_with_the_comments_and_the_empty_lines() -> None:
+    lines = [
+        ConfigLine(text, Path("p"), n) for n, text in enumerate(["{template}", "# note", "", "net=ALLOW", "env=A # x"])
+    ]
+
+    assert [line.rule for line in remove_config_comments(lines)] == ["net=ALLOW", "env=A"]
+
+
+def test_a_missing_module_has_no_config() -> None:
+    assert find_config_for_module("no_such_package_for_sure.sub", ".py-sandboxes") is None
+
+
+def test_a_module_that_cannot_be_read_has_no_config(monkeypatch: pytest.MonkeyPatch) -> None:
+    def broken(name: str) -> None:
+        raise FileNotFoundError(name)
+
+    monkeypatch.setattr(importlib.util, "find_spec", broken)
+
+    assert find_config_for_module("os", ".py-sandboxes") is None
+
+
+def test_a_callable_without_qualname_is_named_after_its_name() -> None:
+    class Named:
+        def __call__(self) -> None: ...
+
+    named = Named()
+    named.__name__ = "renamed"  # type: ignore[attr-defined]
+
+    assert get_callable_info(named)[1] == "renamed"
+
+
+def test_a_callable_instance_is_named_after_its_class() -> None:
+    assert get_callable_info(functools.partial(print))[1] == "partial.__call__"
+
+
+def test_a_system_interpreter_adds_no_path_to_expose(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    for prefix in ("/usr/bin", "/usr/local/bin"):
+        monkeypatch.setattr(Path, "resolve", lambda self, strict=False, prefix=prefix: Path(prefix) / "python3")
+        paths: set[Path] = set()
+
+        follow_links_executable(tmp_path / "python3", paths)
+
+        assert not paths

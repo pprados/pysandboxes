@@ -613,3 +613,128 @@ def test_the_audit_hook_is_installed_once_across_activations(monkeypatch: pytest
     guard_import._activate_patch_import({})
 
     assert len(installed) == 1
+
+
+# %% The audit hook that keeps the guard finder at the head of sys.meta_path
+
+
+def _audit(monkeypatch: pytest.MonkeyPatch, meta_path: Any, *, activated: bool = True) -> None:
+    monkeypatch.setattr(guard_import, "_activated", activated)
+    guard_import._audit_import("import", ("name", None, None, meta_path, None))
+
+
+def test_an_inactive_guard_or_another_event_leaves_the_meta_path_alone(monkeypatch: pytest.MonkeyPatch) -> None:
+    meta_path: list[Any] = ["other"]
+    _audit(monkeypatch, meta_path, activated=False)
+    monkeypatch.setattr(guard_import, "_activated", True)
+    guard_import._audit_import("open", ("name", None, None, meta_path, None))
+
+    assert meta_path == ["other"]
+
+
+def test_the_import_of_a_c_extension_carries_no_meta_path(monkeypatch: pytest.MonkeyPatch) -> None:
+    _audit(monkeypatch, None)
+
+
+def test_a_meta_path_that_is_not_a_list_is_refused(monkeypatch: pytest.MonkeyPatch) -> None:
+    with pytest.raises(RuleModuleNotFoundError, match="no longer a list"):
+        _audit(monkeypatch, (guard_import._guard_finder,))
+
+
+def test_a_guard_finder_already_at_the_head_stays_there(monkeypatch: pytest.MonkeyPatch, capsys: Any) -> None:
+    meta_path: list[Any] = [guard_import._guard_finder, "other"]
+    _audit(monkeypatch, meta_path)
+
+    assert meta_path == [guard_import._guard_finder, "other"]
+    assert capsys.readouterr().err == ""
+
+
+def test_a_guard_finder_pushed_behind_another_one_is_moved_back_quietly(
+    monkeypatch: pytest.MonkeyPatch, capsys: Any
+) -> None:
+    meta_path: list[Any] = ["framework", guard_import._guard_finder]
+    _audit(monkeypatch, meta_path)
+
+    assert meta_path == [guard_import._guard_finder, "framework"]
+    assert capsys.readouterr().err == ""
+
+
+def test_a_guard_finder_removed_from_the_meta_path_is_restored_and_reported(
+    monkeypatch: pytest.MonkeyPatch, capsys: Any
+) -> None:
+    meta_path: list[Any] = ["framework"]
+    _audit(monkeypatch, meta_path)
+
+    assert meta_path == [guard_import._guard_finder, "framework"]
+    assert "removed from sys.meta_path, and restored" in capsys.readouterr().err
+
+
+# %% GuardLoader: creating and executing a module through the wrapped loader
+
+
+class _RecordingLoader:
+    def __init__(self) -> None:
+        self.created: list[ModuleSpec] = []
+        self.executed: list[ModuleType] = []
+
+    def create_module(self, spec: ModuleSpec) -> ModuleType:
+        self.created.append(spec)
+        return ModuleType(spec.name)
+
+    def exec_module(self, module: ModuleType) -> None:
+        self.executed.append(module)
+
+
+def _spec(name: str, loader: Any) -> ModuleSpec:
+    return ModuleSpec(name, loader)
+
+
+def test_a_loader_without_a_wrapped_loader_creates_nothing_and_executes_nothing() -> None:
+    loader = guard_import.GuardLoader("m", None)
+
+    assert loader.create_module(_spec("m", None)) is None
+    loader.exec_module(ModuleType("m"))
+
+
+def test_the_wrapped_loader_creates_the_module_from_the_original_spec() -> None:
+    wrapped = _RecordingLoader()
+    original = _spec("m", wrapped)
+    module = guard_import.GuardLoader("m", original).create_module(_spec("m", None))
+
+    assert module is not None and module.__name__ == "m"
+    assert wrapped.created == [original]
+
+
+def test_an_already_built_module_is_given_back_instead_of_a_new_one() -> None:
+    wrapped = _RecordingLoader()
+    built = ModuleType("m")
+
+    assert guard_import.GuardLoader("m", _spec("m", wrapped), built).create_module(_spec("m", None)) is built
+    assert wrapped.created == []
+
+
+def test_executing_nothing_does_nothing() -> None:
+    guard_import.GuardLoader("m", _spec("m", _RecordingLoader())).exec_module(None)  # type: ignore[arg-type]
+
+
+def test_the_wrapped_loader_executes_the_module_and_a_patched_name_is_patched(monkeypatch: pytest.MonkeyPatch) -> None:
+    wrapped = _RecordingLoader()
+    patched: list[tuple[ModuleType, str]] = []
+    monkeypatch.setattr(guard_import, "_patch_rules", {"m": ()})
+    monkeypatch.setattr(guard_import, "_apply_patch", lambda module, name: patched.append((module, name)))
+    module = ModuleType("m")
+
+    guard_import.GuardLoader("m", _spec("m", wrapped)).exec_module(module)
+
+    assert wrapped.executed == [module]
+    assert patched == [(module, "m")]
+
+
+def test_a_module_without_a_patch_rule_is_executed_unpatched(monkeypatch: pytest.MonkeyPatch) -> None:
+    wrapped = _RecordingLoader()
+    monkeypatch.setattr(guard_import, "_patch_rules", {})
+    monkeypatch.setattr(guard_import, "_apply_patch", lambda module, name: pytest.fail("patched"))
+
+    guard_import.GuardLoader("m", _spec("m", wrapped)).exec_module(ModuleType("m"))
+
+    assert len(wrapped.executed) == 1
