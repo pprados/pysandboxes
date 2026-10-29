@@ -217,6 +217,9 @@ def _attr_allowed(name: str) -> bool:
 
     A pure predicate for `dir()` filtering: it neither records an observation
     for learning nor raises. `_check_attr` is the enforcing counterpart.
+
+    post: name not in FRAME_CAPTURE or not __return__
+    raises: RuntimeError
     """
     if name in FRAME_CAPTURE:
         return False
@@ -237,6 +240,10 @@ def _check_attr(name: str) -> None:
     Raises:
         RuleEvalPermissionError: `name` is a frame-capture attribute, an
             undeclared dunder, or an undeclared ordinary name.
+
+    pre: any(name == captured for captured in FRAME_CAPTURE)
+    post: False
+    raises: RuleEvalPermissionError
     """
     if name in FRAME_CAPTURE:
         raise RuleEvalPermissionError(name, "eval-attribute", _FRAME_CAPTURE_HINT)
