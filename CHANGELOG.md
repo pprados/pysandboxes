@@ -6,7 +6,7 @@
 | ✅ 3.12   | ✅ subprocess  | ✅ WSL      | ✅ Files   |
 | ✅ 3.13   | ✅ landlock    | ✅ MacOS²   | ✅ Network |
 | ✅ 3.14   | ✅ bwrap       | ◐ Windows² | ✅ Import  |
-|          | ✅ firejail    |            | ✅ API     |
+|    3.15   | ✅ firejail    |            | ✅ API     |
 |          | ✅ unshare     |            | ✅ Eval    |
 |          | ✅ qemu        |            | ☐ Source  |
 |          | ◐ sandbox-exec² |           | ☐ Regexp  |
