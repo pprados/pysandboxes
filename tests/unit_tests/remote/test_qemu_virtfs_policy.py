@@ -300,6 +300,19 @@ class TestFileRulesMounts:
 
         assert [t for t, _ in mounts if t.startswith("pysb_exec")] == ["pysb_exec_0", "pysb_exec_1"]
 
+    def test_an_exec_tag_without_an_index_is_ordered_with_the_rest(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setattr(
+            q,
+            "_execution_dirs_mounts",
+            lambda: [("pysb_exec_0", tmp_path, "/exec/zero"), ("pysb_exec_x", tmp_path, "/exec/x")],
+        )
+
+        _, mounts = self._mounts(tmp_path, [])
+
+        assert [t for t, _ in mounts if t.startswith("pysb_exec")] == ["pysb_exec_x", "pysb_exec_0"]
+
     def test_an_exec_dir_already_exposed_is_not_mounted_twice(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:

@@ -32,6 +32,13 @@ def test_a_proc_path_is_not_whitelisted(tmp_path: Path, path: str) -> None:
     assert f"--read-only={path}/" in args
 
 
+@pytest.mark.skipif(sys.platform != "linux", reason="Firejail's /etc handling is Linux-specific")
+def test_etc_is_not_whitelisted(tmp_path: Path) -> None:
+    """--private-etc provides /etc: a whitelist there puts a tmpfs over it and --dns fails."""
+    args = _firejail_args("expose-ro=/etc", tmp_path)
+    assert not [arg for arg in args if arg.startswith("--whitelist=/etc")]
+
+
 def test_a_profile_rlimit_replaces_the_template_one(tmp_path: Path) -> None:
     """A library that maps more than 300 MB at import needs a larger --rlimit-as for its profile alone."""
     params, unparsed = FireJailSSEDaemon("token").parse_rules([ConfigLine("firejail.rlimit-as=600m", Path(), 0)], [])

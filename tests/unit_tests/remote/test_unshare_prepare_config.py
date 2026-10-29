@@ -14,6 +14,7 @@ import pytest
 
 from pysandboxes.all_rules import EmptyRules
 from pysandboxes.e import SandBoxError
+from pysandboxes.guard_files import FSExposeRule
 from pysandboxes.guard_files import parse_rules as parse_file_rules
 from pysandboxes.guard_socket import parse_rules as parse_socket_rules
 from pysandboxes.remote import unshare_sse_daemon as usd
@@ -218,6 +219,21 @@ class TestMounts:
         config, _ = _prepare(_rules(files=("expose-ro=/dev/full",)), tmp_path)
 
         assert not [mount for mount in config.mounts_rw + config.mounts_ro if mount[0].startswith("/dev/")]
+
+    def test_a_device_rule_does_not_hide_the_rules_that_follow_it(self, tmp_path: Path) -> None:
+        shared = tmp_path / "shared"
+        shared.mkdir()
+
+        rules = EmptyRules._replace(
+            file_rules=tuple(
+                FSExposeRule(path=path, write=False, config=_line(f"expose-ro={path}"))
+                for path in ("/dev/full", str(shared))
+            )
+        )
+
+        config, _ = _prepare(rules, tmp_path)
+
+        assert (str(shared), str(shared)) in config.mounts_ro
 
     def test_the_interpreter_and_its_search_path_are_mounted(self, tmp_path: Path) -> None:
         config, _ = _prepare(_rules(), tmp_path)

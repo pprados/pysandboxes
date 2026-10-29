@@ -7,6 +7,7 @@ import os
 import pickle
 import sys
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any
 
 import pytest  # type: ignore[import-untyped]
@@ -164,6 +165,20 @@ def test_python_sb_resolves_module_before_arming_guards(
     assert order.index("find_module_specs") < order.index("activate") < order.index("python_in_sb")
     assert harness.named("find_module_specs") == [("demo.main",)]
     assert harness.named("python_in_sb")[0][0] == (EmptyRules, ["-m", "demo.main", "url"], module_specs)
+
+
+@pytest.mark.parametrize("args", [["-c", "demo.main"], ["-m"], []])
+def test_only_a_module_named_after_dash_m_is_resolved_before_arming(
+    harness: _Harness, monkeypatch: pytest.MonkeyPatch, tmp_path: Path, args: list[str]
+) -> None:
+    monkeypatch.setattr(
+        "pysandboxes.remote.python_in_sb._find_module_specs", lambda name: harness.journal.append(("find", name))
+    )
+
+    _run(monkeypatch, tmp_path, EmptyRules, "--_python-sb", *args)
+
+    assert not [name for name, _ in harness.journal if name == "find"]
+    assert harness.named("python_in_sb")[0][0] == (EmptyRules, args, None)
 
 
 def test_an_abbreviated_internal_option_is_not_taken_from_the_command_line(
@@ -360,6 +375,15 @@ class TestGuestDiagnostics:
 class TestStartCoverage:
     def test_nothing_starts_without_the_settings_in_the_environment(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.delenv("COVERAGE_PROCESS_CONFIG", raising=False)
+
+        assert main_sandbox._start_coverage() is None
+
+    def test_a_measurement_already_running_is_not_taken_without_the_settings(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.delenv("COVERAGE_PROCESS_CONFIG", raising=False)
+        running = SimpleNamespace(Coverage=SimpleNamespace(current=lambda: object()))
+        monkeypatch.setitem(sys.modules, "coverage", running)
 
         assert main_sandbox._start_coverage() is None
 

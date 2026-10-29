@@ -3,6 +3,7 @@
 """Regression: under ``bwrap`` the child must import what the parent imports, editable installs included."""
 
 import os
+import site
 import sys
 from pathlib import Path
 from unittest.mock import patch
@@ -28,6 +29,20 @@ def test_a_path_added_by_a_pth_file_reaches_the_child(tmp_path: Path, monkeypatc
     with patch("pysandboxes.remote.bwrap_sse_daemon.which_command", return_value="/usr/bin/bwrap"):
         args = list(BWrapSSEDaemon("token")._bwrap_args(EmptyRules, {}, tmp_path / "pipe", tmp_path))
     assert str(editable_root) in _setenv(args, "PYTHONPATH").split(":")
+
+
+def test_only_existing_distinct_directories_reach_the_child(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """An empty entry stands for the current directory, a missing one is noise, a site-packages one is not repeated."""
+    present = tmp_path / "present"
+    present.mkdir()
+    site_packages = [p for p in site.getsitepackages() if os.path.isdir(p)]
+    monkeypatch.setattr(sys, "path", [*sys.path, "", str(tmp_path / "missing"), str(present), *site_packages])
+    with patch("pysandboxes.remote.bwrap_sse_daemon.which_command", return_value="/usr/bin/bwrap"):
+        args = list(BWrapSSEDaemon("token")._bwrap_args(EmptyRules, {}, tmp_path / "pipe", tmp_path))
+    entries = _setenv(args, "PYTHONPATH").split(":")
+    assert all(os.path.isdir(entry) for entry in entries)
+    assert [entries.count(p) for p in site_packages] == [1] * len(site_packages)
+    assert str(present) in entries
 
 
 def test_the_child_starts_in_the_resolved_working_directory(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:

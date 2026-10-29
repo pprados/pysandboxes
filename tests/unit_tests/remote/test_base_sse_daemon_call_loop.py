@@ -29,7 +29,8 @@ class _Source:
         self.refusals = refusals
         self.limit = limit
 
-    def __call__(self, *_: Any, **__: Any) -> "_Source":
+    def __call__(self, *_: Any, **kwargs: Any) -> "_Source":
+        self.kwargs = kwargs
         type(self).attempts += 1
         assert type(self).attempts <= self.limit, "the retry loop does not stop"
         return self
@@ -53,12 +54,14 @@ class _Source:
             raise StopAsyncIteration from None
 
 
-def _run(monkeypatch: pytest.MonkeyPatch, source: _Source, retries: int) -> Any:
+def _run(monkeypatch: pytest.MonkeyPatch, source: _Source, retries: int, host: str | None = None) -> Any:
     _Source.attempts = 0
     monkeypatch.setattr(base_sse_daemon.sse_client, "EventSource", source)
     monkeypatch.setattr("pysandboxes._os_sandbox.get_token", lambda: "tok")
     daemon = SSEServerDaemon("tok", port=1234)
     daemon.max_connect_retry = retries
+    if host is not None:
+        daemon.host = host
     daemon._accept_incoming = True
 
     async def func() -> None:
@@ -121,3 +124,47 @@ def test_output_events_are_forwarded(monkeypatch: pytest.MonkeyPatch, capsys: py
 
     captured = capsys.readouterr()
     assert (captured.out, captured.err) == ("out", "err")
+
+
+class _Session:
+    """Stands for `aiohttp.ClientSession`: remembers whether it was closed."""
+
+    def __init__(self, **kwargs: Any) -> None:
+        self.kwargs = kwargs
+        self.closed = False
+
+    async def close(self) -> None:
+        self.closed = True
+
+
+@pytest.mark.parametrize("host", ["127.0.0.1", "localhost"])
+def test_a_loopback_call_uses_one_ipv4_session_and_closes_it(monkeypatch: pytest.MonkeyPatch, host: str) -> None:
+    sessions: list[_Session] = []
+
+    def make_session(**kwargs: Any) -> _Session:
+        sessions.append(_Session(**kwargs))
+        return sessions[-1]
+
+    monkeypatch.setattr(base_sse_daemon.aiohttp, "ClientSession", make_session)
+    source = _Source([{"result": to_b85(1)}])
+
+    _run(monkeypatch, source, 3, host=host)
+
+    assert [s.closed for s in sessions] == [True]
+    assert source.kwargs["session"] is sessions[0]
+
+
+def test_a_remote_call_leaves_the_session_to_the_event_source(monkeypatch: pytest.MonkeyPatch) -> None:
+    source = _Source([{"result": to_b85(1)}])
+
+    assert _run(monkeypatch, source, 3, host="sandbox.example") == 1
+
+    assert "session" not in source.kwargs
+
+
+@pytest.mark.parametrize(
+    ("value", "valid"),
+    [(0, True), (1, True), (2**31 - 1, True), (-1, False), (2**31, False), (True, False), (1.0, False), ("1", False)],
+)
+def test_a_line_number_is_an_int_within_the_c_int_range(value: Any, valid: bool) -> None:
+    assert base_sse_daemon._is_lineno(value) is valid

@@ -266,6 +266,23 @@ def test_module_spec_discovery_does_not_import_parent_package(tmp_path: Path, mo
     assert not marker.exists()
 
 
+def test_a_package_is_listed_with_its_main_module_and_a_plain_module_has_none(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    package = tmp_path / "pkg"
+    package.mkdir()
+    (package / "__init__.py").write_text("", encoding="utf-8")
+    (package / "__main__.py").write_text("", encoding="utf-8")
+    monkeypatch.syspath_prepend(str(tmp_path))
+
+    module_specs = pis._find_module_specs("pkg")
+
+    assert [spec.name for spec in module_specs.packages] == ["pkg"]
+    assert module_specs.module is not None
+    assert module_specs.main is not None
+    assert module_specs.main.origin == str(package / "__main__.py")
+
+
 def test_a_module_runs_as_the_main_module_like_python_dash_m(monkeypatch: pytest.MonkeyPatch) -> None:
     """``alter_sys`` makes the module ``sys.modules["__main__"]``: calendar publishes its enum members there."""
     seen: dict[str, Any] = {}

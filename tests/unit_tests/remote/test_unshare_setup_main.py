@@ -205,12 +205,46 @@ def test_a_proc_that_cannot_be_mounted_is_reported_with_what_to_change(
     assert f"--mount-proc={harness.root}/proc" in harness.exec_args
 
 
+@pytest.mark.parametrize(
+    ("returncode", "stderr", "reported"),
+    [(0, "mount proc failed", False), (1, "unrelated failure", False), (-9, "mount proc failed", True)],
+)
+def test_a_proc_probe_is_reported_only_when_it_fails_on_the_proc_mount(
+    harness: _Run,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    caplog: pytest.LogCaptureFixture,
+    returncode: int,
+    stderr: str,
+    reported: bool,
+) -> None:
+    def probe(cmd: list[str], **kwargs: Any) -> Any:
+        failing = any(arg.startswith("--mount-proc") for arg in cmd)
+        return SimpleNamespace(returncode=returncode if failing else 0, stdout="", stderr=stderr if failing else "")
+
+    monkeypatch.setattr(unshare_setup.subprocess, "run", probe)
+
+    _main(harness, monkeypatch, tmp_path, _config(harness.root), "prog")
+
+    assert ("unshare.proc=none" in caplog.text) is reported
+
+
 def test_a_proc_that_can_be_mounted_is_not_reported(
     harness: _Run, monkeypatch: pytest.MonkeyPatch, tmp_path: Path, caplog: pytest.LogCaptureFixture
 ) -> None:
     _main(harness, monkeypatch, tmp_path, _config(harness.root), "prog")
 
     assert "unshare.proc=none" not in caplog.text
+
+
+def test_a_mount_target_directory_that_already_exists_is_reused(harness: _Run, tmp_path: Path) -> None:
+    source = tmp_path / "source"
+    source.mkdir()
+    (harness.root / "mnt").mkdir(parents=True)
+
+    unshare_setup._mount_bind(str(source), "/mnt", str(harness.root), False)
+
+    assert harness.mounts == [["mount", "--rbind", str(source), f"{harness.root}/mnt"]]
 
 
 def test_the_proc_choice_survives_the_json_trip(tmp_path: Path) -> None:
@@ -291,6 +325,16 @@ class TestNetworkConfiguration:
         assert len([c for c in harness.subs if c[:3] == ["ip", "link", "set"] and c[3] != "lo"]) == 5
         assert harness.sleeps == [0.3, 0.3, 0.3, 0.3, 1.0]
         assert "Could not add default route" in caplog.text
+
+    def test_a_link_command_killed_by_a_signal_is_a_failed_attempt(
+        self, harness: _Run, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
+        harness.ip_results = [(-9, "")] * 5
+
+        _main(harness, monkeypatch, tmp_path, _config(harness.root), "prog")
+
+        assert len([c for c in harness.subs if c[:3] == ["ip", "link", "set"] and c[3] != "lo"]) == 5
+        assert not [c for c in harness.subs if c[:3] == ["ip", "addr", "add"]]
 
     def test_a_missing_address_is_added_even_when_the_link_is_up(
         self, harness: _Run, monkeypatch: pytest.MonkeyPatch, tmp_path: Path

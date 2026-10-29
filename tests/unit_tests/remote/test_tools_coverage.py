@@ -28,8 +28,10 @@ from pysandboxes.e import RestrictedUnpicklingError, SandBoxProtocolError
 from pysandboxes.remote import tools
 from pysandboxes.remote.tools import (
     _FALLBACK_DNS,
+    _MAX_INTEGER_BYTES,
     _get_default_interface_via_ip,
     _prescan,
+    descriptor_predicate,
     from_b85_restricted,
     get_bridge_interfaces,
     get_default_interface,
@@ -73,6 +75,22 @@ class TestUnshareUserNamespaceAvailable:
             ) as mock_run:
                 assert unshare_user_namespace_available() is False
                 mock_run.assert_called_once()
+
+    def test_a_probe_killed_by_a_signal_is_not_a_success(self) -> None:
+        with patch("pysandboxes.remote.tools.which_command", return_value=Path("/usr/bin/unshare")):
+            with patch(
+                "pysandboxes.remote.tools.subprocess.run",
+                return_value=subprocess.CompletedProcess(["unshare"], returncode=-9),
+            ):
+                assert unshare_user_namespace_available() is False
+
+
+@pytest.mark.parametrize(
+    ("module", "accepted"),
+    [("tblib", True), ("tblib.pickling_support", True), ("abc", False), ("tblibx", False), ("zzz", False)],
+)
+def test_the_fallback_channel_accepts_only_tblib_types(module: str, accepted: bool) -> None:
+    assert descriptor_predicate(module, "Traceback", object) is accepted
 
 
 class TestSuggestPackageInstallationExtraBranches:
@@ -127,6 +145,32 @@ class TestPrescanBudgets:
         with patch("pysandboxes.remote.tools._MAX_MEMO", 0):
             with pytest.raises(RestrictedUnpicklingError, match="memo budget"):
                 _prescan(pickle.dumps([1, 2, 3], protocol=5))
+
+    def test_memo_budget_is_counted_per_memoized_object(self) -> None:
+        """Four memoized objects fit a budget of four, and not of three: nothing else is counted."""
+        data = pickle.dumps(["a", "b", "c"], protocol=5)
+        with patch("pysandboxes.remote.tools._MAX_MEMO", 4):
+            _prescan(data)
+        with patch("pysandboxes.remote.tools._MAX_MEMO", 3):
+            with pytest.raises(RestrictedUnpicklingError, match="3-entry memo budget"):
+                _prescan(data)
+
+    def test_a_memo_index_must_stay_below_the_budget(self) -> None:
+        """BINPUT names its slot: slot 2 fits a budget of 3, slots 3 and 4 do not, whatever the object count."""
+        with patch("pysandboxes.remote.tools._MAX_MEMO", 3):
+            _prescan(b"\x80\x02]q\x02.")
+            for index in (3, 4):
+                with pytest.raises(RestrictedUnpicklingError, match=f"memo index {index} exceeds"):
+                    _prescan(b"\x80\x02]q" + bytes([index]) + b".")
+
+    def test_a_protocol_two_stream_with_memo_slots_is_accepted(self) -> None:
+        _prescan(pickle.dumps(["a", "b"], protocol=2))
+
+    def test_an_integer_may_fill_the_budget_but_not_exceed_it(self) -> None:
+        limit_bits = _MAX_INTEGER_BYTES * 8
+        _prescan(pickle.dumps(1 << (limit_bits - 1), protocol=5))
+        with pytest.raises(RestrictedUnpicklingError, match="integer exceeds"):
+            _prescan(pickle.dumps(1 << limit_bits, protocol=5))
 
     def test_unparsable_stream_is_refused(self) -> None:
         """A stream `pickletools.genops` cannot parse is refused, not left to crash."""
