@@ -12,6 +12,7 @@ import sys
 from pathlib import Path
 from typing import Sequence
 
+from ._contracts import ensure, post, pre
 from .sb_types import ConfigLine
 
 pysandboxes_logger = logging.getLogger("Pysandboxes")
@@ -20,6 +21,8 @@ ErrorMsg = tuple[str, Path, int]
 """Type alias for error message tuples containing message, path, and line number."""
 
 
+@post(lambda result: isinstance(result, str) and result != "")
+@ensure(lambda path, result: path is not None or result == "None")
 def make_relative_path(path: Path | str | None) -> str:
     """Convert an absolute path to a relative path for display.
 
@@ -53,6 +56,9 @@ def make_relative_path(path: Path | str | None) -> str:
     return rel_path
 
 
+@post(lambda result: result != "")
+@ensure(lambda rule, result: rule.ln == 0 or result.endswith(f"({rule.ln})"))
+@ensure(lambda rule, result: rule.path != Path() or result.startswith("<arg>"))
 def format_ruleref(rule: ConfigLine) -> str:
     """Format a configuration rule reference for error messages.
 
@@ -73,6 +79,9 @@ def format_ruleref(rule: ConfigLine) -> str:
         return f"{path}({rule.ln})"
 
 
+@pre(lambda errors: len(errors) >= 1)
+@ensure(lambda errors, result: all(error in result for error in errors))
+@ensure(lambda errors, result: len(errors) != 1 or result == errors[0])
 def format_error_list(errors: Sequence[str]) -> str:
     """Format a list of error messages into a human-readable string.
 
@@ -86,6 +95,8 @@ def format_error_list(errors: Sequence[str]) -> str:
     return errors[0] if len(errors) == 1 else ", ".join(errors[:-1]) + " and " + errors[-1]  # pragma: no mutate
 
 
+@ensure(lambda log_level, format=None, use_rich=False, result=None: logging.getLogger().level == log_level)
+@ensure(lambda log_level, format=None, use_rich=False, result=None: len(logging.getLogger().handlers) >= 1)
 def config_log(log_level: int, format: str | None = None, use_rich: bool = False) -> None:
     handlers: list[logging.Handler] = []
     # rich queries kernel32 through ctypes on Windows, which the API guard denies
