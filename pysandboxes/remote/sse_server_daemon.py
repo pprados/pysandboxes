@@ -348,7 +348,7 @@ class SSEServerDaemon(BaseSSESandbox):
 
     __slots__ = ("uvicorn", "task", "port", "bind_host", "stopped")
 
-    def __init__(self, token: str, *, port: int, bind_host: str = "127.0.0.1"):
+    def __init__(self, token: str, *, port: int, bind_host: str = "127.0.0.1") -> None:
         """Initialize SSE server daemon.
 
         Args:

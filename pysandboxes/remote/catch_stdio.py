@@ -29,7 +29,7 @@ class QueueStringIO(io.StringIO):
     thread-specific queue, and also writes to an underlying StringIO buffer.
     """
 
-    def __init__(self, type: str, queue: TQueue | None):
+    def __init__(self, type: str, queue: TQueue | None) -> None:
         """
         Initializes the QueueStringIO.
 

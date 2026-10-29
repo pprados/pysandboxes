@@ -49,7 +49,7 @@ def parse_python_cmd_line(
             indent_increment: int = 2,
             max_help_position: int = 10,
             width: int | None = None,
-        ):
+        ) -> None:
             """Initializes the custom formatter, setting a default width."""
             # We override the width here instead of in the parent class
             if width is None:

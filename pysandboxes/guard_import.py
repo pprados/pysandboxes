@@ -62,6 +62,9 @@ else:
     FastPath = Any
     MetaPathFinderProtocol = Any
 
+PatchFactory = Callable[[Any], Any]
+"""Type of a patch factory: receives the original object, returns its replacement."""
+
 
 class PatchRule(NamedTuple):
     """Rule for applying patches to imported modules.
@@ -73,7 +76,7 @@ class PatchRule(NamedTuple):
     """
 
     code_path: str
-    patch_factory: Callable
+    patch_factory: PatchFactory
 
 
 PatchRules = ImmutableDict[str, tuple[PatchRule, ...]]
@@ -91,7 +94,7 @@ class LearnImportRule(NamedTuple):
     name: str
 
 
-def _conv_patch_rules(patch_rules: dict[str, Callable]) -> PatchRules:
+def _conv_patch_rules(patch_rules: dict[str, PatchFactory]) -> PatchRules:
     """Convert patch rules dictionary to structured patch rules.
 
     Args:
@@ -404,7 +407,7 @@ class GuardLoader(Loader):
         fullname: str,
         original_spec: ModuleSpec | None,
         module: ModuleType | None = None,
-    ):
+    ) -> None:
         """Initialize the guard loader.
 
         Args:
@@ -794,7 +797,7 @@ def _activate_patch_import(
         return False
 
 
-def patch_rules(learn: bool) -> dict[str, Callable]:
+def patch_rules(learn: bool) -> dict[str, PatchFactory]:
     """Get default patch rules for import guard.
 
     Returns:
@@ -808,7 +811,7 @@ def patch_rules(learn: bool) -> dict[str, Callable]:
 
 
 def activate_guard_import(
-    str_patch_rules: dict[str, Callable],
+    str_patch_rules: dict[str, PatchFactory],
     rules: ImportRules,
 ) -> None:
     """Activate import guard with specified rules and patches.

@@ -109,12 +109,18 @@ class Action(IntEnum):
     DENY = 1  # Action to deny a connection
     ALLOW = 0  # Action to allow a connection
 
+    def __repr__(self) -> str:
+        return f"{type(self).__name__}.{self.name}"
+
 
 class Direction(IntEnum):
     """Enumeration for socket connection directions."""
 
     OUT = 1  # Direction for outgoing connections (e.g., client-side connect)
     IN = 0  # Direction for incoming connections (e.g., server-side bind)
+
+    def __repr__(self) -> str:
+        return f"{type(self).__name__}.{self.name}"
 
 
 class Kind(Enum):
@@ -128,6 +134,9 @@ class Kind(Enum):
     # specifier a profile may write. It only names the absent socket type when
     # a learning record comes from a DNS lookup instead of a socket.
     UNKNOWN = socket.SOCK_DGRAM
+
+    def __repr__(self) -> str:
+        return f"{type(self).__name__}.{self.name}"
 
 
 # Parsed rule format used internally:

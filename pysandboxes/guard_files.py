@@ -1648,7 +1648,7 @@ class _ScanDirContextManager(Iterator[os.DirEntry[str]]):
 
     __slots__ = ("directory", "real_directory", "scanner")
 
-    def __init__(self, directory: str):
+    def __init__(self, directory: str) -> None:
         super().__init__()
         self.directory = directory
         if _check_alias.get():
