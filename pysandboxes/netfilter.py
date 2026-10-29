@@ -39,12 +39,15 @@ Limits:
 from ipaddress import IPv4Address, IPv4Network, IPv6Network
 from typing import Iterable, List, Union
 
+from ._contracts import ensure, post
 from .guard_socket import Action, Direction, Kind, SocketRules
 
 # The multiport match takes at most 15 ports.
 _MULTIPORT_MAX = 15
 
 
+@post(lambda result: isinstance(result, str))
+@ensure(lambda rule_ports_list, result: rule_ports_list != range(65536) or result == "")
 def _build_port(rule_ports_list: Union[Iterable[int], range]) -> str:
     if isinstance(rule_ports_list, range):
         if rule_ports_list != range(65536):
@@ -56,6 +59,12 @@ def _build_port(rule_ports_list: Union[Iterable[int], range]) -> str:
     return s_port
 
 
+@post(lambda result: all(len(ports.split(",")) <= _MULTIPORT_MAX for ports in result))
+@ensure(
+    lambda rule_ports_list, result: not isinstance(rule_ports_list, (list, tuple))
+    or len(result) == -(-len(rule_ports_list) // _MULTIPORT_MAX)
+)
+@ensure(lambda rule_ports_list, result: not isinstance(rule_ports_list, range) or len(result) == 1)
 def _build_ports(rule_ports_list: Union[Iterable[int], range]) -> list[str]:
     """The ``--dports`` values of a rule: none for an empty port field, which matches no port, as in the Python
     layer; else lists of at most 15 ports, or a range ("" for every port)."""
@@ -65,6 +74,8 @@ def _build_ports(rule_ports_list: Union[Iterable[int], range]) -> list[str]:
     return [_build_port(ports[i : i + _MULTIPORT_MAX]) for i in range(0, len(ports), _MULTIPORT_MAX)]
 
 
+@post(lambda result: result == "" or result.endswith(" "))
+@ensure(lambda network_obj, ipv6, local=False, result="": ipv6 == isinstance(network_obj, IPv6Network) or result == "")
 def _build_network(network_obj: Union[IPv4Network, IPv6Network], ipv6: bool, local: bool = False) -> str:
     """The address match of a rule, empty for any address.
 
@@ -86,6 +97,8 @@ def _build_network(network_obj: Union[IPv4Network, IPv6Network], ipv6: bool, loc
     return network
 
 
+@post(lambda result: result[0] == "*filter" and result[-1] == "COMMIT" and result.count("COMMIT") == 1)
+@post(lambda result: result[1:4] == [":INPUT DROP [0:0]", ":FORWARD DROP [0:0]", ":OUTPUT DROP [0:0]"])
 def rule_to_netfilter(socket_rules: SocketRules, dns_server: list[IPv4Address], is_ipv6: bool) -> List[str]:
     netfilter = [
         "*filter",
