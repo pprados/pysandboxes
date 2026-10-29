@@ -1444,6 +1444,36 @@ def test_wrap_os_rmdir_decodes_a_bytes_path_for_an_exposed_directory(tmp_path: P
     assert not sub.exists()
 
 
+def test_wrap_os_access_decodes_a_bytes_path_for_an_exposed_directory(tmp_path: Path) -> None:
+    (tmp_path / "f.txt").write_text("x")
+    activate_guard_files_rules([ConfigLine(f"expose-ro={tmp_path}", Path(), 0)])
+    wrapped = _wrap_os_access(os.access, write=False)
+
+    assert wrapped(str(tmp_path / "f.txt").encode(), os.R_OK) is True
+
+
+@pytest.mark.parametrize("suffix", ["", "/"])
+def test_an_exposed_directory_is_reached_with_or_without_a_trailing_separator(tmp_path: Path, suffix: str) -> None:
+    exposed = tmp_path / "exposed"
+    exposed.mkdir()
+    activate_guard_files_rules([ConfigLine(f"expose-ro={exposed}", Path(), 0)])
+
+    remapped, rule = guard_files._apply_dest_to_src_rules(str(exposed) + suffix, write=False)
+
+    assert remapped is not None and rule is None
+
+
+def test_a_sibling_sharing_the_prefix_of_an_exposed_directory_is_not_reached(tmp_path: Path) -> None:
+    exposed = tmp_path / "exposed"
+    exposed.mkdir()
+    (tmp_path / "exposed-secret").mkdir()
+    activate_guard_files_rules([ConfigLine(f"expose-ro={exposed}", Path(), 0)])
+
+    for suffix in ("", "/"):
+        remapped, _ = guard_files._apply_dest_to_src_rules(str(tmp_path / "exposed-secret") + suffix, write=False)
+        assert remapped is None
+
+
 # %% _wrap_os_readlink -- learning records a read, not a write
 
 

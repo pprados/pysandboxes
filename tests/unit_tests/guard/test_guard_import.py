@@ -546,3 +546,70 @@ def test_a_module_is_not_judged_while_the_import_guard_is_off(monkeypatch: pytes
 
     guard_import._judge_user_import("tests")
     guard_import._judge_user_import("tests.integration_tests.tst_file_probe")
+
+
+def _learning_finder(
+    monkeypatch: pytest.MonkeyPatch, spec: ModuleSpec, rules: tuple[str, ...]
+) -> tuple[Any, list[Any]]:
+    _activate(monkeypatch, rules)
+    recorded: list[Any] = []
+
+    class Finder:
+        def find_spec(self, fullname: str, path: Any, target: Any = None) -> ModuleSpec | None:
+            return spec
+
+    guard_finder = guard_import.GuardFinder()
+    monkeypatch.setattr(sys, "meta_path", [guard_finder, Finder()])
+    monkeypatch.setattr(guard_import, "_in_framework_window", lambda: False)
+    monkeypatch.setattr(guard_import, "is_in_sandbox", lambda: True)
+    monkeypatch.setattr(guard_import, "is_learning_mode", lambda: True)
+    monkeypatch.setattr(guard_import, "add_learning_rule", recorded.append)
+    return guard_finder, recorded
+
+
+def test_learning_does_not_record_a_module_a_rule_already_allows(monkeypatch: pytest.MonkeyPatch) -> None:
+    spec = ModuleSpec("demo", loader=None, origin="/opt/demo.py")
+    guard_finder, recorded = _learning_finder(monkeypatch, spec, ("demo",))
+
+    guard_finder.find_spec("demo", None)
+
+    assert LearnImportRule("demo") not in recorded
+
+
+def test_learning_records_the_file_of_a_module_named_after_pysandboxes_alphabetically(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Only the package itself is exempt, not every name that sorts after it."""
+    spec = ModuleSpec("zzdemo", loader=None, origin="/opt/zzdemo.py")
+    guard_finder, recorded = _learning_finder(monkeypatch, spec, ())
+
+    guard_finder.find_spec("zzdemo", None)
+
+    assert LearnFileRule(Path("/opt/zzdemo.py"), False) in recorded
+
+
+@pytest.mark.parametrize("origin", [None, "relative/demo.py"])
+def test_learning_records_no_file_for_a_module_without_an_absolute_origin(
+    monkeypatch: pytest.MonkeyPatch, origin: str | None
+) -> None:
+    spec = ModuleSpec("demo", loader=None, origin=origin)
+    guard_finder, recorded = _learning_finder(monkeypatch, spec, ())
+
+    guard_finder.find_spec("demo", None)
+
+    assert not any(isinstance(rule, LearnFileRule) for rule in recorded)
+
+
+def test_the_audit_hook_is_installed_once_across_activations(monkeypatch: pytest.MonkeyPatch) -> None:
+    installed: list[Any] = []
+    monkeypatch.setattr(guard_import, "_sys_addaudithook", installed.append)
+    monkeypatch.setattr(guard_import, "_audit_hook_installed", False)
+    monkeypatch.setattr(guard_import, "_activated", False)
+    monkeypatch.setattr(sys, "meta_path", [m for m in sys.meta_path if m is not guard_import._guard_finder])
+
+    guard_import._activate_patch_import({})
+    sys.meta_path.remove(guard_import._guard_finder)
+    monkeypatch.setattr(guard_import, "_activated", False)
+    guard_import._activate_patch_import({})
+
+    assert len(installed) == 1
