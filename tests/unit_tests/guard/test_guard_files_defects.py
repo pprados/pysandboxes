@@ -281,3 +281,44 @@ def test_a_relative_path_in_an_exposed_directory_opens_without_exposing_the_work
     finally:
         _deactivate_all_rules()
         os.chdir(previous)
+
+
+# %% A link exposed by name in a directory that is not: what readlink may and may not reveal
+
+
+@pytest.fixture
+def named_link(tmp_path: Path) -> tuple[Path, Path, Path]:
+    """`hidden` holds a link exposed by name, a sibling link to the same target and a secret; only the link and its
+    target are exposed (the layout of a uv interpreter: `cpython-3.12-...` is a link in a directory nobody exposes)."""
+    root = Path(os.path.realpath(tmp_path))
+    hidden, real = root / "hidden", root / "real"
+    hidden.mkdir()
+    real.mkdir()
+    (real / "f").write_text("x")
+    (hidden / "secret.txt").write_text("secret")
+    (hidden / "exposed").symlink_to(real, target_is_directory=True)
+    (hidden / "sibling").symlink_to(real, target_is_directory=True)
+    activate_guard_files_rules(
+        [ConfigLine(f"expose-ro={hidden / 'exposed'}", NonePath, 0), ConfigLine(f"expose-ro={real}", NonePath, 0)]
+    )
+    return hidden, real, root
+
+
+def test_a_link_exposed_by_name_does_not_open_its_directory(named_link: tuple[Path, Path, Path]) -> None:
+    """Whatever readlink learns to do for the exposed link, the siblings, the listing and the secret stay out."""
+    hidden, _, _ = named_link
+    with pytest.raises(RuleFileNotFoundError):
+        os.readlink(hidden / "sibling")
+    with pytest.raises(RuleFileNotFoundError):
+        os.listdir(hidden)
+    assert not (hidden / "secret.txt").exists()
+
+
+@pytest.mark.xfail(
+    strict=True,
+    raises=RuleFileNotFoundError,
+    reason="readlink also asks for the directory holding the link: os.path.realpath of a uv interpreter is refused",
+)
+def test_readlink_of_a_link_exposed_by_name_works_without_its_directory(named_link: tuple[Path, Path, Path]) -> None:
+    hidden, real, _ = named_link
+    assert os.readlink(hidden / "exposed") == str(real)
