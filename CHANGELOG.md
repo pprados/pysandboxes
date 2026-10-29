@@ -11,7 +11,7 @@
 |          | ✅ qemu        |            | ☐ Source  |
 |          | ◐ sandbox-exec² |           | ☐ Regexp  |
 |          | ✅ Docker¹     |            | ☐ DoS     |
-|          | ✅ Podman¹     |            |           |
+|          | ✅ Podman¹     |            | ✅ Coverage >75% |
 |          | ☐ gVisor      |            |           |
 |          | ☐ micro-VM    |            |           |
 
