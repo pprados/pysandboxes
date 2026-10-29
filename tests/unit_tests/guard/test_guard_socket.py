@@ -763,6 +763,42 @@ def test_gethostbyname_fails_when_the_pin_holds_no_ipv4(pin_dns: None) -> None:
         wrapped("v6only.example")
 
 
+def test_gethostbyname_prefers_an_af_inet_entry_over_an_untyped_ipv4_one(pin_dns: None) -> None:
+    import pysandboxes.guard_socket as gs
+
+    stream = SocketKind.SOCK_STREAM
+    gs._pin_dns = cast(
+        ImmutableDict[str, Tuple[AddrInfoType, ...]],
+        ImmutableDict(
+            {
+                "mixed.example": (
+                    (AddressFamily.AF_UNSPEC, stream, 6, "", (_ATTACKER_IP, 0)),
+                    (AddressFamily.AF_INET, stream, 6, "", (_PINNED_IP, 0)),
+                )
+            }
+        ),
+    )
+    assert _over_resolver("socket.gethostbyname", "unused")("mixed.example") == _PINNED_IP
+
+
+def test_gethostbyname_skips_an_entry_without_a_sockaddr_and_falls_back_to_an_untyped_ipv4_one(pin_dns: None) -> None:
+    import pysandboxes.guard_socket as gs
+
+    stream = SocketKind.SOCK_STREAM
+    gs._pin_dns = cast(
+        ImmutableDict[str, Tuple[AddrInfoType, ...]],
+        ImmutableDict(
+            {
+                "bare.example": (
+                    (AddressFamily.AF_UNSPEC, stream, 6, "", ()),
+                    (AddressFamily.AF_UNSPEC, stream, 6, "", (_PINNED_IP, 0)),
+                )
+            }
+        ),
+    )
+    assert _over_resolver("socket.gethostbyname", "unused")("bare.example") == _PINNED_IP
+
+
 # Learning mode writes what generate_rules() returns into a real
 # .py-sandboxes file, and test_learning.py patches the function out, so none
 # of this ever ran under test: a bug here silently produces rules that are
