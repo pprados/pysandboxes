@@ -1133,6 +1133,52 @@ def test_learning_mode_records_a_format_field_attribute_observed_only_at_runtime
     assert LearnEvalRule("eval-attribute", "real") in recorded
 
 
+def _learned_by_guarded_eval(monkeypatch: pytest.MonkeyPatch, source: str, **rules: Any) -> tuple[Any, list[Any]]:
+    _activate(namespace="closed", **rules)
+    recorded: list[Any] = []
+    monkeypatch.setattr(guard_eval, "add_learning_rule", recorded.append)
+    set_learning_mode(True)
+    try:
+        return guarded_eval(source, names={"x": 1}), recorded
+    finally:
+        set_learning_mode(False)
+
+
+def test_learning_mode_records_the_syntax_the_profile_rejects_and_still_runs_the_source(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    result, recorded = _learned_by_guarded_eval(monkeypatch, "x + 41", syntax=_syntax())
+    assert result == 42
+    assert LearnEvalRule("eval-syntax", "arith") in recorded
+
+
+def test_learning_mode_records_a_dunder_reached_only_at_runtime(monkeypatch: pytest.MonkeyPatch) -> None:
+    """`getattr(x, '__class__')` builds the name at runtime: only `state.magic` can propose `eval-magic`."""
+    result, recorded = _learned_by_guarded_eval(
+        monkeypatch, "getattr(x, '__cl' + 'ass__')", syntax=_syntax("arith"), call=_names("getattr")
+    )
+    assert result is int
+    assert LearnEvalRule("eval-magic", "__class__") in recorded
+
+
+def test_reraising_an_error_without_a_traceback_raises_it_unchanged() -> None:
+    err = ValueError("never raised")
+    with pytest.raises(ValueError) as raised:
+        guard_eval._reraise_from_worker(err)
+    assert raised.value is err
+
+
+def test_reraising_an_error_with_a_single_frame_keeps_that_frame() -> None:
+    try:
+        raise ValueError("raised once")
+    except ValueError as err:
+        assert err.__traceback__ is not None and err.__traceback__.tb_next is None
+        with pytest.raises(ValueError) as raised:
+            guard_eval._reraise_from_worker(err)
+    assert raised.value.__traceback__ is not None
+    assert raised.traceback[0].name == "test_reraising_an_error_with_a_single_frame_keeps_that_frame"
+
+
 def test_threads_started_by_the_guard_use_the_raw_primitives_even_when_patched(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
