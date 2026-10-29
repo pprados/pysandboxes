@@ -41,6 +41,7 @@ from typing import (
 if sys.platform == "darwin":
     import fcntl
 
+from ._contracts import ensure, post
 from .e import RuleFileNotFoundError, RulePermissionError
 from .guard_envs import LearnEnviron, expanduser
 from .guard_wraps import guard_wraps
@@ -157,6 +158,7 @@ def _os_path_abspath(path: str) -> str:
         _realpath_cwd.reset(token)
 
 
+@ensure(lambda path, result: result.startswith(path) and result.endswith(("/", os.sep)))
 def _dir_path(path: str) -> str:
     """Return ``path`` ending with the native separator, the form directory rules are stored in.
 
@@ -165,6 +167,7 @@ def _dir_path(path: str) -> str:
     return path if path.endswith(("/", os.sep)) else path + os.sep
 
 
+@ensure(lambda target, result: result == target or target.endswith(result))
 def _link_target(target: str) -> str:
     """Return a ``readlink`` answer without the ``\\\\?\\`` prefix Windows adds, which no rule spells."""
     if sys.platform == "win32" and target.startswith("\\\\?\\"):
@@ -203,6 +206,7 @@ def set_protected_config_paths(paths: "Iterable[Path]") -> None:
     _protected_config_paths = frozenset(_safe_realpath(str(p)) for p in paths)
 
 
+@ensure(lambda canon_path, result: result is None or result in _protected_config_paths)
 def _protected_path(canon_path: str) -> str | None:
     """Return the protected path ``canon_path`` would write to or through, or None.
 
@@ -246,6 +250,14 @@ def is_special_file(path: Path) -> bool:
     return stat.S_ISCHR(mode) or stat.S_ISBLK(mode) or stat.S_ISFIFO(mode) or stat.S_ISSOCK(mode)
 
 
+@post(lambda result: isinstance(result, bool))
+@ensure(
+    lambda rule_path, canon_path, result: not result
+    or not rule_path
+    or canon_path.rstrip("/" + os.sep) == rule_path.rstrip("/" + os.sep)
+    or canon_path.startswith(rule_path.rstrip("/" + os.sep) + "/")
+    or canon_path.startswith(rule_path.rstrip("/" + os.sep) + os.sep)
+)
 def _rule_covers(rule_path: str, canon_path: str) -> bool:
     """Tell whether an expose rule covers ``canon_path``: a directory rule its tree, a file rule that file only."""
     if not rule_path or rule_path.endswith(("/", os.sep)):
@@ -253,6 +265,16 @@ def _rule_covers(rule_path: str, canon_path: str) -> bool:
     return canon_path.rstrip("/" + os.sep) == rule_path
 
 
+@post(lambda result: not any(line.rule.startswith(("expose-ro=", "expose-rw=", "ignore=")) for line in result[1]))
+@post(
+    lambda result: [isinstance(rule, FSExposeRule) for rule in result[0]]
+    == sorted(isinstance(rule, FSExposeRule) for rule in result[0])
+)
+@post(
+    lambda result: [len(rule.path) for rule in result[0] if isinstance(rule, FSExposeRule)]
+    == sorted((len(rule.path) for rule in result[0] if isinstance(rule, FSExposeRule)), reverse=True)
+)
+@ensure(lambda config, errors, result: set(result[1]) <= set(config))
 def parse_rules(
     config: ConfigLines,
     errors: list[ErrorMsg],
@@ -490,6 +512,7 @@ _special_home = OrderedDict(
 _UNSAFE_RULE_CHARS = frozenset(chr(c) for c in range(0x20)) | {"\x7f", "#", "$"}
 
 
+@ensure(lambda path, result: result or str(path) == str(path).strip() or str(path) == "")
 def _is_unsafe_rule_path(path: Path) -> bool:
     """Tell whether ``path`` would not survive being written as a rule value and
     read back: a character from ``_UNSAFE_RULE_CHARS`` anywhere, or a path
@@ -607,12 +630,16 @@ def generate_rules(
     return sorted(list(result))
 
 
+@post(lambda result: isinstance(result, str))
+@ensure(lambda path, result: len(result) <= len(path))
+@ensure(lambda path, result: _without_ntfs_streams(result) == result)
 def _without_ntfs_streams(path: str) -> str:
     """Drop the ``:stream`` suffix NTFS accepts on any component: ``d::$INDEX_ALLOCATION\\f`` opens ``d\\f``."""
     drive, rest = ntpath.splitdrive(path)
     return drive + "".join(part.split(":", 1)[0] for part in re.split(r"([\\/])", rest))
 
 
+@post(lambda result: isinstance(result, bool))
 def _ignore_matches(name: str, pattern: str) -> bool:
     """Match an ``ignore=`` pattern against every spelling the file system resolves to the same file.
 
@@ -627,6 +654,7 @@ def _ignore_matches(name: str, pattern: str) -> bool:
 
 
 # Helper to resolve symlinks and apply rules
+@post(lambda result: result[0] is None or result[1] is None)
 def _apply_src_to_dest_rules(
     path: str,
 ) -> tuple[str | None, FilesRule | None]:
@@ -663,6 +691,7 @@ def _apply_src_to_dest_rules(
     return None, None
 
 
+@ensure(lambda canon_path, result: result is None or _rule_covers(result, canon_path))
 def _matching_expose_root(canon_path: str) -> str | None:
     """Return the exposed root (trailing separator) that ``canon_path`` falls under, or None."""
     for rule in _rules:
@@ -674,6 +703,7 @@ def _matching_expose_root(canon_path: str) -> str | None:
 
 
 # Helper to resolve symlinks and apply rules
+@post(lambda result: result[0] is None or result[1] is None)
 def _apply_dest_to_src_rules(
     path: str | os.PathLike[str] | _DirEntry,
     *,
