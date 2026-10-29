@@ -9,6 +9,11 @@ Only `pre`, `post`, `ensure`, `raises` and `inv` are exposed. `deal.has` swaps `
 each call and `deal.activate` replaces the path finder in `sys.meta_path`: both fight the guards. A contract must
 not decorate a function a guard installs in place of a stdlib one (the wrapper brings a `__wrapped__`), nor one that
 reads the call stack at a fixed depth (the wrapper adds a frame).
+
+A `pre`, `ensure` or `post` lambda receives every parameter of the function by name. `ensure` adds `result`, so a
+parameter with a default needs the same default in the lambda, and `result` goes last and keyword-only
+(`lambda path, mode=None, *, result: ...`); otherwise `deal` raises "multiple values for argument 'result'". A contract
+must not read global state a test mocks (`logging.getLogger()`): bound the result instead.
 """
 
 from typing import Any, Callable, TypeVar
