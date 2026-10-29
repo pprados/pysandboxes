@@ -8,7 +8,7 @@ from pathlib import Path
 
 import pytest
 
-from pysandboxes.main_logger import config_log, format_error_list, make_relative_path
+from pysandboxes.main_logger import config_log, format_error_list, log_level_from_env, make_relative_path
 
 
 @pytest.fixture(autouse=True)
@@ -125,3 +125,32 @@ def test_an_explicit_format_is_kept_with_the_rich_handler() -> None:
         root.handlers[:], root.level = saved
 
     assert "%(levelname)s!%(message)s" in formats
+
+
+@pytest.mark.parametrize(
+    "name, level", [("INFO", logging.INFO), ("debug", logging.DEBUG), ("Warning", logging.WARNING)]
+)
+def test_the_log_level_environment_variable_names_a_level(
+    monkeypatch: pytest.MonkeyPatch, name: str, level: int
+) -> None:
+    monkeypatch.setenv("PYSANDBOXES_LOG_LEVEL", name)
+
+    assert log_level_from_env() == level
+
+
+@pytest.mark.parametrize("value", [None, ""])
+def test_an_unset_or_empty_log_level_variable_changes_nothing(
+    monkeypatch: pytest.MonkeyPatch, value: str | None
+) -> None:
+    monkeypatch.delenv("PYSANDBOXES_LOG_LEVEL", raising=False)
+    if value is not None:
+        monkeypatch.setenv("PYSANDBOXES_LOG_LEVEL", value)
+
+    assert log_level_from_env() is None
+
+
+def test_an_unknown_log_level_is_refused(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("PYSANDBOXES_LOG_LEVEL", "LOUD")
+
+    with pytest.raises(ValueError, match="PYSANDBOXES_LOG_LEVEL: unknown log level 'LOUD'"):
+        log_level_from_env()

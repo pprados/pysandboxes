@@ -157,3 +157,43 @@ def test_an_unknown_log_level_is_refused(tmp_path: Path) -> None:
 
     assert done.returncode != 0
     assert "PYSANDBOXES_LOG_LEVEL: unknown log level 'LOUD'" in done.stderr
+
+
+_PARTIAL_LIB = """
+from pysandboxes import sandbox
+
+
+@sandbox
+def work() -> int:
+    return 6 * 7
+"""
+
+_PARTIAL_APP = """
+import logging
+from pysandboxes import sandboxes
+from partial_lib import work
+
+logging.basicConfig(format="%(name)s: %(message)s")
+with sandboxes(sandboxes_config="app.profile", learn="app.learn"):
+    assert work() == 42
+"""
+
+
+@pytest.mark.parametrize("level, summarized", [("INFO", True), (None, False)])
+def test_the_log_level_of_the_environment_reaches_the_sandboxes_api(
+    tmp_path: Path, level: str | None, summarized: bool
+) -> None:
+    (tmp_path / "partial_lib.py").write_text(_PARTIAL_LIB)
+    (tmp_path / "app.py").write_text(_PARTIAL_APP)
+    (tmp_path / "app.profile").write_text("py-sandbox=true\nos-sandbox=subprocess\npython-import=*\nenv=HOME=${HOME}\n")
+    (tmp_path / "app.learn").write_text("")
+    env = {k: v for k, v in os.environ.items() if k != "PYSANDBOXES_LOG_LEVEL"}
+    if level:
+        env["PYSANDBOXES_LOG_LEVEL"] = level
+
+    done = subprocess.run(
+        [sys.executable, "app.py"], cwd=tmp_path, env=env, capture_output=True, text=True, timeout=_TIMEOUT_SECONDS
+    )
+
+    assert done.returncode == 0, done.stderr
+    assert ("Learning rule provenance" in done.stderr) is summarized

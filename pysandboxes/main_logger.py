@@ -16,6 +16,8 @@ from .sb_types import ConfigLine
 
 pysandboxes_logger = logging.getLogger("Pysandboxes")
 
+LOG_LEVEL_ENV = "PYSANDBOXES_LOG_LEVEL"
+
 ErrorMsg = tuple[str, Path, int]
 """Type alias for error message tuples containing message, path, and line number."""
 
@@ -84,6 +86,21 @@ def format_error_list(errors: Sequence[str]) -> str:
     """
     errors = sorted(errors)
     return errors[0] if len(errors) == 1 else ", ".join(errors[:-1]) + " and " + errors[-1]  # pragma: no mutate
+
+
+def log_level_from_env() -> int | None:
+    """Return the log level named by ``PYSANDBOXES_LOG_LEVEL``, or None when it is unset.
+
+    Raises:
+        ValueError: If the variable names no logging level.
+    """
+    name = os.environ.get(LOG_LEVEL_ENV)
+    if not name:
+        return None
+    level = logging.getLevelNamesMapping().get(name.upper())
+    if level is None:
+        raise ValueError(f"{LOG_LEVEL_ENV}: unknown log level {name!r}")
+    return level
 
 
 def config_log(log_level: int, format: str | None = None, use_rich: bool = False) -> None:

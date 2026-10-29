@@ -25,7 +25,7 @@ the Python layer with `subprocess`; kernel-backed providers are Linux technologi
 
 ### Added
 - Add the macOS Seatbelt `sandbox-exec` provider, with documented host-filtering and DNS limitations.
-- Set `PYSANDBOXES_LOG_LEVEL` to choose the log level of `python-sb` and of its sandboxed process.
+- Set `PYSANDBOXES_LOG_LEVEL` to choose the log level of `python-sb`, of `sandboxes()` and of their sandboxed process.
 
 ### Changed
 - Allow `os.getcwd()` and `os.getcwdb()` to report the current directory without granting file access.

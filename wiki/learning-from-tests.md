@@ -83,7 +83,6 @@ tests without that variable, use the strict application profile. The test and it
 only the call through a decorated `@sandbox` function crosses the boundary:
 ```python
 # conftest.py
-import logging
 import os
 from collections.abc import Iterator
 from pathlib import Path
@@ -104,7 +103,6 @@ def pytest_configure(config: pytest.Config) -> None:
 def sandbox_profile(request: pytest.FixtureRequest) -> Iterator[None]:
     learning = os.environ.get("SANDBOX_LEARN") and request.node.get_closest_marker("sandbox_learn")
     if learning:
-        logging.getLogger("Pysandboxes").setLevel(logging.INFO)
         with sandboxes(sandboxes_config=PROFILE, learn=str(LEARNED)):
             yield
     else:
@@ -119,7 +117,7 @@ Learn one marked test at a time. This keeps the test identifier in the command a
 Before the run, snapshot `.py-sandboxes.learn`; learning is permissive and does not provide the OS sandbox boundary,
 so get human approval before every run and execute only trusted code:
    ```bash
-   SANDBOX_LEARN=1 uv run --locked pytest -p no:xdist -q tests/test_feature.py::test_export_to_csv
+   PYSANDBOXES_LOG_LEVEL=INFO SANDBOX_LEARN=1 uv run --locked pytest -p no:xdist -q -o log_cli=true --log-cli-level=INFO tests/test_feature.py::test_export_to_csv
    ```
 
 Compare the before/after candidate diff in `.py-sandboxes.learn`. Trace imports from the selected test through the

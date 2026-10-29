@@ -7,9 +7,10 @@ logging.getLogger("Pysandboxes").setLevel(logging.INFO)
 ```
 `Pysandboxes` logs the main runtime events.
 
-With the `python-sb` command line, set `PYSANDBOXES_LOG_LEVEL` instead (`DEBUG`, `INFO`, `WARNING`...); the sandboxed process inherits it:
+Without touching the code, set `PYSANDBOXES_LOG_LEVEL` (`DEBUG`, `INFO`, `WARNING`...). `python-sb` and `sandboxes()` read it, and the sandboxed process inherits it:
 ```bash
 PYSANDBOXES_LOG_LEVEL=INFO python-sb -m my_module
+PYSANDBOXES_LOG_LEVEL=INFO pytest -o log_cli=true --log-cli-level=INFO
 ```
 
 For debug details, enable:

@@ -35,6 +35,7 @@ from typing import (
 from ._os_sandbox import async_shutdown_daemon
 from .base_daemon import BaseDaemon, FakeDaemon
 from .e import ConfigSyntaxError
+from .main_logger import log_level_from_env
 from .private_loop import get_sandbox_loop, sandbox_loop, set_sandbox_loop
 from .tools import (
     Environ,
@@ -177,6 +178,13 @@ def sandbox(
         return decorator
     else:
         return decorator(_func)
+
+
+def _apply_log_level_env() -> None:
+    """Set the root log level from ``PYSANDBOXES_LOG_LEVEL``; the sandbox daemon inherits it."""
+    level = log_level_from_env()
+    if level is not None:
+        logging.root.setLevel(level)
 
 
 class sandboxes:
@@ -347,6 +355,7 @@ class sandboxes:
 
         if not is_in_sandbox():  # Inner call
             check_mixte_async_async()
+            _apply_log_level_env()
             log_level = logging.root.getEffectiveLevel()
             try:
                 all_rules = load_and_parse_config(
@@ -405,6 +414,7 @@ class sandboxes:
 
             from .py_sandbox import load_and_parse_config
 
+            _apply_log_level_env()
             log_level = logging.root.getEffectiveLevel()
             try:
                 all_rules = await asyncio.to_thread(

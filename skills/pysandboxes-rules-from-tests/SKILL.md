@@ -15,7 +15,7 @@ Modes:
 Mode unclear from request/code => ask. Never mix modes. Never call a module marker a sandbox boundary.
 
 ## Learning logs (required)
-Every learning run: set `PYSANDBOXES_LOG_LEVEL=INFO` on the `python-sb` command. Keep live pytest logs at `INFO`. INFO summarizes the call stack that produced each learned rule; pytest INFO shows progress. Apply to the test-framework baseline, full-suite, and partial runs. Full mode: the variable on the command line. Partial mode: set the `Pysandboxes` logger to `INFO` before sandbox entry. Never use default logging.
+Every learning run: set the environment variable `PYSANDBOXES_LOG_LEVEL=INFO` on the command. Keep live pytest logs at `INFO`. INFO summarizes the call stack that produced each learned rule; pytest INFO shows progress. Apply to the test-framework baseline, full-suite, and partial runs. Full mode: the variable in front of `python-sb`. Partial mode: the variable in front of `pytest`. Never set the log level in code, never use default logging.
 
 ## 1. Inspect
 Read `.py-sandboxes`, entry point, test config, deps, existing `.py-sandboxes.tests` / `.py-sandboxes.learn`. Keep existing profile rules and backups. Learning `.old` files are disposable; remove them. `learn=false` (included lock) => stop, explain, never remove lock. Test failure from code bug => fix before learning. Run every full-mode command with the working directory at the project root (the directory containing `pyproject.toml`); never change to `tests/`. Pass test paths explicitly, such as `tests/test_pysandboxes_empty.py` or `tests`.
@@ -168,7 +168,6 @@ Shared `sandboxes()` fixture. Strict runs load `.py-sandboxes`; marked run with 
 
 ```python
 # conftest.py
-import logging
 import os
 from collections.abc import Iterator
 from pathlib import Path
@@ -189,7 +188,6 @@ def pytest_configure(config: pytest.Config) -> None:
 def sandbox_profile(request: pytest.FixtureRequest) -> Iterator[None]:
     learning = os.environ.get("SANDBOX_LEARN") and request.node.get_closest_marker("sandbox_learn")
     if learning:
-        logging.getLogger("Pysandboxes").setLevel(logging.INFO)
         with sandboxes(sandboxes_config=PROFILE, learn=str(LEARNED)):
             yield
     else:
@@ -200,7 +198,7 @@ def sandbox_profile(request: pytest.FixtureRequest) -> Iterator[None]:
 Mark only tests exercising an app path through `@sandbox`. Never mark tests asserting a denial. Learning records accesses without the OS sandbox boundary; run trusted code only. When the task requests learning, do not ask for run approval. Run one marked test at a time, so test id + before/after diff of `.py-sandboxes.learn` identify the source:
 
 ```bash
-SANDBOX_LEARN=1 uv run --locked pytest -p no:xdist -q -o log_cli=true --log-cli-level=INFO tests/test_feature.py::test_feature
+PYSANDBOXES_LOG_LEVEL=INFO SANDBOX_LEARN=1 uv run --locked pytest -p no:xdist -q -o log_cli=true --log-cli-level=INFO tests/test_feature.py::test_feature
 ```
 
 Review all new candidates, following imports from test through decorated function and callers. Candidates belong to the sandboxed app path (pytest on host). Treat every emitted rule as needed for the observed run. Present every rule with risk, why observed, owner, test id, `file:line` evidence, confidence, and destination. Ask once whether the user accepts all proposed rules or none. On acceptance, add all to `.py-sandboxes`; on rejection, add none. Do not promote pytest/fixture rules from host-side imports. Batch `python-import` modules by destination and owner, except modules with a criticality comment, which stay on separate lines. Keep accepted rules and remove `.py-sandboxes.learn` and `.py-sandboxes.learn.old` after strict verification.

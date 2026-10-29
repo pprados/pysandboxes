@@ -17,7 +17,7 @@ from .base_daemon import BaseDaemon
 from .config import DEBUG
 from .e import ConfigSyntaxError
 from .guard_provider import learn_lock
-from .main_logger import config_log, format_ruleref
+from .main_logger import config_log, format_ruleref, log_level_from_env
 from .py_sandbox import load_and_parse_config
 from .remote.client_subprocess_sse_daemon import (
     BaseSubProcessDaemon,
@@ -104,19 +104,15 @@ def _debug_log() -> None:
     )
 
 
-LOG_LEVEL_ENV = "PYSANDBOXES_LOG_LEVEL"
-
-
 def _apply_log_level_env() -> None:
-    """Set the root log level from ``PYSANDBOXES_LOG_LEVEL``; the sandboxed process inherits it."""
-    name = os.environ.get(LOG_LEVEL_ENV)
-    if not name:
-        return
-    level = logging.getLevelNamesMapping().get(name.upper())
-    if level is None:
-        print(f"{LOG_LEVEL_ENV}: unknown log level {name!r}", file=sys.stderr)
+    """Configure the logging of ``python-sb`` from ``PYSANDBOXES_LOG_LEVEL``; the sandboxed process inherits it."""
+    try:
+        level = log_level_from_env()
+    except ValueError as e:
+        print(e, file=sys.stderr)
         sys.exit(-1)
-    config_log(level)
+    if level is not None:
+        config_log(level)
 
 
 def main() -> int:
