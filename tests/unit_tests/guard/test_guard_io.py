@@ -185,15 +185,6 @@ def activate_guard_files_rules(rules: ConfigLines) -> None:
                 config=ConfigLine("Hack for pytest", Path(), 0),
             )
         )
-        if p.is_symlink():
-            # readlink on a link needs the directory holding it: coverage resolves the interpreter path
-            new_file_rules.append(
-                FSExposeRule(
-                    path=str(p.parent) + "/",
-                    write=False,
-                    config=ConfigLine("Hack for pytest", Path(), 0),
-                )
-            )
 
     # activate_guard(tuple(list(file_rules) + new_file_rules))
     all_rules = list(file_rules)

@@ -44,6 +44,8 @@ the Python layer with `subprocess`; kernel-backed providers are Linux technologi
 - The samples' partial-mode tests run under the provider named by `OS_SANDBOX` instead of always under `subprocess`, so
   `make sample-tests` now exercises that provider in both modes.
 - A `net=` port list with a range followed by a single port, such as `80-90,85`, no longer fails with a `TypeError`.
+- `os.path.realpath()` of the interpreter no longer fails when it is reached through a `uv` link, which made
+  `pytest --cov` stop every sandboxed process.
 
 ## [0.7.0] - 2026-10-22
 

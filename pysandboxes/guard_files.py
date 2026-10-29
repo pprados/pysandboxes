@@ -663,6 +663,16 @@ def _apply_src_to_dest_rules(
     return None, None
 
 
+def _is_exposed_by_name(path: str) -> bool:
+    """Whether a rule names ``path`` itself, not a directory above it nor what it resolves to.
+
+    ``expose=`` lines are stored realpath-resolved: only the rules the framework builds for the interpreter
+    (``<python>``) keep a link under its own name.
+    """
+    name = _os_path_abspath(path).rstrip(os.sep)
+    return any(isinstance(rule, FSExposeRule) and rule.path and rule.path.rstrip(os.sep) == name for rule in _rules)
+
+
 def _matching_expose_root(canon_path: str) -> str | None:
     """Return the exposed root (trailing separator) that ``canon_path`` falls under, or None."""
     for rule in _rules:
@@ -1510,9 +1520,10 @@ def _wrap_os_readlink(func: Callable[..., Any]) -> Callable[..., Any]:
         remapped_first, rule = _apply_dest_to_src_rules(path, write=False)
         if rule:
             _raise_ignore(path, rule)
-        # The link is read in the directory holding it, which its target does not expose.
+        # The link is read in the directory holding it, which its target does not expose, unless a rule names the
+        # link itself: a uv interpreter is such a link, and os.path.realpath reads it.
         holder, _ = _apply_dest_to_src_rules(os.path.dirname(_os_path_abspath(path)) + os.sep, write=False)
-        if not remapped_first or not holder:
+        if not remapped_first or not (holder or _is_exposed_by_name(path)):
             if not is_learning_mode():
                 _raise_access(path)
             add_learning_rule(LearnFileRule(Path(path), False))
