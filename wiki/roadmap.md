@@ -87,6 +87,7 @@ Planned work, in no committed order:
   - [ ] Compile a part of code
   - [ ] Propagate the tracability id
   - [ ] Use anyio
+  - [ ] `os-sandbox=auto` alias (the best provider for this machine, dropped in 62183681 because it only chose between landlock and subprocess)
   - [ ] Other transports between the parent and the sandbox (SSE over local HTTP is used: portable to every provider)
     - [ ] Pipe or Unix socket (not portable to a VM)
     - [ ] gRPC
