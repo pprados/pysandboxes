@@ -106,6 +106,18 @@ class TestManageOldsFile:
             assert old_path is not None
             assert old_path.suffix == ".old"
 
+    def test_manage_olds_file_skips_backups_already_taken(self) -> None:
+        """Test that a backup never overwrites an earlier one."""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            test_path = Path(temp_dir) / "existing_config.conf"
+            test_path.write_text("existing content")
+            Path(f"{test_path}.old").write_text("first")
+            Path(f"{test_path}.old_1").write_text("second")
+
+            _, old_path = _manage_olds_file(test_path)
+
+            assert old_path == Path(f"{test_path}.old_2")
+
 
 class TestLearningModeManagement:
     """Test cases for learning mode activation/deactivation."""
