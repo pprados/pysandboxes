@@ -16,6 +16,7 @@ from pysandboxes.eval_transform import (
     _WARNED_MODULES,
     RESERVED_PREFIX,
     Violation,
+    _depth,
     inject,
     learn_targets,
     raise_if_rejected,
@@ -244,6 +245,20 @@ def test_the_static_nesting_is_bounded() -> None:
     source = "[" * 30 + "]" * 30
     violations = _check(source, syntax=_syntax(), max_depth=5)
     assert any("eval-max-depth" in v.remedy for v in violations)
+
+
+def test_a_tree_at_exactly_the_node_limit_is_accepted() -> None:
+    source = "[1, 2, 3]"
+    count = sum(1 for _ in ast.walk(ast.parse(source)))
+    assert not _check(source, syntax=_syntax(), max_nodes=count)
+    assert _check(source, syntax=_syntax(), max_nodes=count - 1)
+
+
+def test_a_tree_at_exactly_the_depth_limit_is_accepted() -> None:
+    source = "[[[1]]]"
+    depth = _depth(ast.parse(source))
+    assert not _check(source, syntax=_syntax(), max_depth=depth)
+    assert _check(source, syntax=_syntax(), max_depth=depth - 1)
 
 
 def test_the_report_is_exhaustive_actionable_and_honest() -> None:

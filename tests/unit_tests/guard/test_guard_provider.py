@@ -198,6 +198,13 @@ def test_remote_result_guard_accepts_truthy_values(value: str, existing_config: 
     assert result[RESULT_GUARD] is True
 
 
+@pytest.mark.parametrize("value", ["false", "none", "0", "off"])
+def test_remote_result_guard_accepts_falsy_values(value: str, existing_config: Path) -> None:
+    result, errors = _parse(f"remote-result-guard={value}", config_path=existing_config)
+    assert not errors
+    assert result[RESULT_GUARD] is False
+
+
 def test_remote_result_guard_defaults_to_true(existing_config: Path) -> None:
     result, errors = _parse(config_path=existing_config)
     assert not errors

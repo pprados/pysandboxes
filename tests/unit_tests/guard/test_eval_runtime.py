@@ -14,6 +14,7 @@ from pysandboxes.eval_runtime import (
     FRAME_CAPTURE,
     HELPERS,
     EvalState,
+    __sb_b_dir__,
     __sb_binop__,
     __sb_enter__,
     __sb_getattr__,
@@ -129,6 +130,32 @@ def test_a_frame_capture_refusal_names_no_rule_to_add() -> None:
         __sb_getattr__(object(), "f_globals")
     assert "Add `eval-attribute=f_globals`" not in str(caught.value)
     assert caught.value.hint is not None
+
+
+class _Holder:
+    def __init__(self, **attributes: Any) -> None:
+        self.__dict__.update(attributes)
+
+
+@pytest.fixture
+def wide_state() -> Iterator[EvalState]:
+    rules = DEFAULT_RULES._replace(
+        attribute=_names("ok", "f_globals", "__lead", "trail__"),
+        magic=_names("__name__"),
+    )
+    st = EvalState(rules)
+    push_state(st)
+    yield st
+    pop_state()
+
+
+def test_dir_hides_a_frame_capture_name_even_when_the_rules_allow_it(wide_state: EvalState) -> None:
+    assert __sb_b_dir__(_Holder(ok=1, f_globals=2)) == ["ok"]
+
+
+def test_dir_judges_a_half_dunder_name_by_the_attribute_rules(wide_state: EvalState) -> None:
+    """A name that only starts or only ends with `__` is not a magic name."""
+    assert __sb_b_dir__(_Holder(__lead=1, trail__=2)) == ["__lead", "trail__"]
 
 
 def test_frame_capture_covers_the_documented_names() -> None:
