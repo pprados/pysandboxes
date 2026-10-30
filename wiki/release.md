@@ -14,8 +14,8 @@ make publish-pre-release VERSION=0.1.0b5
 
 The target refuses a malformed version, a dirty tree, another branch, a `develop` behind `origin/develop` and an
 existing tag. It then shows what changed since the last tag in the pipeline and the wheel (`.github`, `Makefile`,
-`pyproject.toml`, `uv.lock`, `pysandboxes`), asks for confirmation, signs the tag with your SSH key, and pushes
-`develop` then the tag.
+`pyproject.toml`, `uv.lock`, `pysandboxes`), signs the tag with your SSH key, and pushes `develop` then the tag,
+without asking for confirmation: it can run from a script or from a coding agent.
 
 The tag starts `.github/workflows/release.yml`. When every check has passed, the run waits for **one approval**: the
 `testpypi` deployment, in the run page or under Actions → Release. Approving publishes the wheel; the images follow
@@ -57,8 +57,8 @@ The first final version publishes the `[0.0.0]` entry as written. From the next 
 rewrites it before the tag: an LLM (`claude -p`, without tools, from the maintainer's logged-in shell) merges the
 lines the entry holds with the `feat`, `fix`, `perf` and `security` commit subjects since the last final tag, into
 `### Added`, `### Changed`, `### Fixed` and `### Security` bullets written for users. The entry then opens in
-`$VISUAL`, `$EDITOR` or `vi`, and the confirmation question signs and tags what was saved; declining restores
-`CHANGELOG.md`. An answer of the wrong shape, a failing or missing `claude` falls back to the entry followed by the raw
+`$VISUAL`, `$EDITOR` or `vi` when stdin is a terminal, and what was saved is signed and tagged; without a terminal
+the entry is tagged as drafted. An answer of the wrong shape, a failing or missing `claude` falls back to the entry followed by the raw
 commit subjects: a release never depends on a model. `CHANGELOG_LLM` replaces the command. The tests that call a real
 model are marked `llm` and run only with `RUN_LLM_TESTS=1`.
 

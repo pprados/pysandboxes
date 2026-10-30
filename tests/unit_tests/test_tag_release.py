@@ -65,7 +65,7 @@ def _env(work: Path) -> dict[str, str]:
     return {**_ENV, "PATH": f"{work.parent / 'bin'}:{_ENV['PATH']}"}
 
 
-def _release(work: Path, *args: str, answer: str = "y\n") -> subprocess.CompletedProcess[str]:
+def _release(work: Path, *args: str, answer: str = "") -> subprocess.CompletedProcess[str]:
     env = _env(work)
     return subprocess.run(
         [str(SCRIPT), *args], cwd=work, env=env, input=answer, capture_output=True, text=True, check=False
@@ -163,20 +163,19 @@ def test_an_existing_tag_is_refused(work: Path) -> None:
     assert "already exists" in result.stderr
 
 
-@pytest.mark.parametrize("answer", ["n\n", "\n", ""])
-def test_a_declined_or_missing_confirmation_tags_nothing(work: Path, answer: str) -> None:
-    result = _release(work, "minor", answer=answer)
-    assert result.returncode != 0
-    assert "Nothing tagged" in result.stderr
-    assert _git(work, "tag") == ""
-    assert _git(work, "log", "-1", "--format=%s") == "init"
+def test_no_confirmation_is_asked_and_the_release_is_tagged_without_any_input(work: Path) -> None:
+    result = _release(work, "minor")
+    assert result.returncode == 0, result.stderr
+    assert "[y/N]" not in result.stdout + result.stderr
+    assert _git(work, "tag") == "v0.1.0"
+    assert any(line.endswith("refs/tags/v0.1.0") for line in _origin_tags(work))
 
 
-def test_the_diff_since_the_last_tag_is_shown_before_the_question(work: Path) -> None:
+def test_the_diff_since_the_last_tag_is_shown_before_the_tag(work: Path) -> None:
     _git(work, "tag", "-m", "x", "v0.1.0b1")
     (work / "pysandboxes").mkdir()
     _commit(work, "pysandboxes/new.py")
-    result = _release(work, "pre", "0.1.0b2", answer="n\n")
+    result = _release(work, "pre", "0.1.0b2")
     assert "Changes since v0.1.0b1" in result.stdout
     assert "pysandboxes/new.py" in result.stdout
 
@@ -280,16 +279,6 @@ def test_the_first_final_version_keeps_the_hand_written_entry_alone(work: Path) 
     result = _release(work, "patch")
     assert result.returncode == 0, result.stderr
     assert "Deny by default" not in _git(work, "show", "v0.0.1:CHANGELOG.md")
-
-
-def test_a_declined_final_version_leaves_the_changelog_untouched(work: Path) -> None:
-    _git(work, "tag", "-m", "x", "v0.0.1")
-    _git(work, "commit", "-q", "--allow-empty", "-m", "fix: load the filter")
-    _git(work, "push", "-q", "origin", "develop")
-    result = _release(work, "patch", answer="n\n")
-    assert result.returncode != 0
-    assert (work / "CHANGELOG.md").read_text() == CHANGELOG
-    assert _git(work, "status", "--porcelain") == ""
 
 
 def test_the_last_line_names_the_index_of_the_release_kind(work: Path) -> None:

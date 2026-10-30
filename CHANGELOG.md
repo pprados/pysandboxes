@@ -28,6 +28,7 @@
 - Add `make crosshair`, which looks for counterexamples to the PEP 316 contracts written in the docstrings of the pure helpers.
 
 ### Changed
+- `make publish-*` no longer asks for a confirmation before it signs and pushes the tag, so a release can run from a script.
 - Allow `os.getcwd()` and `os.getcwdb()` to report the current directory without granting file access.
 - A profile generated on macOS names `sandbox-exec` when it is available, instead of `subprocess`.
 - A device, a FIFO or a socket is exposed as the file itself, and `/dev/null`, `/dev/zero`, `/dev/urandom` and

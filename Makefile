@@ -860,7 +860,7 @@ init-macos-vm:
 
 # Tags the head of develop with a signed vX.Y.Z(a|b|rc)N and pushes develop, then the tag: release.yml verifies it,
 # builds the wheel and, once the testpypi deployment is approved, publishes it to test.pypi.org. The tag is signed
-# on this machine only; review what the head brings before confirming, a published tag is never moved.
+# on this machine only and nothing asks before it is pushed: a published tag is never moved.
 ## Tag and push a pre-release, which the CI publishes to test.pypi.org: make publish-pre-release VERSION=0.1.0b2
 publish-pre-release: quick-demo-gif
 	@scripts/tag-release.sh pre "$(VERSION)"

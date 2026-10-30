@@ -9,8 +9,8 @@
 # final, which must be greater; it dates the CHANGELOG.md entry [0.0.0] before the tag. The next merge into develop
 # opens a new one, so the tagged CHANGELOG.md holds no open entry. After the first
 # final version, changelog-draft.sh rewrites that entry from its own lines and the commits since the last final tag;
-# the maintainer edits it ($VISUAL, $EDITOR, else vi, when on a terminal) and approves it with the tag. A published tag
-# is never moved.
+# the maintainer edits it ($VISUAL, $EDITOR, else vi, when on a terminal), and nothing asks before the tag is signed and
+# pushed. A published tag is never moved.
 set -euo pipefail
 
 die() {
@@ -91,12 +91,6 @@ if [[ $mode != pre ]] &&
     git checkout -- CHANGELOG.md
     die "The '$open_entry' entry of CHANGELOG.md is empty: describe the release first."
 fi
-read -r -p "Sign and push $tag on $(git rev-parse --short HEAD)? [y/N] " answer || answer=
-if [[ $answer != [yY] ]]; then
-    git checkout -- CHANGELOG.md
-    die "Nothing tagged."
-fi
-
 start=$(git rev-parse HEAD)
 step=
 on_error() {
