@@ -1,5 +1,5 @@
 version = 1
-revision = 3
+revision = 5
 requires-python = ">=3.11.5"
 resolution-markers = [
     "python_full_version >= '3.14'",
@@ -1827,6 +1827,7 @@ provides-extras = ["all", "bwrap", "firejail", "landlock", "sandbox-exec", "subp
 [package.metadata.requires-dev]
 dev = [
     { name = "cosmic-ray", specifier = ">=8.7.0" },
+    { name = "crosshair-tool", specifier = ">=0.0.111" },
     { name = "importlib-metadata", specifier = "==7.2.1" },
     { name = "ipython" },
     { name = "json-with-comments", specifier = ">=1.2.10" },
