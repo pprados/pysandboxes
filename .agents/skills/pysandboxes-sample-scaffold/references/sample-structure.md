@@ -39,12 +39,12 @@ The `##` comment above a target is its description in `make help`.
 
 ## pyproject.toml
 
-- `[project]`: `name`, `version`, `description`, `readme`, `requires-python = ">=3.11"`, `license`, `classifiers`, `dependencies` (starting with `pysandboxes`).
+- `[project]`: `name`, `version`, `description`, `readme`, `requires-python = ">=3.11.5,<3.15"` (the range of the root `pyproject.toml`), `license`, `classifiers` (Python 3.11 to 3.14), `dependencies` (starting with `pysandboxes`).
 - `[dependency-groups]`: `dev` (ipython, pyright, ruff), `test` (pytest, pytest-asyncio, pytest-mock), `codespell`.
 - `[project.scripts]`: `<sample-name> = "<package_dir>.main:main"`.
 - `[tool.uv.sources]`: `pysandboxes = { path = "../..", editable = true }`.
 - `[build-system]`: `hatchling`; `[tool.hatch.build.targets.wheel]` with `packages = ["<package_dir>"]`.
-- Tools: `[tool.pyright]` (include package and tests, `.venv`), `[tool.black]` and `[tool.ruff]` (line-length 120, py310), `[tool.ruff.lint]` (`E`, `F`, `I`), `[tool.codespell]`, `[tool.pytest.ini_options]` (`--strict-markers --strict-config -vv`).
+- Tools: `[tool.pyright]` (include package and tests, `.venv`), `[tool.black]` and `[tool.ruff]` (line-length 120, `py311`: the code is always written in Python 3.11 syntax), `[tool.ruff.lint]` (`E`, `F`, `I`), `[tool.codespell]`, `[tool.pytest.ini_options]` (`--strict-markers --strict-config -vv`).
 
 The Python package (directory) name is snake_case, e.g. `agno_demo`.
 

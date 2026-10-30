@@ -13,7 +13,7 @@ A sample is a self-contained subproject under `samples/<name>-demo/` with its ow
 
 - The user asks to create a new sample, example, or demo under `samples/`.
 - The user wants a new subproject with the same structure as the existing framework demos.
-- The user wants to audit an existing sample against the common layout.
+- The user wants to audit an existing sample against the common layout (see "Auditing a sample").
 
 ## Workflow
 
@@ -31,6 +31,7 @@ A sample is a self-contained subproject under `samples/<name>-demo/` with its ow
 3. **Write the code and tests**
    - `<package_dir>/__init__.py` and `<package_dir>/main.py` exposing `main()` (target of `[project.scripts]`, used by `make run`).
    - `tests/conftest.py` and `tests/test_*.py`.
+   - Every new `.py` file starts with `# Copyright (c) 2026, Philippe PRADOS` and `# License: Apache V2`. Type hints everywhere, Python 3.11 syntax (`str | None`), lines of at most 120 characters, no useless comments. A test must be able to fail: never set `OS_SANDBOX=none`, give each blocking assertion a negative control, and make sure every profile a test names exists on disk (a missing profile silently switches to learning mode, where nothing is denied).
 
 4. **Add the sandbox files**, adapted from the closest existing sample (they are framework-specific, there is no template):
    - `env.example`: the variables the sample reads, without values.
@@ -39,7 +40,23 @@ A sample is a self-contained subproject under `samples/<name>-demo/` with its ow
 
 5. **Register the sample** in the root `Makefile`: add `<name>` (without `-demo`) to `SAMPLES`. This enables `sample-tests-<name>` and `pip-audit` for it, and therefore CI.
 
-6. **Validate** from the sample directory: `make init`, `make help`, `make validate`. Then, from the repo root, `make sample-tests-<name>`.
+6. **Validate** from the sample directory: `make init`, `make help`, `make validate`. Then, from the repo root, `make sample-tests-<name>`. CI runs the samples on Python 3.11 to 3.14, and `make sample-tests-matrix` runs them on every Python and every OS provider (the maintainer's check before a minor or final release).
+
+7. **Document and commit**
+   - Add one user-facing line to the open `## [0.0.0] - 202X-XX-XX` entry of `CHANGELOG.md`, under `### Added` (never date it nor add a version).
+   - Search the repository for the name of an existing sample (`rg -l <existing>-demo`) and add the new one wherever the samples are listed, such as `README.md` or the `wiki/`.
+   - Commit `uv.lock` with the sample. Commit subjects follow Conventional Commits (`feat(samples): ...`). Branch from `develop`; the pull request targets `develop`.
+
+## Auditing a sample
+
+Compare the sample to `references/sample-structure.md` and to the closest existing sample, and report each gap without fixing it unasked:
+
+- required files present (`Makefile`, `pyproject.toml`, `uv.lock`, `README.md`, `.gitignore`, `env.example`, `learn.py`, both `.py-sandboxes*` profiles);
+- Makefile targets and pyproject layout identical to the other samples (`diff` against the reference sample);
+- name in `SAMPLES` of the root `Makefile`;
+- copyright header on every `.py` file;
+- every `net=` rule of the profiles justified, and no `expose-rw` wider than needed;
+- `make validate` green from the sample directory, then `make sample-tests-<name>` from the root.
 
 ## Resources
 
@@ -49,5 +66,5 @@ A sample is a self-contained subproject under `samples/<name>-demo/` with its ow
 ## Conventions to respect
 
 - One sample = one directory under `samples/` with its own `.venv`. Never use the root venv.
-- Do not modify the root `.pysandboxes` configuration.
+- Do not modify the root `.py-sandboxes` configuration.
 - Keep the Makefile targets and pyproject layout identical to the other samples, so `make help`, `make tests` and `make validate` behave the same everywhere.
