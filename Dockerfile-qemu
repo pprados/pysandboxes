@@ -15,21 +15,23 @@ RUN set -eux \
     && apt-get autoremove -y \
     && rm -rf /var/lib/apt/lists/*
 
-# The guest's iptables-restore must meet the libxtables and the extensions it was built with: a 24.04 guest (1.8.10)
-# crashes (free(): invalid pointer) on the 1.8.11 of this Debian base. A 25.04 guest has the 1.8.11 already.
+# The guest's iptables-restore must meet the libxtables and the extensions it was built with: a 24.04 guest (1.8.10) or
+# a 23.04 guest (1.8.9) crashes (free(): invalid pointer) on the 1.8.11 of this Debian base. A 25.04 guest has the
+# 1.8.11 already. The release of the guest names the Ubuntu series whose libraries are copied over the base's.
 RUN set -eux \
     && release="$(ls "${PYSANDBOXES_VM_IMAGES_DIR}" | sed -n 's/^ubuntu-\([0-9.]*\)-.*/\1/p' | head -1)" \
-    && if [ "$release" = "24.04" ]; then \
-        mirror=http://archive.ubuntu.com/ubuntu; \
-        [ "$(dpkg --print-architecture)" = amd64 ] || mirror=http://ports.ubuntu.com/ubuntu-ports; \
+    && case "$release" in 24.04) series=noble; mirror=http://archive.ubuntu.com/ubuntu ;; \
+        23.04) series=lunar; mirror=http://old-releases.ubuntu.com/ubuntu ;; *) series= ;; esac \
+    && if [ -n "$series" ]; then \
+        [ "$(dpkg --print-architecture)" = amd64 ] || [ "$series" = lunar ] || mirror=http://ports.ubuntu.com/ubuntu-ports; \
         apt-get update; \
         apt-get install -y --no-install-recommends ubuntu-keyring; \
         mkdir -p /tmp/ub/lists /tmp/ub/debs /tmp/ub/x; \
-        echo "deb [signed-by=/usr/share/keyrings/ubuntu-archive-keyring.gpg] $mirror noble main" > /tmp/ub/sources.list; \
+        echo "deb [signed-by=/usr/share/keyrings/ubuntu-archive-keyring.gpg] $mirror $series main" > /tmp/ub/sources.list; \
         apt_ub="apt-get -o Dir::Etc::sourcelist=/tmp/ub/sources.list -o Dir::Etc::sourceparts=/dev/null -o Dir::State::lists=/tmp/ub/lists"; \
         $apt_ub update; \
         cd /tmp/ub/debs; \
-        $apt_ub download iptables/noble libxtables12/noble libip4tc2/noble libip6tc2/noble libnftnl11/noble libmnl0/noble; \
+        $apt_ub download iptables/$series libxtables12/$series libip4tc2/$series libip6tc2/$series libnftnl11/$series libmnl0/$series; \
         for deb in *.deb; do dpkg-deb -x "$deb" /tmp/ub/x; done; \
         for lib in /tmp/ub/x/usr/lib/*-linux-gnu; do cp -a "$lib/." "/usr/lib/$(basename "$lib")/"; done; \
         rm -rf /tmp/ub; \
