@@ -9,11 +9,13 @@
 | ☐ 3.15   | ✅ firejail    |            | ✅ API     |
 |          | ✅ unshare     |            | ✅ Eval    |
 |          | ✅ qemu        |            | ☐ Source  |
-|          | ◐ sandbox-exec² |           | ☐ Regexp  |
+|          | ✅ sandbox-exec² |           | ☐ Regexp  |
 |          | ✅ Docker¹     |            | ☐ DoS     |
 |          | ✅ Podman¹     |            | ✅ Coverage >75% |
 |          | ☐ gVisor      |            |           |
 |          | ☐ micro-VM    |            |           |
+|          | ☐ AppContainer² |          |           |
+|          | ☐ Windows Sandbox² |       |           |
 
 ¹ Docker and Podman are not providers of their own: a container runs the
 `unshare` provider, with `--privileged` for Docker.
