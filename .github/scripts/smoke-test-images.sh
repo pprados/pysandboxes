@@ -12,6 +12,7 @@ set -euo pipefail
 version=$1
 tag=$2
 engine=${CONTAINER_CMD:-docker}
+kvm=${KVM_DEVICE:-/dev/kvm}
 
 in_image() {
     local image=$1
@@ -41,16 +42,16 @@ in_image python-sb-qemu genisoimage --version
 in_image python-sb-qemu iptables-restore --version
 # shellcheck disable=SC2016  # expanded inside the image, where the variable is set
 in_image python-sb-qemu sh -c 'ls "$PYSANDBOXES_VM_IMAGES_DIR"/* >/dev/null'
-if [[ -c /dev/kvm ]]; then
+if [[ -c $kvm ]]; then
     probe='printf "os-sandbox=qemu\nnet=ALLOW|TCP|localhost|9999|IN\n" > /tmp/probe.py-sandboxes
 python-sb --pysandboxes-config=/tmp/probe.py-sandboxes -c "print(\"guest-ok\")"'
-    guest=$("$engine" run --rm --privileged --device /dev/kvm --group-add "$(stat -c %g /dev/kvm)" --network host \
+    guest=$("$engine" run --rm --privileged --device "$kvm" --group-add "$(stat -c %g "$kvm")" --network host \
         "python-sb-qemu:$tag" sh -c "$probe" 2>&1 || true)
     if [[ $guest != *guest-ok* ]]; then
         echo "::error::the qemu guest of python-sb-qemu:$tag cannot apply its network rules: $guest"
         exit 1
     fi
 else
-    echo "::warning::no /dev/kvm: the qemu guest of python-sb-qemu:$tag is not run"
+    echo "::warning::no $kvm: the qemu guest of python-sb-qemu:$tag is not run"
 fi
 echo "The five images hold pysandboxes $version"

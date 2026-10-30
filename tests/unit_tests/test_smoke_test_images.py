@@ -15,10 +15,15 @@ IMAGES = ["python-sb", "python-sb-landlock", "python-sb-unshare", "python-sb-bwr
 # Stands for docker: logs `run --rm <image> <command...>`; prints the version held in $FAKE_DIR/version-<image>
 # (else $FAKE_VERSION) for the importlib.metadata probe; fails when "<image> <command>" is listed in $FAKE_DIR/broken.
 FAKE_DOCKER = """#!/usr/bin/env bash
-shift 2
+shift
+while [[ $1 == -* ]]; do if [[ $1 == --device || $1 == --group-add || $1 == --network ]]; then shift; fi; shift; done
 image=${1%%:*}; shift
 printf '%s %s\\n' "$image" "$*" >>"$FAKE_DIR/calls"
 if grep -qxF "$image $1" "$FAKE_DIR/broken" 2>/dev/null; then exit 1; fi
+if [[ $1 == sh && $3 == *guest-ok* ]]; then
+    grep -qxF "guest" "$FAKE_DIR/broken" 2>/dev/null || echo guest-ok
+    exit 0
+fi
 if [[ $1 == python && $2 == -c ]]; then
     cat "$FAKE_DIR/version-$image" 2>/dev/null || echo "$FAKE_VERSION"
 fi
@@ -35,12 +40,13 @@ def fake(tmp_path: Path) -> Path:
     return tmp_path
 
 
-def _smoke(fake: Path) -> subprocess.CompletedProcess[str]:
+def _smoke(fake: Path, kvm: str = "/dev/null") -> subprocess.CompletedProcess[str]:
     env = {
         **os.environ,
         "PATH": f"{fake / 'bin'}:{os.environ['PATH']}",
         "FAKE_DIR": str(fake),
         "FAKE_VERSION": VERSION,
+        "KVM_DEVICE": kvm,
     }
     return subprocess.run([str(SCRIPT), VERSION, "3.13"], env=env, capture_output=True, text=True, check=False)
 
@@ -100,3 +106,25 @@ def test_an_image_holding_another_version_fails(fake: Path) -> None:
 def test_a_missing_provider_binary_fails(fake: Path, broken: str) -> None:
     (fake / "broken").write_text(broken + "\n")
     assert _smoke(fake).returncode != 0
+
+
+def test_the_qemu_guest_runs_a_program_behind_a_network_rule(fake: Path) -> None:
+    _smoke(fake)
+    probe = [c for c in _calls(fake) if c.startswith("python-sb-qemu sh -c printf")]
+    assert len(probe) == 1
+    assert "os-sandbox=qemu" in probe[0]
+    assert "net=ALLOW|TCP" in probe[0]
+
+
+def test_a_guest_that_cannot_apply_its_network_rules_fails(fake: Path) -> None:
+    (fake / "broken").write_text("guest\n")
+    result = _smoke(fake)
+    assert result.returncode == 1
+    assert "cannot apply its network rules" in result.stdout
+
+
+def test_without_kvm_the_guest_is_not_run_and_the_smoke_test_warns(fake: Path) -> None:
+    result = _smoke(fake, kvm=str(fake / "no-kvm"))
+    assert result.returncode == 0
+    assert "::warning::" in result.stdout
+    assert not any(c.startswith("python-sb-qemu sh -c printf") for c in _calls(fake))
