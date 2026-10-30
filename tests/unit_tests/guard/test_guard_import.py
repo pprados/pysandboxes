@@ -29,6 +29,7 @@ from pysandboxes.guard_import import (
     patch_rules,
     user_code,
 )
+from pysandboxes.immutable_dict import ImmutableDict
 from pysandboxes.main_logger import ErrorMsg
 from pysandboxes.sb_types import ConfigLine, ConfigLines
 
@@ -607,10 +608,10 @@ def test_the_audit_hook_is_installed_once_across_activations(monkeypatch: pytest
     monkeypatch.setattr(guard_import, "_activated", False)
     monkeypatch.setattr(sys, "meta_path", [m for m in sys.meta_path if m is not guard_import._guard_finder])
 
-    guard_import._activate_patch_import({})
+    guard_import._activate_patch_import(ImmutableDict({}))
     sys.meta_path.remove(guard_import._guard_finder)
     monkeypatch.setattr(guard_import, "_activated", False)
-    guard_import._activate_patch_import({})
+    guard_import._activate_patch_import(ImmutableDict({}))
 
     assert len(installed) == 1
 
