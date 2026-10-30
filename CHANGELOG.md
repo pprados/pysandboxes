@@ -20,35 +20,40 @@
 `unshare` provider, with `--privileged` for Docker.
 
 
-## [0.0.0] - 202X-XX-XX
+## [0.8.0] - 2026-10-30
 
 ### Added
 - Present Py-Sandboxes as an execution harness for Python in the README.
-- Add the macOS Seatbelt `sandbox-exec` provider, with documented host-filtering and DNS limitations.
+- Add the macOS Seatbelt `sandbox-exec` provider, which resolves names through mDNSResponder, with documented host-filtering and DNS limitations.
 - Set `PYSANDBOXES_LOG_LEVEL` to choose the log level of `python-sb`, of `sandboxes()` and of their sandboxed process.
 - Add `make crosshair`, which looks for counterexamples to the PEP 316 contracts written in the docstrings of the pure helpers.
+- Learning summarizes at info level where the learned rules come from, only when a rule was learned.
 
 ### Changed
 - `make publish-*` no longer asks for a confirmation before it signs and pushes the tag, so a release can run from a script.
 - Allow `os.getcwd()` and `os.getcwdb()` to report the current directory without granting file access.
 - A profile generated on macOS names `sandbox-exec` when it is available, instead of `subprocess`.
-- A device, a FIFO or a socket is exposed as the file itself, and `/dev/null`, `/dev/zero`, `/dev/urandom` and
-  `/dev/random` need no rule: `landlock` and `firejail` no longer open the whole `/dev`, and learning no longer writes
-  `expose-rw=/dev`.
-- `landlock` gives the sandbox a temporary directory of its own, removed when the daemon stops, instead of the host's
-  whole `/tmp`: `tempfile` works as before, but a hard-coded `/tmp/...` path is now refused.
+- A device, a FIFO or a socket is exposed as the file itself, and `/dev/null`, `/dev/zero`, `/dev/urandom` and `/dev/random` need no rule: `landlock` and `firejail` no longer open the whole `/dev`, and learning no longer writes `expose-rw=/dev`.
+- `landlock` gives the sandbox a temporary directory of its own, removed when the daemon stops, instead of the host's whole `/tmp`: `tempfile` works as before, but a hard-coded `/tmp/...` path is now refused.
 
 ### Fixed
-
-- `shutil.disk_usage()` now obeys file access rules.
+- `shutil.disk_usage()` and `os.statvfs()` now obey file access rules, on Windows too.
 - Learn module source access found by `importlib`, so `python-sb -m package.module` works after learning without granting project-root reads.
+- `python-sb -m` no longer judges the package it runs before the import guard is armed.
 - `python-sb app/script.py` runs again under a profile that exposes only `./app`, such as a learned one.
-- The samples' partial-mode tests run under the provider named by `OS_SANDBOX` instead of always under `subprocess`, so
-  `make sample-tests` now exercises that provider in both modes.
-- The `qemu` container image for Python 3.11 and 3.12 no longer fails with `iptables-restore failed: free(): invalid pointer`.
+- Learning no longer drops callers located under the repository.
+- `os.readlink()` can read a link that a rule names itself.
+- Under `qemu`, a device rule uses the guest's own `/dev` instead of sharing the host's.
+- The samples' partial-mode tests run under the provider named by `OS_SANDBOX` instead of always under `subprocess`, so `make sample-tests` now exercises that provider in both modes.
+- The `qemu` container images no longer fail with `iptables-restore failed: free(): invalid pointer`, and every image is now checked for it.
 - A `net=` port list with a range followed by a single port, such as `80-90,85`, no longer fails with a `TypeError`.
-- `os.path.realpath()` of the interpreter no longer fails when it is reached through a `uv` link, which made
-  `pytest --cov` stop every sandboxed process.
+- `os.path.realpath()` of the interpreter no longer fails when it is reached through a `uv` link, which made `pytest --cov` stop every sandboxed process.
+- An immutable dictionary refuses a forged pickle state.
+- The configuration and network-filter pipes of a remote sandbox are now private to their user.
+
+### Security
+- Raise `virtualenv` to clear its advisories.
+- Relock the samples' dependencies to versions without known vulnerabilities.
 
 ## [0.7.0] - 2026-10-22
 
