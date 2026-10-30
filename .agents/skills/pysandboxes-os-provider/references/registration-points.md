@@ -52,13 +52,13 @@ Every hit outside landlock's own modules is a place the new provider must appear
 | `AGENTS.md`, `AGENTS.template.md` | Provider list. |
 | `CONTRIBUTING.md` | List of per-provider wiki pages. |
 | `SECURITY.md` | Provider list. |
-| `CHANGELOG.md` | Entry, and the platform/provider table at the top. |
+| `CHANGELOG.md` | One user-facing line under `### Added` of the open `## [0.0.0] - 202X-XX-XX` entry (no date, no version), and the OS-Sandbox / OS columns of the table at the top. |
 | `wiki/roadmap.md` | Mark the provider or platform as done. |
 | `wiki/alternatives.md`, `wiki/use-cases.md` | Provider comparisons and use cases, if the provider changes them. |
 | `wiki/audit-python-security.md` | What the provider holds against compiled code. |
 | `coding-agents/README.md` | Provider list given to `python-sb` users. |
 
-This table is the starting point of the question the skill asks the user (workflow step 7), not a substitute for it.
+This table is the starting point of the documentation scope the integration plan (workflow phase 2) lists, not a substitute for it.
 
 ## Linux-only assumptions to avoid in a non-Linux provider
 
@@ -70,7 +70,7 @@ This table is the starting point of the question the skill asks the user (workfl
 ## Verification
 
 ```bash
-uv run pytest tests/unit_tests/test_provider_platforms.py
+uv run pytest tests/unit_tests/test_provider_platforms.py tests/unit_tests/test_architecture.py
 uv run pytest -rs tests/unit_tests/remote -k <name>
 PYSANDBOXES_FAIL_ON_SKIP=1 uv run pytest -rs \
     tests/integration_tests/test_guards_with_providers.py \
@@ -79,5 +79,7 @@ PYSANDBOXES_FAIL_ON_SKIP=1 uv run pytest -rs \
 # When the provider enforces net= at the OS level, with <name> in its _PROVIDERS:
 PYSANDBOXES_FAIL_ON_SKIP=1 uv run pytest -rs tests/integration_tests/test_os_netfilter.py -k <name>
 ```
+
+Before the pull request, run `make format` then `make validate`.
 
 On a non-Linux target, run `.github/workflows/cross-os.yml` (manual dispatch) and require it green.

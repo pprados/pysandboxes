@@ -1,6 +1,6 @@
 ---
 name: pysandboxes-os-provider
-description: Use when adding a new OS-sandbox provider (os-sandbox=<name>) to pysandboxes, e.g. a Windows, macOS or other-OS isolation backend, or a new Linux technology next to landlock, bwrap, firejail, unshare and qemu. Covers the daemon class, the platform registry, rule enforcement, tests, CI and documentation.
+description: Use when adding a new OS-sandbox provider (os-sandbox=<name>) to pysandboxes, e.g. a Windows, macOS or other-OS isolation backend, or a new Linux technology next to the providers of `_PROVIDER_SPECS` (landlock, bwrap, firejail, unshare, qemu, sandbox-exec, ...). Covers the daemon class, the platform registry, rule enforcement, tests, CI, documentation, changelog and pull request requirements.
 ---
 
 # Pysandboxes OS Provider
@@ -22,7 +22,7 @@ Do not copy code from this skill: read the live providers.
 
 ## Workflow
 
-Work through these phases in order. Keep findings and decisions in the implementation plan or task notes; do not start provider implementation until technical analysis and planning are complete. This skill is self-contained: follow this workflow and its own `references/registration-points.md`. It does not require another skill, workflow framework, or approval system.
+Work through these phases in order. Keep findings and decisions in the implementation plan or task notes; do not start provider implementation until technical analysis and planning are complete. Branch from `develop` and open the pull request against it, never `master`.
 
 ### 1. Technical feasibility analysis
 
@@ -42,7 +42,7 @@ If OS-level `net=` filtering is claimed, include tests in `tests/integration_tes
 
 Include a provider-specific Docker/Podman image, its build and smoke-test integration, and instructions for running it. Investigate host privileges and runtime constraints. If the target OS or runtime makes such an image impossible, establish that in feasibility analysis and plan the closest useful container validation with evidence.
 
-Include a dedicated `wiki/<name>.md` page and updates to existing pages identified from the Documentation table in `references/registration-points.md` and a repository-wide search for the latest comparable provider (currently landlock). List the intended change for each page and update relevant existing pages too.
+Include the `CHANGELOG.md` entry and the pull request requirements of `CONTRIBUTING.md` (see "Repository requirements" below). Include a dedicated `wiki/<name>.md` page and updates to existing pages identified from the Documentation table in `references/registration-points.md` and a repository-wide search for the latest comparable provider (currently landlock). List the intended change for each page and update relevant existing pages too.
 
 Include CI for every claimed platform. Update `.github/workflows/cross-os.yml` for supported non-Linux platforms. If hosted runners cannot provide the required capability, plan a GitHub Actions VM route or reproducible local VM validation. Do not add a platform tag until its provider suites have passed there.
 
@@ -67,7 +67,7 @@ Write `wiki/<name>.md` covering how it works, prerequisites, limitations, and ho
 
 3. **Cover every rule kind**: `expose-ro`, `expose-rw`, `ignore=`, `net=`, env rules. For each one, the provider either enforces it, or logs a warning when `py-sandbox=False` leaves it unenforced (model: `_warn_ignore_rules_are_not_enforced` in landlock). Record the result (✅/❌) in `wiki/os-providers.md`. A rule silently not enforced is the failure this step prevents.
 
-4. **Probe the host** in the classmethod `unavailable_reason()`: binary, kernel feature, OS version. Return a human-readable reason or `None`. Test-environment quirks only (container, CI runner) go into `provider_skip_reason()` in `tests/integration_tests/_env.py`, never into the provider.
+4. **Probe the host** in the classmethod `unavailable_reason()`: binary, kernel feature, OS version. Return a human-readable reason or `None`.
 
 5. **Register the provider**: every point listed in `references/registration-points.md`. The platform tag in `_PROVIDER_SPECS` is a claim: "the CI job of that OS must run the provider suites before a value is added".
 
@@ -76,9 +76,9 @@ Write `wiki/<name>.md` covering how it works, prerequisites, limitations, and ho
    - Integration suite in `tests/integration_tests/remote/test_<name>.py`.
    - The shared suites `test_usage_with_providers.py` and `test_guards_with_providers.py` must pass with the new row of `ALL_OS_SANDBOX`.
    - If the provider enforces `net=` at the OS level, add it to `_PROVIDERS` in `tests/integration_tests/test_os_netfilter.py`. With `py-sandbox=false`, it proves under `python-sb` and in daemon mode that the OS filter alone drops a destination outside the rules, with a negative control. The shared suites cannot show this: the Python socket guard refuses in place of a broken filter, which is how the bwrap and qemu filters stayed broken unnoticed. A provider that does not enforce `net=` records ❌ in `wiki/os-providers.md` instead (step 3).
-   - Every integration test runs in CI, with `PYSANDBOXES_FAIL_ON_SKIP=1`. No row is deselected or silently skipped.
+   - The tests follow the rules of the "Tests" section of `CONTRIBUTING.md`: a test must be able to fail, with a negative control run without the sandbox, refusals asserted through `sandbox_denials()`, and a narrow `pytest.raises`. Never set `OS_SANDBOX=none` to make a suite pass.
 
-The detailed implementation patterns follow for reference; use them within the phases above, and use the documentation scope defined in the integration plan.
+These implementation details complement the phases above; the documentation scope is the one defined in the integration plan.
 
 ## Resources
 
@@ -88,4 +88,14 @@ The detailed implementation patterns follow for reference; use them within the p
 
 - Never import platform-only modules (`fcntl`, `ctypes` bindings of one OS, ...) at the top of a module reachable from other platforms: the registry is read without importing the provider, keep it so.
 - A provider that cannot express a rule says so (warning + ❌ in the wiki); it does not approximate it silently.
-- Never modify the root `.pysandboxes` configuration.
+- Never modify the root `.py-sandboxes` configuration.
+- Import layering is enforced by `tests/unit_tests/test_architecture.py` (pytestarch): a provider never imports another provider nor an entry point, and only `_os_sandbox` and `python_sb` import `remote`. A new module that breaks a rule gets its import fixed, not the rule.
+
+## Repository requirements
+
+- **Code**: type hints everywhere, Python 3.11 syntax (`str | None`), docstrings on public APIs, lines of at most 120 characters, `black` formatting. Every new file starts with `# Copyright (c) 2026, Philippe PRADOS` and `# License: Apache V2`. No useless comments.
+- **Changelog**: add one user-facing line, with no implementation detail, to the open `## [0.0.0] - 202X-XX-XX` entry of `CHANGELOG.md`, under `### Added`. Before the first public release the entry has no `### Changed` or `### Fixed`. Tick the provider in the OS-Sandbox column of the table at the top (and the OS column for a new platform). Never date the entry nor add a version: `make publish-*` does.
+- **Dependencies**: `uv` only; run `make lock` when `pyproject.toml` changes.
+- **Pull request**: use the `security-model.md` template (`.github/PULL_REQUEST_TEMPLATE/`). Say which layer the change touches (Python or OS) and give a test proving the refusal holds. Commit subjects follow Conventional Commits (`feat(provider): ...`, `test(integration): ...`, `docs: ...`).
+- **Before the pull request**: `make format`, `make validate`, and `make integration-tests` (a provider always qualifies).
+- **Documentation**: a new known weakness goes into `wiki/weaknesses.md`; what the provider holds against compiled code goes into `wiki/audit-python-security.md`.

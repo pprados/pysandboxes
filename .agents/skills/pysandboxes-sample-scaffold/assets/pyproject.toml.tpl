@@ -3,7 +3,7 @@ name = "{{SAMPLE_NAME}}"
 version = "0.1.0"
 description = "{{DESCRIPTION}}"
 readme = "README.md"
-requires-python = ">=3.11"
+requires-python = ">=3.11.5,<3.15"
 authors = [{ name = "{{AUTHOR}}" }]
 keywords = ["sandboxes", "{{KEYWORDS}}"]
 license = { text = "MIT" }
@@ -13,6 +13,9 @@ classifiers = [
     "License :: OSI Approved :: MIT License",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
 ]
 dependencies = [
     "pysandboxes",
@@ -51,7 +54,7 @@ venv = ".venv"
 
 [tool.black]
 line-length = 120
-target-version = ["py310"]
+target-version = ["py311"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I"]
@@ -59,7 +62,7 @@ ignore = []
 
 [tool.ruff]
 line-length = 120
-target-version = "py310"
+target-version = "py311"
 
 [tool.codespell]
 skip = ".git,*.pdf,*.svg,*.yaml,*.ipynb,uv.lock,./.venv"
