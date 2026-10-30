@@ -23,6 +23,7 @@
 ## [0.0.0] - 202X-XX-XX
 
 ### Added
+- Present Py-Sandboxes as an execution harness for Python in the README.
 - Add the macOS Seatbelt `sandbox-exec` provider, with documented host-filtering and DNS limitations.
 - Set `PYSANDBOXES_LOG_LEVEL` to choose the log level of `python-sb`, of `sandboxes()` and of their sandboxed process.
 - Add `make crosshair`, which looks for counterexamples to the PEP 316 contracts written in the docstrings of the pure helpers.

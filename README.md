@@ -7,7 +7,7 @@ https://github.com/user-attachments/assets/3700b690-0e86-408e-a3e7-e299268bfc25
 [![License](https://img.shields.io/pypi/l/pysandboxes.svg)](https://github.com/pprados/pysandboxes/blob/master/LICENSE.txt)
 [![Platform](https://img.shields.io/badge/platform-Linux%20%7C%20macOS-lightgrey.svg)](#platform-support)
 
-> Put `python-sb` in front of `python`: the program can then only touch what a readable policy file allows.
+> Put `python-sb` in front of `python`: the program can then only touch what a readable policy file allows. Py-Sandboxes is an execution harness for Python: it wraps the program, enforces the policy, and learns it by watching the program run.
 
 Python programs that run LLM-written code, agent skills, MCP servers or third-party tools usually run with all the rights of the user: every file, the network, every API token. A manipulated model can use them to read local files, reach internal services or run commands ([OWASP LLM05:2025](https://genai.owasp.org/llmrisk/llm052025-improper-output-handling/), [OWASP LLM06:2025](https://genai.owasp.org/llmrisk/llm062025-excessive-agency/)).
 
@@ -76,6 +76,8 @@ npx skills add pprados/pysandboxes/skills --skill '*'
 See [coding agents](https://github.com/pprados/pysandboxes/wiki/coding-agents) for what the two skills do and how to install them for the current user.
 
 # Three layers, three different promises
+
+The harness is made of three nested layers. Unlike an agent harness, which trusts the code it drives, it enforces the policy on the code itself, with the OS provider as the outermost layer.
 
 | Layer | What it does | What it does not do |
 |---|---|---|
