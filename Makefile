@@ -793,6 +793,8 @@ endif
 .PHONY: release
 ## Run the full local check (validate and all-tests) before a final version
 release: validate all-tests
+# qemu-tcg only emulates what qemu runs under KVM: the check leaves it out, like make coverage.
+release: export PYTEST_ADDOPTS = -m "not slow"
 
 uv.lock: pyproject.toml
 	uv lock
