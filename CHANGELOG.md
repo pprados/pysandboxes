@@ -2,26 +2,23 @@
 
 | Python   | OS-Sandbox    | OS         | Feature   |
 |----------|---------------|------------|-----------|
-| ✅ 3.11   | ✅ none        | ✅ Linux    | ✅ Env     |
-| ✅ 3.12   | ✅ subprocess  | ✅ WSL      | ✅ Files   |
-| ✅ 3.13   | ✅ landlock    | ✅ MacOS²   | ✅ Network |
-| ✅ 3.14   | ✅ bwrap       | ◐ Windows² | ✅ Import  |
-| ☐ 3.15   | ✅ firejail    |            | ✅ API     |
-|          | ✅ unshare     |            | ✅ Eval    |
-|          | ✅ qemu        |            | ☐ Source  |
-|          | ✅ sandbox-exec² |           | ☐ Regexp  |
-|          | ✅ Docker¹     |            | ☐ DoS     |
-|          | ✅ Podman¹     |            | ✅ Coverage >75% |
-|          | ☐ gVisor      |            |           |
-|          | ☐ micro-VM    |            |           |
-|          | ☐ AppContainer² |          |           |
-|          | ☐ Windows Sandbox² |       |           |
+| ✅ 3.11   | ✅ none         | ✅ Linux    | ✅ Env     |
+| ✅ 3.12   | ✅ subprocess   | ✅ WSL      | ✅ Files   |
+| ✅ 3.13   | ✅ landlock     | ✅ MacOS²   | ✅ Network |
+| ✅ 3.14   | ✅ bwrap        | ◐ Windows² | ✅ Import  |
+| ☐ 3.15   | ✅ firejail     |            | ✅ API     |
+|          | ✅ unshare       |            | ✅ Eval    |
+|          | ✅ qemu          |            | ☐ Source  |
+|          | ✅ sandbox-exec  |            | ☐ Regexp  |
+|          | ✅ Docker¹       |            | ☐ DoS     |
+|          | ✅ Podman¹       |            |           |
+|          | ☐ gVisor        |            |           |
+|          | ☐ micro-VM      |            |           |
+|          | ☐ App container |            |           |
 
 ¹ Docker and Podman are not providers of their own: a container runs the
 `unshare` provider, with `--privileged` for Docker.
 
-² macOS offers the Seatbelt `sandbox-exec` provider. Windows uses
-the Python layer with `subprocess`; kernel-backed providers are Linux technologies.
 
 ## [0.0.0] - 202X-XX-XX
 
