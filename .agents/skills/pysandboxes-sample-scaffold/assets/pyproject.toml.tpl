@@ -6,11 +6,11 @@ readme = "README.md"
 requires-python = ">=3.11.5,<3.15"
 authors = [{ name = "{{AUTHOR}}" }]
 keywords = ["sandboxes", "{{KEYWORDS}}"]
-license = { text = "MIT" }
+license = "Apache-2.0"
 classifiers = [
     "Development Status :: 4 - Beta",
     "Intended Audience :: Developers",
-    "License :: OSI Approved :: MIT License",
+    "License :: OSI Approved :: Apache Software License",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
