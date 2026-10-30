@@ -44,6 +44,7 @@
 - `python-sb app/script.py` runs again under a profile that exposes only `./app`, such as a learned one.
 - The samples' partial-mode tests run under the provider named by `OS_SANDBOX` instead of always under `subprocess`, so
   `make sample-tests` now exercises that provider in both modes.
+- The `qemu` container image for Python 3.12 no longer fails with `iptables-restore failed: free(): invalid pointer`.
 - A `net=` port list with a range followed by a single port, such as `80-90,85`, no longer fails with a `TypeError`.
 - `os.path.realpath()` of the interpreter no longer fails when it is reached through a `uv` link, which made
   `pytest --cov` stop every sandboxed process.
