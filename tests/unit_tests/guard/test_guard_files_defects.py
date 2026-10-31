@@ -334,7 +334,8 @@ def test_a_link_exposed_by_name_does_not_open_its_directory(named_link: tuple[Pa
             os.readlink(hidden / name)
     with pytest.raises(RuleFileNotFoundError):
         os.listdir(hidden)
-    assert not (hidden / "secret.txt").exists()
+    with pytest.raises(RuleFileNotFoundError):
+        os.stat(hidden / "secret.txt")
 
 
 def test_readlink_of_a_link_whose_target_is_not_exposed_stays_refused(tmp_path: Path) -> None:
