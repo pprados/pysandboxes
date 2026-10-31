@@ -7,6 +7,7 @@ Only the pure parts are covered here. ``GuardFinder`` and ``GuardLoader`` mutate
 """
 
 import logging
+import os
 import sys
 from importlib.machinery import ModuleSpec
 from pathlib import Path
@@ -581,12 +582,13 @@ def test_learning_records_the_file_of_a_module_named_after_pysandboxes_alphabeti
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Only the package itself is exempt, not every name that sorts after it."""
-    spec = ModuleSpec("zzdemo", loader=None, origin="/opt/zzdemo.py")
+    origin = os.path.abspath("/opt/zzdemo.py")
+    spec = ModuleSpec("zzdemo", loader=None, origin=origin)
     guard_finder, recorded = _learning_finder(monkeypatch, spec, ())
 
     guard_finder.find_spec("zzdemo", None)
 
-    assert LearnFileRule(Path("/opt/zzdemo.py"), False) in recorded
+    assert LearnFileRule(Path(origin), False) in recorded
 
 
 @pytest.mark.parametrize("origin", [None, "relative/demo.py"])
