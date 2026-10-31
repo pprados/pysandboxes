@@ -64,6 +64,10 @@ logger = logging.getLogger(__name__)
 
 DEBUG_LAUNCH = DEBUG or False
 
+# firejail probes the address it picked on the bridge with ARP, and the probe fails now and then (arp_check: Invalid
+# argument) with exit code 1 before the sandbox starts: a new launch picks another address.
+FIREJAIL_START_ATTEMPTS = 3
+
 
 def get_log_formatter() -> str:
     """Get the current log formatter pattern.
@@ -254,23 +258,33 @@ async def launch_sandbox(
         if stdin is not None:
             subprocess_kwargs["stdin"] = stdin
 
-        process = await asyncio.create_subprocess_exec(
-            *cmd,
-            **subprocess_kwargs,
-        )
+        attempts = FIREJAIL_START_ATTEMPTS if use_fifo and Path(cmd[0]).name == "firejail" else 1
+        for attempt in range(1, attempts + 1):
+            process = await asyncio.create_subprocess_exec(
+                *cmd,
+                **subprocess_kwargs,
+            )
 
-        # Notify caller before blocking on FIFO write (e.g., to start slirp4netns)
-        if on_launched and process.pid is not None:
-            on_launched(process.pid)
+            # Notify caller before blocking on FIFO write (e.g., to start slirp4netns)
+            if on_launched and process.pid is not None:
+                on_launched(process.pid)
 
-        # It's a good time for that
-        gc.collect()
-        if use_fifo:
-            with os.fdopen(await _open_fifo_for_write(pipe_path, process), "wb") as fifo:
-                # serialization only
-                fifo.write(pickle.dumps(process_config))
-                fifo.flush()
+            # It's a good time for that
+            gc.collect()
+            if not use_fifo:
+                break
+            try:
+                with os.fdopen(await _open_fifo_for_write(pipe_path, process), "wb") as fifo:
+                    # serialization only
+                    fifo.write(pickle.dumps(process_config))
+                    fifo.flush()
+            except SandBoxError:
+                if process.returncode is None or attempt == attempts:
+                    raise
+                logger.warning("firejail exited with code %s before the start, launching it again", process.returncode)
+                continue
             pipe_path.unlink()
+            break
         return process
     finally:
         pass

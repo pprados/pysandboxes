@@ -46,6 +46,8 @@
 - Under `qemu`, a device rule uses the guest's own `/dev` instead of sharing the host's.
 - The samples' partial-mode tests run under the provider named by `OS_SANDBOX` instead of always under `subprocess`, so `make sample-tests` now exercises that provider in both modes.
 - The `qemu` container images, including the Ubuntu 24.04 and Python 3.11 guests, no longer fail with `iptables-restore failed: free(): invalid pointer`, and every image is now checked for it.
+- A `firejail` sandbox that exits before it starts, on the failed ARP probe of the address it picked on the bridge, is
+  launched again, up to three times, instead of failing the run.
 - A `net=` port list with a range followed by a single port, such as `80-90,85`, no longer fails with a `TypeError`.
 - `os.path.realpath()` of the interpreter no longer fails when it is reached through a `uv` link, which made `pytest --cov` stop every sandboxed process.
 - An immutable dictionary refuses a forged pickle state.
