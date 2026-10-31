@@ -20,11 +20,11 @@
 `unshare` provider, with `--privileged` for Docker.
 
 
-## [0.0.0] - 202X-XX-XX
+## [0.8.0] - 2026-10-31
 
 ### Added
 - Present Py-Sandboxes as an execution harness for Python in the README.
-- Add the macOS Seatbelt `sandbox-exec` provider, which resolves names through mDNSResponder, with documented host-filtering and DNS limitations.
+- Add the macOS Seatbelt `sandbox-exec` provider, which receives its profile through a private pipe and resolves names through mDNSResponder, with documented host-filtering and DNS limitations.
 - Set `PYSANDBOXES_LOG_LEVEL` to choose the log level of `python-sb`, of `sandboxes()` and of their sandboxed process.
 - Add `make crosshair`, which looks for counterexamples to the PEP 316 contracts written in the docstrings of the pure helpers.
 - Learning summarizes at info level where the learned rules come from, only when a rule was learned.
@@ -45,7 +45,7 @@
 - `os.readlink()` can read a link that a rule names itself.
 - Under `qemu`, a device rule uses the guest's own `/dev` instead of sharing the host's.
 - The samples' partial-mode tests run under the provider named by `OS_SANDBOX` instead of always under `subprocess`, so `make sample-tests` now exercises that provider in both modes.
-- The `qemu` container images no longer fail with `iptables-restore failed: free(): invalid pointer`, and every image is now checked for it.
+- The `qemu` container images, including the Ubuntu 24.04 and Python 3.11 guests, no longer fail with `iptables-restore failed: free(): invalid pointer`, and every image is now checked for it.
 - A `net=` port list with a range followed by a single port, such as `80-90,85`, no longer fails with a `TypeError`.
 - `os.path.realpath()` of the interpreter no longer fails when it is reached through a `uv` link, which made `pytest --cov` stop every sandboxed process.
 - An immutable dictionary refuses a forged pickle state.
@@ -53,7 +53,7 @@
 
 ### Security
 - Raise `virtualenv` to clear its advisories.
-- Relock the samples' dependencies to versions without known vulnerabilities.
+- Relock the samples' dependencies, including `pyasn1`, `joserfc`, `langgraph-sdk`, `brotli` and `gitpython`, to versions without known vulnerabilities.
 
 ## [0.7.0] - 2026-10-22
 
