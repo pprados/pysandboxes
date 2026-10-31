@@ -20,7 +20,7 @@
 `unshare` provider, with `--privileged` for Docker.
 
 
-## [0.8.0] - 2026-10-30
+## [0.0.0] - 202X-XX-XX
 
 ### Added
 - Present Py-Sandboxes as an execution harness for Python in the README.
