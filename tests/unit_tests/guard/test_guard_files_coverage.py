@@ -136,6 +136,7 @@ def test_the_canonical_helpers_flag_the_canonicalization_while_they_run(monkeypa
     assert guard_files._canonicalizing.get() is False
 
 
+@pytest.mark.skipif(sys.platform == "win32", reason="the remapped directory is a POSIX path")
 def test_getcwd_reports_the_remapped_directory_except_inside_realpath(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(guard_files, "_apply_src_to_dest_rules", lambda path: ("/virtual/", None))
     wrapper = guard_files._wrap_os_getcwd(lambda: "/real")

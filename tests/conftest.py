@@ -37,6 +37,7 @@ _LINUX_ONLY_TESTS = [
     "unit_tests/remote/test_slirp_watcher.py",
     "unit_tests/remote/test_apply_netfilter.py",
     "unit_tests/fault_injection/test_landlock_*.py",
+    "unit_tests/guard/test_guard_files_gaps.py",
 ]
 
 _MACOS_ONLY_TESTS = ["integration_tests/remote/test_sandbox_exec.py"]

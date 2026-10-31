@@ -614,6 +614,7 @@ def test_socketpair_is_guarded_on_windows_only(monkeypatch: pytest.MonkeyPatch) 
     assert "socket.socketpair" not in gs.patch_rules(learn=False)
 
 
+@pytest.mark.skipif(sys.platform == "win32", reason="the test names a Windows path by a file name with backslashes")
 def test_an_unknown_platform_reads_no_hosts_file(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     """Only win32 looks under SystemRoot: a platform sorting after it must not."""
     hosts = tmp_path / "System32\\drivers\\etc\\hosts"
