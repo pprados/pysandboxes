@@ -16,8 +16,9 @@ RUN set -eux \
     && rm -rf /var/lib/apt/lists/*
 
 # The guest's iptables-restore must meet the libxtables and the extensions it was built with: a 24.04 guest (1.8.10) or
-# a 23.04 guest (1.8.9) crashes (free(): invalid pointer) on the 1.8.11 of this Debian base. A 25.04 guest has the
-# 1.8.11 already. The release of the guest names the Ubuntu series whose libraries are copied over the base's.
+# a 23.04 guest (1.8.7) crashes (free(): invalid pointer) on the 1.8.11 of this Debian base. A 25.04 guest has the
+# 1.8.11 already. The release of the guest names the Ubuntu series whose libraries are copied over the base's, with the
+# tools that load them: the base's own iptables-restore would miss symbols of an older libxtables.
 RUN set -eux \
     && release="$(ls "${PYSANDBOXES_VM_IMAGES_DIR}" | sed -n 's/^ubuntu-\([0-9.]*\)-.*/\1/p' | head -1)" \
     && case "$release" in 24.04) series=noble; mirror=http://archive.ubuntu.com/ubuntu ;; \
@@ -34,6 +35,7 @@ RUN set -eux \
         $apt_ub download iptables/$series libxtables12/$series libip4tc2/$series libip6tc2/$series libnftnl11/$series libmnl0/$series; \
         for deb in *.deb; do dpkg-deb -x "$deb" /tmp/ub/x; done; \
         for lib in /tmp/ub/x/usr/lib/*-linux-gnu; do cp -a "$lib/." "/usr/lib/$(basename "$lib")/"; done; \
+        for bin in sbin bin; do [ -d "/tmp/ub/x/usr/$bin" ] && cp -a "/tmp/ub/x/usr/$bin/." "/usr/$bin/"; done; \
         rm -rf /tmp/ub; \
         apt-get purge -y ubuntu-keyring; \
         apt-get autoremove -y; \

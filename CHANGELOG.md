@@ -20,6 +20,12 @@
 `unshare` provider, with `--privileged` for Docker.
 
 
+## [0.0.0] - 202X-XX-XX
+
+### Fixed
+- The `qemu` container image for Python 3.11 keeps a working `iptables-restore` of its own next to the libraries its
+  guest needs.
+
 ## [0.8.0] - 2026-10-31
 
 ### Added
