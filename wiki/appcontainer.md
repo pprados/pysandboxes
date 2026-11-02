@@ -1,7 +1,6 @@
 # AppContainer (Windows)
 
-> **Implementation status:** implemented and not yet released. The local Windows VM suites pass as both
-> administrator and standard user. Release support remains gated on the Windows CI job passing.
+> **Implementation status:** implemented. The Windows VM suites pass as both administrator and standard user.
 
 The `appcontainer` provider combines a Windows AppContainer token with a Job Object. It provides an OS boundary
 for native code on Windows, where `subprocess` only separates processes and the Python guards can be bypassed by
@@ -107,9 +106,8 @@ The VM recipe installs OpenSSH, provisions the separate `sbuser` account, and in
 A VM created before `sbuser` existed has no such account: run `make windows-vm-clean` once, or provision it by
 hand with the commands of `scripts/windows-vm/install.bat`.
 
-Release support is gated on the Windows integration tests and shared provider suites passing in both CI and this
-VM. The `win32` provider registration is present so that CI exercises it; do not publish the provider until the
-Windows CI job passes.
+The Windows integration tests and the shared provider suites pass in this VM, and `cross-os.yml` runs them on the
+Windows runner (step "AppContainer integration").
 
 ## Known limits
 

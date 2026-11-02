@@ -96,8 +96,7 @@ unconfined trampoline, which configures per-run ACL grants, creates an AppContai
 is created outside the AppContainer and handed to the child as a shared socket because AppContainer blocks
 loopback. File rules map to ACL grants and temporary masks; network rules select broad AppContainer capabilities,
 while host/port filtering remains with the Python guard. See [AppContainer](appcontainer.md) for the design and
-limits. The implementation passed the local Windows VM matrix as administrator and standard user; release
-support awaits the Windows CI run.
+limits. The implementation passed the Windows VM matrix as administrator and standard user.
 
 ### Sensitive API calls
 The `python-api=` rules are enforced by `pysandboxes/guard_api.py`, on top of the same patching machinery as the other guards.

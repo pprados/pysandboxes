@@ -5,7 +5,7 @@
 | ✅ 3.11   | ✅ none         | ✅ Linux    | ✅ Env     |
 | ✅ 3.12   | ✅ subprocess   | ✅ WSL      | ✅ Files   |
 | ✅ 3.13   | ✅ landlock     | ✅ MacOS²   | ✅ Network |
-| ✅ 3.14   | ✅ bwrap        | ◐ Windows² | ✅ Import  |
+| ✅ 3.14   | ✅ bwrap        | ✅ Windows | ✅ Import  |
 | ☐ 3.15   | ✅ firejail     |            | ✅ API     |
 |          | ✅ unshare       |            | ✅ Eval    |
 |          | ✅ qemu          |            | ☐ Source  |
@@ -14,7 +14,7 @@
 |          | ✅ Podman¹       |            |           |
 |          | ☐ gVisor        |            |           |
 |          | ☐ micro-VM      |            |           |
-|          | ◐ appcontainer² |            |           |
+|          | ✅ appcontainer  |            |           |
 
 ¹ Docker and Podman are not providers of their own: a container runs the
 `unshare` provider, with `--privileged` for Docker.
@@ -24,7 +24,7 @@
 
 ### Added
 - Add the Windows AppContainer provider (`os-sandbox=appcontainer`), which confines files and network with an
-  AppContainer token. Its local administrator and standard-user suites pass; release support awaits the Windows CI run.
+  AppContainer token, and runs without administrator rights.
 - Configuration profiles can be included only when `sys.platform` matches, so OS-specific permissions can be kept
   in separate files.
 

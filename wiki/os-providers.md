@@ -40,7 +40,7 @@ The providers that can wrap the Python sandbox are:
 | [landlock](https://landlock.io/)                                | [here](landlock.md)                   | • Directory access<br/>• Network TCP port filtering                          | This is a technology that allows an auto isolation inside a Linux process.                                                               |
 | [qemu](https://www.qemu.org/)                            | [here](qemu.md)                       | • Total emulation of OS and CPU                                              | No need of privilege. Use KVM if it's possible, else use the emulation.                                                                  |
 | sandbox-exec | [here](sandbox-exec.md) | • Seatbelt path and port filtering<br/>• Deprecated by Apple<br/>• No remote host/IP filtering | Legacy macOS-only profile launcher. |
-| [appcontainer](appcontainer.md) | [here](appcontainer.md) | • File ACLs<br/>• AppContainer network capabilities<br/>• Job Object | Windows-only provider; local administrator and standard-user suites pass, and the Windows CI run proves the platform claim. |
+| [appcontainer](appcontainer.md) | [here](appcontainer.md) | • File ACLs<br/>• AppContainer network capabilities<br/>• Job Object | Windows-only provider; its administrator and standard-user suites pass, and `cross-os.yml` runs them on the Windows runner. |
 
 The `none` column means plain Python with no sandbox. `py-sandbox` shows the Python layer. Each OS column shows that provider's controls; it does not include Python controls. In practice, OS providers wrap the Python layer.
 
