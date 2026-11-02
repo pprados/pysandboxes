@@ -63,6 +63,36 @@ jobs:
     - name: Guard layer
       run: uv run pytest tests/unit_tests/guard
 
+    - name: AppContainer slowness diagnostic
+      if: ${{ matrix.os == 'windows-latest' && matrix.python-version == '3.13' && !cancelled() }}
+      continue-on-error: true
+      timeout-minutes: 10
+      run: |
+        uv run python - <<'PY'
+        import os, subprocess, sys, time
+        for label, root in (("base_prefix", sys.base_prefix), ("venv", sys.prefix)):
+            start = time.time()
+            files = sum(len(names) for _, _, names in os.walk(root))
+            print(f"{label} {root}: {files} files, walked in {time.time() - start:.1f}s", flush=True)
+            start = time.time()
+            try:
+                done = subprocess.run(["icacls.exe", root, "/T"], capture_output=True, text=True, timeout=240)
+                print(f"{label}: icacls /T rc={done.returncode} in {time.time() - start:.1f}s", flush=True)
+            except subprocess.TimeoutExpired:
+                print(f"{label}: icacls /T still running after 240s", flush=True)
+        test = "tests/integration_tests/test_guards_with_providers.py::test_eval_is_refused_under_every_backend"
+        child = subprocess.Popen([sys.executable, "-m", "pytest", "-x", "-s", "-k", "appcontainer", test])
+        started = time.time()
+        for mark in (45, 120):
+            time.sleep(max(0, mark - (time.time() - started)))
+            print(f"--- processes at {mark}s (pytest exit: {child.poll()})", flush=True)
+            subprocess.run(["powershell", "-NoProfile", "-Command",
+                "Get-CimInstance Win32_Process | Where-Object { $_.Name -match 'python|icacls|powershell|cmd' } | "
+                "Select-Object ProcessId,ParentProcessId,Name,CreationDate,CommandLine | Format-List"])
+        child.kill()
+        print(f"pytest ended after {time.time() - started:.0f}s", flush=True)
+        PY
+
     - name: Provider suites
       if: ${{ !cancelled() }}  # runs even when the guard layer failed: both results are wanted
       timeout-minutes: 20
