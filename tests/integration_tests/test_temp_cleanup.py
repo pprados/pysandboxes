@@ -36,13 +36,16 @@ def _temp_entries() -> set[str]:
     return {name for name in os.listdir(tmp_dir) if name.startswith("tmp")}
 
 
-@pytest.mark.parametrize("os_sandbox", ["subprocess", "unshare"])
+_PROVIDERS = ["subprocess", "unshare", *(["appcontainer"] if sys.platform == "win32" else [])]
+
+
+@pytest.mark.parametrize("os_sandbox", _PROVIDERS)
 def test_a_sandbox_leaves_no_temporary_file_behind(os_sandbox: str) -> None:
     """Run one sandbox to completion: the temporary directory must look untouched."""
     reason = provider_skip_reason(os_sandbox)
     if reason:
         pytest.skip(reason)
-    if os_sandbox != "subprocess" and not default_route_available():
+    if os_sandbox not in ("subprocess", "appcontainer") and not default_route_available():
         pytest.skip(NO_DEFAULT_ROUTE_REASON)
     if not profile_hosts_resolvable():
         pytest.skip(NO_PROFILE_DNS_REASON)

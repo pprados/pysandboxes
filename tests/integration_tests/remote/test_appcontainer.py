@@ -3,8 +3,10 @@
 """Windows integration tests for the AppContainer OS provider."""
 
 import os
+import socket
 import subprocess
 import sys
+import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
@@ -59,6 +61,47 @@ def _sddl(path: Path) -> str:
         check=True,
     )
     return result.stdout.strip()
+
+
+@pytest.mark.skipif(sys.platform != "win32", reason="AppContainer is Windows-only")
+@pytest.mark.parametrize("allow_rule", [False, True], ids=["no-net-rule", "net-allow-rule"])
+def test_network_is_denied_by_default_and_loopback_stays_blocked(tmp_path: Path, allow_rule: bool) -> None:
+    server = socket.socket()
+    server.bind(("127.0.0.1", 0))
+    server.listen()
+    port = server.getsockname()[1]
+    stop = threading.Event()
+
+    def serve() -> None:
+        server.settimeout(0.2)
+        while not stop.is_set():
+            try:
+                server.accept()[0].close()
+            except OSError:
+                continue
+
+    thread = threading.Thread(target=serve, daemon=True)
+    thread.start()
+    try:
+        rules = (f"net=ALLOW|TCP|127.0.0.1|{port}|OUT",) if allow_rule else ()
+        code = (
+            "import socket\n"
+            "try:\n"
+            f"    socket.create_connection(('127.0.0.1', {port}), timeout=5).close()\n"
+            "    print('CONNECTED')\n"
+            "except OSError as exc:\n"
+            "    print('REFUSED', type(exc).__name__)\n"
+        )
+
+        result = _run(tmp_path, _profile(tmp_path, *rules), code)
+    finally:
+        stop.set()
+        thread.join()
+        server.close()
+
+    assert result.returncode == 0, result.stderr
+    assert "REFUSED" in result.stdout
+    assert "CONNECTED" not in result.stdout
 
 
 @pytest.mark.skipif(sys.platform != "win32", reason="AppContainer is Windows-only")

@@ -30,6 +30,8 @@ from ._env import provider_skip_reason
 
 ROOT_DIR = Path(__file__).resolve().parent.parent.parent
 _GATEWAY = "10.0.2.2"
+# `appcontainer` is left out on purpose: it grants a network capability, not a host or port rule, and blocks the
+# loopback this suite connects to. Its default deny is covered by tests/integration_tests/remote/test_appcontainer.py.
 _PROVIDERS = tuple(
     provider
     for provider in ("bwrap", "unshare", "qemu", "landlock", "sandbox-exec")
