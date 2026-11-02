@@ -36,6 +36,17 @@ def test_a_read_grant_does_not_cover_write(tmp_path: Path) -> None:
     assert not appcontainer_acl._has_allow_ace(tmp_path, (_ALL_APPLICATION_PACKAGES,), appcontainer_acl._MODIFY)
 
 
+def test_a_revoke_removes_the_grant_from_the_path_and_its_children(tmp_path: Path) -> None:
+    child = tmp_path / "child.txt"
+    child.touch()
+    appcontainer_acl._grant_dacl(tmp_path, _ALL_APPLICATION_PACKAGES, appcontainer_acl._READ_EXECUTE, True)
+
+    appcontainer_acl._revoke_dacl(tmp_path, _ALL_APPLICATION_PACKAGES)
+
+    assert not appcontainer_acl._has_allow_ace(tmp_path, (_ALL_APPLICATION_PACKAGES,), appcontainer_acl._READ_EXECUTE)
+    assert "ALL APPLICATION PACKAGES" not in _listing(child)
+
+
 def test_a_missing_path_is_reported_as_an_os_error(tmp_path: Path) -> None:
     with pytest.raises(OSError):
         appcontainer_acl._grant_dacl(tmp_path / "missing", _ALL_APPLICATION_PACKAGES, appcontainer_acl._MODIFY, False)

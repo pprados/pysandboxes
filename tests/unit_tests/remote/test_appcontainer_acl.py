@@ -106,19 +106,16 @@ def test_finish_run_removes_its_package_sid_grants(tmp_path: Path, monkeypatch) 
     monkeypatch.setenv("LOCALAPPDATA", str(tmp_path))
     monkeypatch.setattr(appcontainer_acl, "_acl_lock", nullcontext)
     path = tmp_path / "exposed"
+    path.mkdir()
+    gone = tmp_path / "gone"
     appcontainer_acl._write_run_journal(
-        {"package": {"profile": "profile", "grants": [str(path)], "window_access": False}}
+        {"package": {"profile": "profile", "grants": [str(path), str(gone)], "window_access": False}}
     )
-    calls: list[tuple[str, dict[str, str]]] = []
-
-    def run_script(script: str, variables: dict[str, str], *, locked: bool = False) -> str:
-        calls.append((script, variables))
-        return ""
-
-    monkeypatch.setattr(appcontainer_acl, "_run_acl_script", run_script)
+    revoked: list[tuple[Path, str]] = []
+    monkeypatch.setattr(appcontainer_acl, "_revoke_dacl", lambda target, sid: revoked.append((target, sid)))
 
     assert appcontainer_acl.finish_run("package") == ("profile",)
-    assert calls[0][1] == {"PYSB_PATH": str(path), "PYSB_SID": "package"}
+    assert revoked == [(path, "package")]
     assert appcontainer_acl._read_run_journal() == {}
 
 

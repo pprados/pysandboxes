@@ -187,6 +187,8 @@ _PROTECTED_DACL = 0x80000000
 _UNPROTECTED_DACL = 0x20000000
 _SE_DACL_PROTECTED = 0x1000
 _SUB_CONTAINERS_AND_OBJECTS_INHERIT = 3
+_GRANT_ACCESS = 1
+_REVOKE_ACCESS = 4
 _ACL_SIZE_INFORMATION = 2
 _ACE_SID_OFFSET = 8
 
@@ -285,12 +287,15 @@ def _dacl_of(path: Path) -> Iterator[tuple[ctypes.c_void_p, bool]]:
         kernel32.LocalFree(descriptor)
 
 
-def _grant_dacl(path: Path, sid: str, mask: int, inherit: bool) -> None:
-    """Merge an allow entry for ``sid`` into a path's DACL, keeping its inheritance protection."""
+def _edit_dacl(path: Path, sid: str, mode: int, mask: int, inherit: bool) -> None:
+    """Merge one access entry for ``sid`` into a path's DACL, keeping its inheritance protection."""
     advapi32, kernel32 = _win32_apis()
     with _sid_pointer(sid) as sid_pointer, _dacl_of(path) as (dacl, protected):
         access = _ExplicitAccess(
-            mask, 1, _SUB_CONTAINERS_AND_OBJECTS_INHERIT if inherit else 0, _Trustee(None, 0, 0, 0, sid_pointer.value)
+            mask,
+            mode,
+            _SUB_CONTAINERS_AND_OBJECTS_INHERIT if inherit else 0,
+            _Trustee(None, 0, 0, 0, sid_pointer.value),
         )
         merged = ctypes.c_void_p()
         _check_status(advapi32.SetEntriesInAclW(1, ctypes.byref(access), dacl, ctypes.byref(merged)))
@@ -301,6 +306,16 @@ def _grant_dacl(path: Path, sid: str, mask: int, inherit: bool) -> None:
             )
         finally:
             kernel32.LocalFree(merged)
+
+
+def _grant_dacl(path: Path, sid: str, mask: int, inherit: bool) -> None:
+    """Add an allow entry for ``sid`` to a path's DACL."""
+    _edit_dacl(path, sid, _GRANT_ACCESS, mask, inherit)
+
+
+def _revoke_dacl(path: Path, sid: str) -> None:
+    """Remove every explicit entry of ``sid`` from a path's DACL."""
+    _edit_dacl(path, sid, _REVOKE_ACCESS, 0, False)
 
 
 def _has_allow_ace(path: Path, sids: tuple[str, ...], mask: int) -> bool:
@@ -652,17 +667,8 @@ def _finish_run_locked(package_sid: str) -> tuple[str, ...]:
     if run is None:
         return ()
     for path in run["grants"]:
-        sddl = _run_acl_script(
-            "if (Test-Path -LiteralPath $env:PYSB_PATH) { "
-            "$acl = Get-Acl -LiteralPath $env:PYSB_PATH; "
-            "$rules = @($acl.Access | Where-Object { $_.IdentityReference.Value -eq $env:PYSB_SID }); "
-            "foreach ($rule in $rules) { [void]$acl.RemoveAccessRuleSpecific($rule) }; "
-            "$acl.GetSecurityDescriptorSddlForm([System.Security.AccessControl.AccessControlSections]::Access) }",
-            {"PYSB_PATH": path, "PYSB_SID": package_sid},
-            locked=True,
-        )
-        if sddl.strip():
-            _set_acl_sddl(Path(path), sddl.strip())
+        if Path(path).exists():
+            _revoke_dacl(Path(path), package_sid)
     if run.get("window_access"):
         from .win_window import remove_service_window_access
 
