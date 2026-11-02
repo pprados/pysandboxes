@@ -384,7 +384,7 @@ def activate_sandboxes(
     if envs is None:
         envs = os.environ
     provider_key = rules_provider if rules_provider is not None else all_rules.os_sandbox
-    if provider_key and provider_key != "none":
+    if provider_key:
         from pysandboxes._os_sandbox import providers_factory
 
         if provider_key not in providers_factory:

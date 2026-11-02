@@ -60,7 +60,7 @@ def harness(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> Any:
         h.journal.append(("run_guest", ((config, module_specs), {})))
         return 11
 
-    async def run_server(config: DaemonParameters) -> int:
+    async def run_server(config: DaemonParameters, shared_socket: Any = None) -> int:
         h.journal.append(("run_server", ((config,), {})))
         return 7
 
