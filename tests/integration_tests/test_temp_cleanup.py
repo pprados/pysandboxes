@@ -17,6 +17,8 @@ from pathlib import Path
 
 import pytest
 
+from pysandboxes._os_sandbox import unsupported_platform_reason
+
 from ._env import (
     NO_DEFAULT_ROUTE_REASON,
     NO_PROFILE_DNS_REASON,
@@ -36,7 +38,8 @@ def _temp_entries() -> set[str]:
     return {name for name in os.listdir(tmp_dir) if name.startswith("tmp")}
 
 
-_PROVIDERS = ["subprocess", "unshare", *(["appcontainer"] if sys.platform == "win32" else [])]
+# A provider the platform does not have gets no row: with PYSANDBOXES_FAIL_ON_SKIP a skip fails the run.
+_PROVIDERS = [name for name in ("subprocess", "unshare", "appcontainer") if not unsupported_platform_reason(name)]
 
 
 @pytest.mark.parametrize("os_sandbox", _PROVIDERS)

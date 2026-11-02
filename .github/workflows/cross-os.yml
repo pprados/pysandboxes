@@ -88,3 +88,4 @@ jobs:
       run: >-
         uv run pytest -rs
         tests/integration_tests/remote/test_appcontainer.py
+        tests/integration_tests/test_temp_cleanup.py
