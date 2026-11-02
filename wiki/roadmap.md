@@ -19,7 +19,7 @@ Planned work, in no committed order:
     - See [here](https://huntr.com/bounties/63ab1cfe-b573-4cf5-a7d3-fb6c957e34b0)
 - [ ] OS Compatible
   - [X] Linux
-  - [ ] Windows
+  - [X] Windows
   - [X] Mac OS
 - [ ] OS-sandboxes
   - [X] Basic
