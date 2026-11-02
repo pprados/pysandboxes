@@ -2,7 +2,6 @@
 # License: Apache V2
 """Pure planning helpers for the Windows AppContainer access-control layer."""
 
-import base64
 import ctypes
 import errno
 import glob
@@ -165,6 +164,15 @@ _GRANT_ACCESS = 1
 _REVOKE_ACCESS = 4
 _ACL_SIZE_INFORMATION = 2
 _ACE_SID_OFFSET = 8
+_ACL_REVISION = 2
+_ACL_HEADER_SIZE = 8
+_ACE_HEADER_SIZE = 8
+_ACE_INHERITED_FLAG = 0x10
+_ACCESS_DENIED_ACE_TYPE = 1
+_FULL_CONTROL = 0x1F01FF
+_OWNER_RIGHTS = "S-1-3-4"
+_SDDL_REVISION = 1
+_NO_INDEX = 0xFFFFFFFF
 
 
 class _Trustee(ctypes.Structure):
@@ -215,6 +223,12 @@ def _win32_apis() -> tuple[Any, Any]:
     advapi32.GetAclInformation.argtypes = (pointer, pointer, dword, dword)
     advapi32.GetAce.argtypes = (pointer, dword, out)
     advapi32.EqualSid.argtypes = (pointer, pointer)
+    advapi32.GetLengthSid.argtypes = (pointer,)
+    advapi32.GetLengthSid.restype = dword
+    advapi32.InitializeAcl.argtypes = (pointer, dword, dword)
+    advapi32.AddAce.argtypes = (pointer, dword, dword, pointer, dword)
+    advapi32.AddAccessDeniedAce.argtypes = (pointer, dword, dword, pointer)
+    advapi32.ConvertSecurityDescriptorToStringSecurityDescriptorW.argtypes = (pointer, dword, dword, out, pointer)
     kernel32.LocalFree.argtypes = (pointer,)
     kernel32.LocalFree.restype = pointer
     return advapi32, kernel32
@@ -242,7 +256,7 @@ def _sid_pointer(sid: str) -> Iterator[ctypes.c_void_p]:
 
 
 @contextmanager
-def _dacl_of(path: Path) -> Iterator[tuple[ctypes.c_void_p, bool]]:
+def _dacl_of(path: Path) -> Iterator[tuple[ctypes.c_void_p, bool, ctypes.c_void_p]]:
     """Yield a path's DACL and whether it is protected from inheritance, without translating any SID to a name."""
     advapi32, kernel32 = _win32_apis()
     dacl = ctypes.c_void_p()
@@ -256,7 +270,7 @@ def _dacl_of(path: Path) -> Iterator[tuple[ctypes.c_void_p, bool]]:
         control = ctypes.c_uint16()
         revision = ctypes.c_uint32()
         _check_call(advapi32.GetSecurityDescriptorControl(descriptor, ctypes.byref(control), ctypes.byref(revision)))
-        yield dacl, bool(control.value & _SE_DACL_PROTECTED)
+        yield dacl, bool(control.value & _SE_DACL_PROTECTED), descriptor
     finally:
         kernel32.LocalFree(descriptor)
 
@@ -264,7 +278,7 @@ def _dacl_of(path: Path) -> Iterator[tuple[ctypes.c_void_p, bool]]:
 def _edit_dacl(path: Path, sid: str, mode: int, mask: int, inherit: bool) -> None:
     """Merge one access entry for ``sid`` into a path's DACL, keeping its inheritance protection."""
     advapi32, kernel32 = _win32_apis()
-    with _sid_pointer(sid) as sid_pointer, _dacl_of(path) as (dacl, protected):
+    with _sid_pointer(sid) as sid_pointer, _dacl_of(path) as (dacl, protected, _):
         access = _ExplicitAccess(
             mask,
             mode,
@@ -295,7 +309,7 @@ def _revoke_dacl(path: Path, sid: str) -> None:
 def _has_allow_ace(path: Path, sids: tuple[str, ...], mask: int) -> bool:
     """Return whether a path's DACL holds an allow entry covering ``mask`` for one of ``sids``."""
     advapi32, _ = _win32_apis()
-    with ExitStack() as stack, _dacl_of(path) as (dacl, _):
+    with ExitStack() as stack, _dacl_of(path) as (dacl, _, _):
         if not dacl.value:
             return False
         pointers = [stack.enter_context(_sid_pointer(sid)) for sid in sids]
@@ -316,6 +330,67 @@ def _has_broad_appcontainer_read_access(path: Path) -> bool:
     return _has_allow_ace(path, _ALL_APPLICATION_PACKAGES, _READ_EXECUTE)
 
 
+def _dacl_sddl(path: Path) -> str:
+    """Return the DACL of a path as an SDDL string."""
+    advapi32, kernel32 = _win32_apis()
+    with _dacl_of(path) as (_, _, descriptor):
+        text = ctypes.c_void_p()
+        _check_call(
+            advapi32.ConvertSecurityDescriptorToStringSecurityDescriptorW(
+                descriptor, _SDDL_REVISION, _DACL_INFORMATION, ctypes.byref(text), None
+            )
+        )
+        try:
+            return ctypes.wstring_at(text.value or 0)
+        finally:
+            kernel32.LocalFree(text)
+
+
+def _deny_access(path: Path, package_sid: str, runtime_sid: str, *, protect_inheritance: bool) -> None:
+    """Deny a package SID everything on a path, dropping its own, the runtime SID's and OWNER RIGHTS entries.
+
+    The other entries keep their order. Cutting the inheritance makes the inherited entries explicit.
+    """
+    advapi32, kernel32 = _win32_apis()
+    with ExitStack() as stack, _dacl_of(path) as (dacl, protected, _):
+        removed = [stack.enter_context(_sid_pointer(sid)) for sid in (package_sid, runtime_sid, _OWNER_RIGHTS)]
+        kept: list[bytes] = []
+        if dacl.value:
+            size = _AclSizeInformation()
+            _check_call(
+                advapi32.GetAclInformation(dacl, ctypes.byref(size), ctypes.sizeof(size), _ACL_SIZE_INFORMATION)
+            )
+            for index in range(size.AceCount):
+                entry = ctypes.c_void_p()
+                _check_call(advapi32.GetAce(dacl, index, ctypes.byref(entry)))
+                address = entry.value or 0
+                header = _AceHeader.from_address(address)
+                if header.AceType in (0, _ACCESS_DENIED_ACE_TYPE) and any(
+                    advapi32.EqualSid(address + _ACE_SID_OFFSET, pointer) for pointer in removed
+                ):
+                    continue
+                entry_bytes = bytearray(ctypes.string_at(address, header.AceSize))
+                if protect_inheritance:
+                    entry_bytes[1] &= ~_ACE_INHERITED_FLAG
+                kept.append(bytes(entry_bytes))
+        deny_size = _ACE_HEADER_SIZE + advapi32.GetLengthSid(removed[0])
+        total = (_ACL_HEADER_SIZE + deny_size + sum(len(ace) for ace in kept) + 3) // 4 * 4
+        buffer = ctypes.create_string_buffer(total)
+        _check_call(advapi32.InitializeAcl(ctypes.addressof(buffer), total, _ACL_REVISION))
+        _check_call(advapi32.AddAccessDeniedAce(ctypes.addressof(buffer), _ACL_REVISION, _FULL_CONTROL, removed[0]))
+        for ace in kept:
+            block = ctypes.create_string_buffer(ace, len(ace))
+            _check_call(
+                advapi32.AddAce(ctypes.addressof(buffer), _ACL_REVISION, _NO_INDEX, ctypes.addressof(block), len(ace))
+            )
+        flag = _PROTECTED_DACL if protect_inheritance or protected else _UNPROTECTED_DACL
+        _check_status(
+            advapi32.SetNamedSecurityInfoW(
+                str(path), 1, _DACL_INFORMATION | flag, None, None, ctypes.addressof(buffer), None
+            )
+        )
+
+
 def mask_acl(path: Path, package_sid: str, runtime_sid: str) -> None:
     """Mask an ignored path and retain its original descriptor until the last run exits."""
     path_key = _mask_path_key(path)
@@ -326,64 +401,12 @@ def mask_acl(path: Path, package_sid: str, runtime_sid: str) -> None:
             if package_sid not in entry["users"]:
                 entry["users"].append(package_sid)
                 _write_mask_journal(journal)
-                _remove_mask_access(path, package_sid, runtime_sid, protect_inheritance=False)
+                _deny_access(path, package_sid, runtime_sid, protect_inheritance=False)
             return
-        sddl = _run_acl_script(
-            "([string](Get-Acl -LiteralPath $env:PYSB_PATH).Sddl).Trim()",
-            {"PYSB_PATH": str(path)},
-            locked=True,
-        )
+        sddl = _dacl_sddl(path)
         journal[path_key] = {"sddl": sddl, "users": [package_sid]}
         _write_mask_journal(journal)
-        _remove_mask_access(path, package_sid, runtime_sid, protect_inheritance=True)
-
-
-def _remove_mask_access(path: Path, package_sid: str, runtime_sid: str, *, protect_inheritance: bool) -> None:
-    protect = "$acl.SetAccessRuleProtection($true, $true); " if protect_inheritance else ""
-    deny_package = (
-        "$package = New-Object -TypeName System.Security.Principal.SecurityIdentifier -ArgumentList $env:PYSB_SID; "
-        "$deny = New-Object -TypeName System.Security.AccessControl.FileSystemAccessRule -ArgumentList "
-        "@($package, [System.Security.AccessControl.FileSystemRights]::FullControl, "
-        "[System.Security.AccessControl.AccessControlType]::Deny); $acl.AddAccessRule($deny); "
-    )
-    sddl = _run_acl_script(
-        "$acl = Get-Acl -LiteralPath $env:PYSB_PATH; "
-        + protect
-        + "$sids = @($env:PYSB_SID, $env:PYSB_RUNTIME_SID, 'S-1-3-4'); "
-        "$rules = @($acl.Access | Where-Object { $sids -contains $_.IdentityReference.Value }); "
-        "foreach ($rule in $rules) { [void]$acl.RemoveAccessRuleSpecific($rule) }; "
-        + deny_package
-        + "$acl.GetSecurityDescriptorSddlForm([System.Security.AccessControl.AccessControlSections]::Access)",
-        {"PYSB_PATH": str(path), "PYSB_SID": package_sid, "PYSB_RUNTIME_SID": runtime_sid},
-        locked=True,
-    ).strip()
-    _set_acl_sddl(path, sddl)
-
-
-def _run_acl_script(script: str, variables: dict[str, str], *, locked: bool = False) -> str:
-    if sys.platform != "win32":
-        raise OSError("AppContainer ACL operations are available only on win32")
-    script = "$ErrorActionPreference = 'Stop'; " + script
-    encoded = base64.b64encode(script.encode("utf-16-le")).decode("ascii")
-
-    def run_script() -> subprocess.CompletedProcess[str]:
-        result = subprocess.run(
-            ["powershell.exe", "-NoLogo", "-NoProfile", "-NonInteractive", "-EncodedCommand", encoded],
-            capture_output=True,
-            text=True,
-            check=False,
-            env={**os.environ, **variables, "ErrorActionPreference": "Stop"},
-        )
-        return result
-
-    if locked:
-        result = run_script()
-    else:
-        with _acl_lock():
-            result = run_script()
-    if result.returncode:
-        raise OSError(f"AppContainer ACL operation failed for {variables.get('PYSB_PATH')}: {result.stderr.strip()}")
-    return result.stdout
+        _deny_access(path, package_sid, runtime_sid, protect_inheritance=True)
 
 
 def _set_acl_sddl(path: Path, sddl: str) -> None:

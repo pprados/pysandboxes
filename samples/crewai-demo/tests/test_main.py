@@ -39,4 +39,5 @@ def test_main_kickoff_prints(
     mock_crew.kickoff.assert_called_once()
     assert (tmp_path / ".local/share/crewai-demo").is_dir()
     assert (tmp_path / ".local/share/crewai/credentials").is_dir()
-    assert (tmp_path / "AppData/Local/CrewAI").is_dir()
+    assert (tmp_path / "AppData/Local/CrewAI/crewai-demo").is_dir()
+    assert (tmp_path / "AppData/Local/crewai/credentials").is_dir()

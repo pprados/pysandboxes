@@ -73,13 +73,13 @@ def test_ignore_under_writable_exposure_is_reported(tmp_path: Path) -> None:
 def test_ignore_mask_is_kept_until_its_last_run_exits(tmp_path: Path, monkeypatch) -> None:  # type: ignore[no-untyped-def]
     monkeypatch.setenv("LOCALAPPDATA", str(tmp_path))
     monkeypatch.setattr(appcontainer_acl, "_acl_lock", nullcontext)
-    calls: list[str] = []
-
-    def run_script(script: str, variables: dict[str, str], *, locked: bool = False) -> str:
-        calls.append(script)
-        return "original-sddl" if ").Sddl" in script or "GetSecurityDescriptorSddlForm" in script else ""
-
-    monkeypatch.setattr(appcontainer_acl, "_run_acl_script", run_script)
+    monkeypatch.setattr(appcontainer_acl, "_dacl_sddl", lambda path: "original-sddl")
+    denied: list[tuple[str, bool]] = []
+    monkeypatch.setattr(
+        appcontainer_acl,
+        "_deny_access",
+        lambda path, package, runtime, *, protect_inheritance: denied.append((package, protect_inheritance)),
+    )
     set_calls: list[tuple[Path, str]] = []
     monkeypatch.setattr(appcontainer_acl, "_set_acl_sddl", lambda path, sddl: set_calls.append((path, sddl)))
     path = tmp_path / "exposed" / "secret.txt"
@@ -94,12 +94,11 @@ def test_ignore_mask_is_kept_until_its_last_run_exits(tmp_path: Path, monkeypatc
     appcontainer_acl.finish_run("package-1")
     mask_journal = appcontainer_acl._read_mask_journal()
     assert mask_journal[appcontainer_acl._mask_path_key(path)]["users"] == ["package-2"]
-    assert len(calls) == 3
+    assert denied == [("package-1", True), ("package-2", False)]
 
     appcontainer_acl.finish_run("package-2")
     assert appcontainer_acl._read_mask_journal() == {}
-    assert len(calls) == 3
-    assert set_calls[-1] == (path, "original-sddl")
+    assert set_calls == [(path, "original-sddl")]
 
 
 def test_finish_run_removes_its_package_sid_grants(tmp_path: Path, monkeypatch) -> None:  # type: ignore[no-untyped-def]

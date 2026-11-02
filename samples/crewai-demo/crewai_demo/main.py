@@ -93,7 +93,8 @@ def _read_user_turn() -> str | None:
 
 def _ensure_runtime_directories() -> None:
     """Create the CrewAI paths granted by this sample's sandbox profile."""
-    (Path(os.environ.get("LOCALAPPDATA", Path.cwd())) / "CrewAI").mkdir(parents=True, exist_ok=True)
+    for relative_path in ("CrewAI/crewai-demo", "crewai/credentials"):
+        (Path(os.environ.get("LOCALAPPDATA", Path.cwd())) / relative_path).mkdir(parents=True, exist_ok=True)
     for relative_path in (
         ".config/crewai",
         ".local/share/crewai-demo",
