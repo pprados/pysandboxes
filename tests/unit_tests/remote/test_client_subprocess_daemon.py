@@ -65,10 +65,10 @@ class TestHooks:
         daemon.on_process_launched(1)
         assert asyncio.run(daemon._on_process_started()) is None
 
-    def test_a_plain_subprocess_keeps_the_rules_as_they_are(self, tmp_path: Path) -> None:
+    def test_a_plain_subprocess_keeps_the_rules_as_they_are(self) -> None:
         daemon = SubProcessDaemon("tok")
 
-        assert daemon.update_rules_and_activate(envs=Envs({}), all_rules=EmptyRules, temp=tmp_path) is EmptyRules
+        assert daemon.update_rules_and_activate(envs=Envs({}), all_rules=EmptyRules) is EmptyRules
 
 
 class TestSubprocessCmd:

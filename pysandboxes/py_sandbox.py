@@ -7,13 +7,11 @@ configuration parsing, rule activation, and integration with various security
 guards (files, network, imports, environment).
 """
 
-import contextlib
 import inspect
 import logging
 import os
 import re
 import sys
-import tempfile
 import types
 import uuid
 
@@ -393,23 +391,10 @@ def activate_sandboxes(
         os_provider: BaseDaemon = providers_factory[provider_key](
             str(uuid.uuid4()),
         )
-        # Offer the opportunity to update the rules (add, remove, etc.)
-        # The directory does not outlive the call: the only provider that writes into
-        # a `temp` does so for the netfilter FIFOs, and those need a `pipe_path`, which
-        # this call site has none of. A bare `mkdtemp()` here left one empty directory
-        # behind per sandboxed process -- thousands of them, since this runs on every
-        # activation. Removing it before the guards are armed also keeps the unlink out
-        # of the file guard's way. `none` ignores `temp`, and gets none: inside an AppContainer, Python gives a
-        # directory made by `mkdtemp` an owner-only ACL its own process cannot read, so removing it fails.
-        temp_context = (
-            contextlib.nullcontext(tempfile.gettempdir()) if provider_key == "none" else tempfile.TemporaryDirectory()
-        )
-        with temp_context as temp_dir:
-            all_rules = os_provider.update_rules_and_activate(
-                all_rules=all_rules,
-                envs=Envs(envs),
-                temp=Path(temp_dir),
-            )
+        # Offer the opportunity to update the rules (add, remove, etc.). No provider writes a file here, so no
+        # directory is made for it: one per sandboxed process was left behind, and inside an AppContainer the
+        # process cannot even remove the one it made.
+        all_rules = os_provider.update_rules_and_activate(all_rules=all_rules, envs=Envs(envs))
 
     # Apply the rules
     if all_rules.use_py_sandbox:

@@ -25,7 +25,6 @@ import traceback
 from asyncio import CancelledError, Task
 from dataclasses import dataclass
 from logging import getLogger
-from pathlib import Path
 from typing import Any, AsyncGenerator
 
 from uvicorn import Server
@@ -389,15 +388,12 @@ class SSEServerDaemon(BaseSSESandbox):
         *,
         envs: Envs,
         all_rules: AllRules,
-        temp: Path,
     ) -> AllRules:
         """Update security rules for server daemon.
 
         Args:
             envs: Environment variables.
             all_rules: Current security rules.
-            temp: Run-time directory shared with the sandbox. Accepted for the
-                `BaseDaemon` signature; the rebuilt rules do not use it.
 
         Returns:
             Updated security rules for server context.

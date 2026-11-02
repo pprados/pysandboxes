@@ -841,15 +841,12 @@ class SubProcessDaemon(BaseSubProcessDaemon):
         *,
         envs: Envs,
         all_rules: AllRules,
-        temp: Path,
     ) -> AllRules:
         """Update security rules (no-op for basic subprocess daemon).
 
         Args:
             envs: Environment variables.
             all_rules: Current security rules.
-            temp: Run-time directory shared with the sandbox. Accepted for the
-                `BaseDaemon` signature; a plain subprocess translates nothing.
 
         Returns:
             Unchanged security rules.

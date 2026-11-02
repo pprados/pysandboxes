@@ -257,14 +257,12 @@ class FireJailSSEDaemon(BaseSubProcessDaemon):
         *,
         all_rules: AllRules,
         envs: Envs,
-        temp: Path,
     ) -> AllRules:
         """Return the rules unchanged: firejail adds its own layer, the Python guards keep every rule.
 
         Args:
             all_rules: Current security rules.
             envs: Environment variables.
-            temp: Run-time directory shared with the sandbox.
 
         Returns:
             The same rules.
