@@ -115,40 +115,15 @@ def _is_injected_sse_rule(rule: SocketRule, injected_port: int) -> bool:
     )
 
 
-def _trace(message: str) -> None:
-    if sys.platform != "win32":
-        return
-    with (_mask_journal_path().parent / "acl-trace.log").open("a", encoding="utf-8") as stream:
-        stream.write(f"{time.strftime('%H:%M:%S')} pid={os.getpid()} {message}\n")
-
-
-@contextmanager
-def _traced(label: str) -> Iterator[None]:
-    start = time.perf_counter()
-    try:
-        yield
-    finally:
-        _trace(f"{label}: {time.perf_counter() - start:.2f}s")
-
-
 def apply_acl(path: Path, sid: str, rights: str, *, runtime: bool = False, run_sid: str | None = None) -> None:
-    """Add a checked, inheritable filesystem ACE for one SID, tracing its duration."""
-    with _traced(f"apply_acl {'runtime' if runtime else 'package'} {rights} {path}"):
-        _apply_acl(path, sid, rights, runtime=runtime, run_sid=run_sid)
-
-
-def _apply_acl(path: Path, sid: str, rights: str, *, runtime: bool = False, run_sid: str | None = None) -> None:
-    if not runtime and rights == "RX":
-        with _traced(f"  has_broad_read_access {path}"):
-            broad = _has_broad_appcontainer_read_access(path)
-        if broad:
-            return
+    """Add a checked, inheritable filesystem ACE for one SID."""
+    if not runtime and rights == "RX" and _has_broad_appcontainer_read_access(path):
+        return
     mask = _READ_EXECUTE if rights == "RX" else _MODIFY
     try:
         inherit = path.is_dir()
         if run_sid is None:
-            with _traced(f"  grant_dacl {path}"):
-                _grant_dacl(path, sid, mask, inherit)
+            _grant_dacl(path, sid, mask, inherit)
         else:
             with _acl_lock():
                 runs = _read_run_journal()
@@ -160,8 +135,7 @@ def _apply_acl(path: Path, sid: str, rights: str, *, runtime: bool = False, run_
                     grants.append(path_text)
                     _write_run_journal(runs)
                 try:
-                    with _traced(f"  grant_dacl {path}"):
-                        _grant_dacl(path, sid, mask, inherit)
+                    _grant_dacl(path, sid, mask, inherit)
                     if runtime and path.is_dir() and not _runtime_acl_cached(path, sid):
                         _apply_acl_tree(path, sid)
                         _cache_runtime_acl(path, sid)
@@ -461,23 +435,21 @@ def _set_acl_sddl(path: Path, sddl: str) -> None:
 
 def _apply_acl_tree(path: Path, sid: str) -> None:
     """Grant a runtime SID access to existing files beneath an interpreter directory."""
-    with _traced(f"icacls inherit {path}"):
-        inherit_result = subprocess.run(
-            ["icacls.exe", str(path), "/grant", f"*{sid}:(OI)(CI)RX"],
-            capture_output=True,
-            text=True,
-            check=False,
-        )
+    inherit_result = subprocess.run(
+        ["icacls.exe", str(path), "/grant", f"*{sid}:(OI)(CI)RX"],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
     if inherit_result.returncode:
         details = inherit_result.stderr.strip() or inherit_result.stdout.strip()
         raise OSError(f"Cannot grant AppContainer runtime access to {path}: {details}")
-    with _traced(f"icacls recursive {path}"):
-        recursive_result = subprocess.run(
-            ["icacls.exe", str(path), "/grant", f"*{sid}:RX", "/T"],
-            capture_output=True,
-            text=True,
-            check=False,
-        )
+    recursive_result = subprocess.run(
+        ["icacls.exe", str(path), "/grant", f"*{sid}:RX", "/T"],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
     if recursive_result.returncode:
         details = recursive_result.stderr.strip() or recursive_result.stdout.strip()
         raise OSError(f"Cannot grant AppContainer runtime access to {path}: {details}")
@@ -637,11 +609,9 @@ def _lock_file(lock_file: Any) -> None:
     """Wait until the first byte of a Windows lock file can be locked."""
     msvcrt = __import__("msvcrt")
     lock_file.seek(0)
-    started = time.perf_counter()
     while True:
         try:
             msvcrt.__dict__["locking"](lock_file.fileno(), msvcrt.__dict__["LK_NBLCK"], 1)
-            _trace(f"  lock acquired after {time.perf_counter() - started:.2f}s")
             return
         except OSError as error:
             if error.errno not in (errno.EACCES, errno.EDEADLK):
