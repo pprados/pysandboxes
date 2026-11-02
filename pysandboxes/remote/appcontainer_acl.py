@@ -137,8 +137,11 @@ def apply_acl(path: Path, sid: str, rights: str, *, runtime: bool = False, run_s
 
 
 def _apply_acl(path: Path, sid: str, rights: str, *, runtime: bool = False, run_sid: str | None = None) -> None:
-    if not runtime and rights == "RX" and _has_broad_appcontainer_read_access(path):
-        return
+    if not runtime and rights == "RX":
+        with _traced(f"  has_broad_read_access {path}"):
+            broad = _has_broad_appcontainer_read_access(path)
+        if broad:
+            return
     access = "ReadAndExecute" if rights == "RX" else "Modify"
     script = (
         "$acl = Get-Acl -LiteralPath $env:PYSB_PATH; "
@@ -167,7 +170,10 @@ def _apply_acl(path: Path, sid: str, rights: str, *, runtime: bool = False, run_
             "PYSB_IS_DIR": str(path.is_dir()).lower(),
         }
         if run_sid is None:
-            _set_acl_sddl(path, _run_acl_script(script, variables).strip())
+            with _traced(f"  run_acl_script {path}"):
+                sddl = _run_acl_script(script, variables).strip()
+            with _traced(f"  set_acl_sddl {path}"):
+                _set_acl_sddl(path, sddl)
         else:
             with _acl_lock():
                 runs = _read_run_journal()
@@ -179,8 +185,10 @@ def _apply_acl(path: Path, sid: str, rights: str, *, runtime: bool = False, run_
                     grants.append(path_text)
                     _write_run_journal(runs)
                 try:
-                    sddl = _run_acl_script(script, variables, locked=True).strip()
-                    _set_acl_sddl(path, sddl)
+                    with _traced(f"  run_acl_script {path}"):
+                        sddl = _run_acl_script(script, variables, locked=True).strip()
+                    with _traced(f"  set_acl_sddl {path}"):
+                        _set_acl_sddl(path, sddl)
                     if runtime and path.is_dir() and not _runtime_acl_cached(path, sid):
                         _apply_acl_tree(path, sid)
                         _cache_runtime_acl(path, sid)
@@ -510,9 +518,11 @@ def _lock_file(lock_file: Any) -> None:
     """Wait until the first byte of a Windows lock file can be locked."""
     msvcrt = __import__("msvcrt")
     lock_file.seek(0)
+    started = time.perf_counter()
     while True:
         try:
             msvcrt.__dict__["locking"](lock_file.fileno(), msvcrt.__dict__["LK_NBLCK"], 1)
+            _trace(f"  lock acquired after {time.perf_counter() - started:.2f}s")
             return
         except OSError as error:
             if error.errno not in (errno.EACCES, errno.EDEADLK):
