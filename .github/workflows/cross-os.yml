@@ -91,6 +91,9 @@ jobs:
                 "Select-Object ProcessId,ParentProcessId,Name,CreationDate,CommandLine | Format-List"])
         child.kill()
         print(f"pytest ended after {time.time() - started:.0f}s", flush=True)
+        trace = os.path.join(os.environ["LOCALAPPDATA"], "pysandboxes", "appcontainer", "acl-trace.log")
+        print("--- acl-trace.log", flush=True)
+        print(open(trace, encoding="utf-8").read() if os.path.exists(trace) else "(no trace file)", flush=True)
         PY
 
     - name: Provider suites
