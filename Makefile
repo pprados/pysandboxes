@@ -6,7 +6,7 @@ SHELL=/bin/bash
 	build-images build-image-base build-image-landlock build-image-unshare build-image-bwrap build-image-qemu build-image-docker build-image-podman build-image-clean \
 	minikube-ready minikube-build-images lock validate inspector github-push-test init \
 	clean-sandbox-temps quick-demo-gif \
-	windows-vm windows-tests windows-tests-all windows-vm-stop windows-vm-clean macos-vm macos-tests macos-vm-stop \
+	windows-vm windows-tests windows-tests-user windows-tests-all windows-vm-stop windows-vm-clean macos-vm macos-tests macos-vm-stop \
 	linux-vm linux-tests linux-vm-stop linux-vm-clean \
 	doctor setup-linux setup-macos setup-windows init-macos-vm
 
@@ -180,6 +180,24 @@ windows-tests: windows-vm
 	  $(WINDOWS_VM_SSH) "cd /d C:\\pysandboxes && set \"PYSANDBOXES_FAIL_ON_SKIP=$(WINDOWS_VM_FAIL_ON_SKIP)\" && set \"SETUPTOOLS_SCM_PRETEND_VERSION=0.0.0\" && uv sync --python $(WINDOWS_VM_PYTHON) --group test && $$cmd" || status=1; \
 	done; \
 	exit $$status
+
+WINDOWS_VM_USER ?= sbuser
+WINDOWS_VM_USER_SSH = ssh -i $(WINDOWS_VM_DIR)/$(WINDOWS_VM_USER) -p $(WINDOWS_VM_SSH_PORT) -o IdentitiesOnly=yes \
+	-o UserKnownHostsFile=$(WINDOWS_VM_DIR)/known_hosts -o StrictHostKeyChecking=accept-new -o ConnectTimeout=5 \
+	$(WINDOWS_VM_USER)@127.0.0.1
+WINDOWS_VM_USER_PYTEST ?= tests/integration_tests/remote/test_appcontainer.py tests/integration_tests/test_temp_cleanup.py \
+	tests/integration_tests/test_guards_with_providers.py tests/integration_tests/test_usage_with_providers.py
+
+## Run the `appcontainer` suites in the Windows VM as the standard user, which is how the provider is meant to be used
+## (a standard user cannot create symbolic links on Windows, so the sources go without them; the interpreter is copied
+## into its profile, because the user must own the DACL of the runtime the provider grants to the AppContainer)
+windows-tests-user: windows-vm
+	@set -u; \
+	$(WINDOWS_VM_USER_SSH) "if not exist C:\\Users\\$(WINDOWS_VM_USER)\\pysandboxes mkdir C:\\Users\\$(WINDOWS_VM_USER)\\pysandboxes" || exit 1; \
+	git ls-files -co --exclude-standard | while IFS= read -r file; do if [ -f "$$file" ] && [ ! -L "$$file" ]; then printf '%s\n' "$$file"; fi; done \
+	  | tar -cf - -T - | $(WINDOWS_VM_USER_SSH) "tar -xf - -C C:/Users/$(WINDOWS_VM_USER)/pysandboxes" || exit 1; \
+	$(WINDOWS_VM_USER_SSH) "powershell.exe -NoProfile -Command \"\$$python = uv python find $(WINDOWS_VM_PYTHON) --managed-python; robocopy (Split-Path \$$python) C:\\Users\\$(WINDOWS_VM_USER)\\python-runtime /E /COPY:DAT /R:1 /W:1 | Out-Null; if (\$$LASTEXITCODE -ge 8) { exit \$$LASTEXITCODE }; exit 0\"" || exit 1; \
+	$(WINDOWS_VM_USER_SSH) "cd /d C:\\Users\\$(WINDOWS_VM_USER)\\pysandboxes && set \"UV_PROJECT_ENVIRONMENT=.venv-user\" && set \"PYSANDBOXES_FAIL_ON_SKIP=$(WINDOWS_VM_FAIL_ON_SKIP)\" && set \"SETUPTOOLS_SCM_PRETEND_VERSION=0.0.0\" && uv sync --python C:\\Users\\$(WINDOWS_VM_USER)\\python-runtime\\python.exe --group test && uv run pytest -rs -m \"not slow\" $(WINDOWS_VM_USER_PYTEST)"
 
 ## Run the whole unit and integration suites in the Windows VM, not only the cross-os.yml steps
 windows-tests-all:
