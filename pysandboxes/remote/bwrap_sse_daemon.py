@@ -435,7 +435,6 @@ class BWrapSSEDaemon(BaseSubProcessDaemon):
         *,
         all_rules: AllRules,
         envs: Envs,
-        temp: Path,
     ) -> AllRules:
         """No rule replacement for bwrap; return rules unchanged."""
         return all_rules

@@ -60,7 +60,7 @@ def harness(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> Any:
         h.journal.append(("run_guest", ((config, module_specs), {})))
         return 11
 
-    async def run_server(config: DaemonParameters) -> int:
+    async def run_server(config: DaemonParameters, shared_socket: Any = None) -> int:
         h.journal.append(("run_server", ((config,), {})))
         return 7
 
@@ -130,9 +130,29 @@ def test_the_server_path_hands_the_environment_and_no_provider_override_to_the_g
 
     (args, kwargs), *_ = harness.named("activate")
     assert args == (EmptyRules, harness.environ)
-    assert kwargs == {"rules_provider": None}
+    assert kwargs == {"rules_provider": None, "run_provider": True}
     assert harness.environ["KEEP"] == "1"
     assert pysandboxes.os_sandbox == EmptyRules.os_sandbox
+
+
+@pytest.mark.parametrize(
+    ("platform", "os_sandbox", "run_provider"),
+    [("win32", "appcontainer", False), ("linux", "appcontainer", True), ("win32", "subprocess", True)],
+)
+def test_the_provider_is_skipped_only_for_a_process_the_appcontainer_trampoline_confined(
+    harness: _Harness,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    platform: str,
+    os_sandbox: str,
+    run_provider: bool,
+) -> None:
+    monkeypatch.setattr(sys, "platform", platform)
+
+    _run(monkeypatch, tmp_path, EmptyRules._replace(os_sandbox=os_sandbox))
+
+    (_, kwargs), *_ = harness.named("activate")
+    assert kwargs["run_provider"] is run_provider
 
 
 def test_python_sb_runs_the_program_with_the_unparsed_arguments(
@@ -257,7 +277,7 @@ class TestGuest:
 
         (args, kwargs), *_ = harness.named("activate")
         assert args[0].root_path == Path.cwd()
-        assert kwargs == {"rules_provider": "none"}
+        assert kwargs == {"rules_provider": "none", "run_provider": True}
         ((config, _), _), *_ = harness.named("run_guest")
         assert config.all_rules.root_path == Path.cwd()
         assert not harness.named("run_server")
@@ -300,7 +320,7 @@ class TestGuest:
         assert _without_pytest(harness.environ) == {"KEPT": "1", "NONE": "", "NUM": "4"}
         (args, kwargs), *_ = harness.named("activate")
         assert args[0].root_path == self._rules().root_path
-        assert kwargs == {"rules_provider": None}
+        assert kwargs == {"rules_provider": None, "run_provider": True}
 
 
 _ENTRY_POINTS = ("pysandboxes.remote.python_in_sb", "pysandboxes.remote.qemu_guest_console_io")

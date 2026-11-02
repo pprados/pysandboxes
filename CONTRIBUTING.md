@@ -16,19 +16,22 @@ does not count as a vulnerability, such as the known Python-layer weaknesses in
 ## Getting started
 
 Python 3.11.5 to 3.14, with [uv](https://docs.astral.sh/uv/) exclusively. Every OS provider is a Linux technology, except
-the Seatbelt `sandbox-exec` of macOS, so what you can run depends on your system:
+the Seatbelt `sandbox-exec` of macOS and the `appcontainer` of Windows, so what you can run depends on your system:
 
 | Your system | What runs | Needs |
 |---|---|---|
 | Linux, or WSL2 | everything: the Python layer and the providers `landlock`, `bwrap`, `firejail`, `unshare`, `qemu` | the packages and kernel settings below |
 | macOS | the Python layer over `subprocess` and the `sandbox-exec` provider, which is what `cross-os.yml` proves on macOS | Xcode command line tools, uv; GNU sed, jq and coreutils (`make setup-macos`) for the release-script tests, which are left out without them |
-| native Windows | the Python layer over `subprocess` | uv, git, GNU make, a bash (Git Bash) |
+| native Windows | the Python layer over `subprocess` and the `appcontainer` provider, which is what `cross-os.yml` proves on Windows | uv, git, GNU make, a bash (Git Bash) |
 
 On macOS and Windows, a change that touches a Linux kernel-backed provider is tested in a Linux VM (Lima, Colima, Multipass
 or UTM on a Mac) or in WSL2 (`wsl --install -d Ubuntu-24.04` on Windows). Prefer WSL2 on Windows: the Makefile is
 written for bash, and WSL2 gives you the providers too. Landlock is reported to work under WSL2; `make doctor`
 tells you whether your kernel has it. A VM on an Apple Silicon Mac or in WSL2 has no nested KVM in the general
 case, so `qemu` falls back to the slow TCG row there.
+
+The `appcontainer` provider has local administrator and standard-user suites that pass in a Windows VM. The local
+workflow uses `make windows-vm`, `make windows-tests`, `make windows-vm-stop`, and `make windows-vm-clean`.
 
 ```bash
 git clone https://github.com/pprados/pysandboxes.git
@@ -102,7 +105,8 @@ The [`wiki/`](wiki/Home.md) directory holds the documentation a contributor need
 - [`implementation.md`](wiki/implementation.md): how the framework is put together;
 - [`weaknesses.md`](wiki/weaknesses.md) and the two security assessments: what the Python layer does not stop,
   and the attacks already studied;
-- one page per OS provider (`bwrap.md`, `firejail.md`, `unshare.md`, `qemu.md`, `landlock.md`, `sandbox-exec.md`), and
+- one page per OS provider (`bwrap.md`, `firejail.md`, `unshare.md`, `qemu.md`, `landlock.md`, `sandbox-exec.md`,
+  `appcontainer.md`), and
   [`eval.md`](wiki/eval.md) for the `eval-*` rules;
 - [`tests.md`](wiki/tests.md): which suite covers what, and the gaps;
 - [`release.md`](wiki/release.md): how a pre-release is published, and the settings behind it;

@@ -49,6 +49,7 @@ PySandboxes runs Python under a deny-by-default policy stored in `.py-sandboxes`
 ## Choose and operate an OS provider
 
 - [Provider comparison](os-providers.md): which provider for which situation, enforcement mechanisms, prerequisites, compatibility, and trade-offs.
+- [AppContainer for Windows](appcontainer.md): provider implementation, validation status, and limits.
 - [Landlock](landlock.md)
 - [Bubblewrap (`bwrap`)](bwrap.md)
 - [Firejail](firejail.md)

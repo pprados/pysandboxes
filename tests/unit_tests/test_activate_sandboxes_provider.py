@@ -45,6 +45,29 @@ def test_rules_provider_overrides_the_configured_provider(providers: list[str], 
     assert providers == ["none"]
 
 
+def test_the_provider_is_handed_the_rules_and_the_environment_and_no_directory(
+    monkeypatch: pytest.MonkeyPatch, rules: Any
+) -> None:
+    received: list[set[str]] = []
+
+    class _Provider:
+        def update_rules_and_activate(self, **kwargs: Any) -> Any:
+            received.append(set(kwargs))
+            return kwargs["all_rules"]
+
+    monkeypatch.setattr(_os_sandbox, "providers_factory", {"subprocess": lambda token: _Provider()})
+
+    activate_sandboxes(rules)
+
+    assert received == [{"all_rules", "envs"}]
+
+
+def test_a_process_confined_before_it_started_does_not_call_its_provider(providers: list[str], rules: Any) -> None:
+    activate_sandboxes(rules, run_provider=False)
+
+    assert providers == []
+
+
 def test_an_unknown_provider_is_refused(providers: list[str], rules: Any) -> None:
     with pytest.raises(ValueError, match="Unknown os-sandbox name: nope"):
         activate_sandboxes(rules, rules_provider="nope")

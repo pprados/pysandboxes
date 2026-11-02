@@ -13,7 +13,8 @@
         "--sandbox-port", "48000"  // Force a port to communicate with the sandbox, and add it in .py-sandboxes
       ],
       "env": {
-        "OS_SANDBOX": "subprocess"
+        "OS_SANDBOX": "subprocess",
+        "PYTHONUTF8": "1"
       }
     }
   }

@@ -10,7 +10,7 @@ name: Cross-OS Provider Tests
 # nature, and its failures would bury what this job is for. Modules testing a
 # Linux-only provider are left out of the collection by tests/conftest.py.
 #
-# Windows exercises `subprocess`; macOS exercises `sandbox-exec` and `subprocess`.
+# Windows exercises `appcontainer` and `subprocess`; macOS exercises `sandbox-exec` and `subprocess`.
 # Both run the guards' own unit tests: they are what the Python layer rests on there.
 #
 # Called by full-gate.yml, so the nightly proves macOS and Windows too, plus on demand: `gh act` cannot run macOS or
@@ -80,3 +80,12 @@ jobs:
         tests/integration_tests/remote/test_sandbox_exec.py
         tests/integration_tests/test_os_file_confinement.py
         tests/integration_tests/test_os_netfilter.py
+
+    - name: AppContainer integration
+      if: ${{ matrix.os == 'windows-latest' && !cancelled() }}
+      env:
+        PYSANDBOXES_FAIL_ON_SKIP: "1"
+      run: >-
+        uv run pytest -rs
+        tests/integration_tests/remote/test_appcontainer.py
+        tests/integration_tests/test_temp_cleanup.py

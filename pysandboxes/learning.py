@@ -19,11 +19,11 @@ import sys
 import threading
 from collections import Counter
 from datetime import datetime
-from types import FrameType
 
 # Python 3.10+ only
 from importlib import resources
 from pathlib import Path
+from types import FrameType
 from typing import Any, NamedTuple, Set
 
 from .config import DEBUG
@@ -349,8 +349,11 @@ def _log_learning_summary(replaces: dict[str, str], learning: set[Any]) -> None:
                 lines.append(f"  origin not captured at INFO: {sample}{suffix}")
         if section == "learning_guard_import":
             modules = {module.strip() for rule in rules for module in rule.partition("=")[2].split(",")}
-            sources = [rule for rule in sources if getattr(rule, "name", None) in modules]
-            missing = sorted(modules - {rule.name for rule in sources})
+            from .guard_import import LearnImportRule
+
+            imported = [rule for rule in sources if isinstance(rule, LearnImportRule) and rule.name in modules]
+            sources = imported
+            missing = sorted(modules - {rule.name for rule in imported})
             if missing:
                 sample = ", ".join(missing[:8])
                 suffix = f" and {len(missing) - 8} more" if len(missing) > 8 else ""

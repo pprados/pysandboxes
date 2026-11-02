@@ -5,7 +5,7 @@
 | ✅ 3.11   | ✅ none         | ✅ Linux    | ✅ Env     |
 | ✅ 3.12   | ✅ subprocess   | ✅ WSL      | ✅ Files   |
 | ✅ 3.13   | ✅ landlock     | ✅ MacOS²   | ✅ Network |
-| ✅ 3.14   | ✅ bwrap        | ◐ Windows² | ✅ Import  |
+| ✅ 3.14   | ✅ bwrap        | ✅ Windows | ✅ Import  |
 | ☐ 3.15   | ✅ firejail     |            | ✅ API     |
 |          | ✅ unshare       |            | ✅ Eval    |
 |          | ✅ qemu          |            | ☐ Source  |
@@ -14,13 +14,22 @@
 |          | ✅ Podman¹       |            |           |
 |          | ☐ gVisor        |            |           |
 |          | ☐ micro-VM      |            |           |
-|          | ☐ App container |            |           |
+|          | ✅ appcontainer  |            |           |
 
 ¹ Docker and Podman are not providers of their own: a container runs the
 `unshare` provider, with `--privileged` for Docker.
 
 
 ## [0.0.0] - 202X-XX-XX
+
+### Added
+- Add the Windows AppContainer provider (`os-sandbox=appcontainer`), which confines files and network with an
+  AppContainer token, and runs without administrator rights.
+- Configuration profiles can be included only when `sys.platform` matches, so OS-specific permissions can be kept
+  in separate files.
+
+### Changed
+- Document the AppContainer provider's security limits and the local Windows VM workflow.
 
 ### Fixed
 - The `qemu` container image for Python 3.11 keeps a working `iptables-restore` of its own next to the libraries its

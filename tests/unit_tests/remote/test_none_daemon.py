@@ -46,14 +46,13 @@ async def test_shutdown_gives_the_flag_back(daemon: NoneDaemon) -> None:
     assert not daemon._is_started
 
 
-def test_the_rules_come_back_untouched(daemon: NoneDaemon, tmp_path: object) -> None:
+def test_the_rules_come_back_untouched(daemon: NoneDaemon) -> None:
     """No rule is applied, and none is dropped either: the same object comes back."""
     sentinel = object()
 
     result = daemon.update_rules_and_activate(
         envs=ImmutableDict({}),
         all_rules=sentinel,  # type: ignore[arg-type]
-        temp=tmp_path,  # type: ignore[arg-type]
     )
 
     assert result is sentinel

@@ -67,7 +67,7 @@ def test_the_default_rule_parsing_takes_nothing_and_hands_back_every_rule() -> N
     assert errors == []
 
 
-def test_the_abstract_operations_raise_not_implemented_when_reached_through_super(tmp_path: Path) -> None:
+def test_the_abstract_operations_raise_not_implemented_when_reached_through_super() -> None:
     daemon = FakeDaemon("token")
     update: Any = BaseDaemon.update_rules_and_activate  # pyright: ignore[reportAbstractUsage]
     start: Any = BaseDaemon._start  # pyright: ignore[reportAbstractUsage]
@@ -76,7 +76,7 @@ def test_the_abstract_operations_raise_not_implemented_when_reached_through_supe
     call: Any = BaseDaemon.call_in_sandbox  # pyright: ignore[reportAbstractUsage]
 
     with pytest.raises(NotImplementedError):
-        update(daemon, envs=Envs({}), all_rules=EmptyRules, temp=tmp_path)
+        update(daemon, envs=Envs({}), all_rules=EmptyRules)
     with pytest.raises(NotImplementedError):
         asyncio.run(start(daemon, EmptyRules, envs={}, log_level=0, init_fn=None))
     with pytest.raises(NotImplementedError):
@@ -88,10 +88,10 @@ def test_the_abstract_operations_raise_not_implemented_when_reached_through_supe
 
 
 class TestFakeDaemon:
-    def test_it_leaves_the_rules_as_they_are(self, tmp_path: Path) -> None:
+    def test_it_leaves_the_rules_as_they_are(self) -> None:
         daemon = FakeDaemon("token")
 
-        assert daemon.update_rules_and_activate(envs=Envs({}), all_rules=EmptyRules, temp=tmp_path) is EmptyRules
+        assert daemon.update_rules_and_activate(envs=Envs({}), all_rules=EmptyRules) is EmptyRules
 
     def test_start_then_stop_then_shutdown_move_the_started_flag(self) -> None:
         daemon = FakeDaemon("token")

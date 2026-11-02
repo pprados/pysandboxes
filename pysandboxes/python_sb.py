@@ -9,7 +9,7 @@ import tempfile
 import uuid
 from contextlib import ExitStack
 from pathlib import Path
-from typing import Any, Mapping, TextIO, cast
+from typing import Any, Mapping, Protocol, TextIO, cast
 
 from ._os_sandbox import check_provider_available, providers_factory
 from .all_rules import AllRules
@@ -409,6 +409,14 @@ def _main(stack: ExitStack) -> int:
         return return_code
 
 
+class _MeasuredRun(Protocol):
+    """What `_save_coverage` calls on the running ``coverage.Coverage``, which this module never imports."""
+
+    def stop(self) -> None: ...
+
+    def save(self) -> None: ...
+
+
 def _save_coverage() -> None:
     """Save the coverage data of a measured run: ``os._exit`` skips the ``atexit`` where coverage does it.
 
@@ -417,7 +425,7 @@ def _save_coverage() -> None:
     """
     try:
         current = getattr(getattr(sys.modules.get("coverage"), "Coverage", None), "current", None)
-        measured = current() if callable(current) else None
+        measured = cast("_MeasuredRun | None", current() if callable(current) else None)
         if measured is not None:
             measured.stop()
             measured.save()

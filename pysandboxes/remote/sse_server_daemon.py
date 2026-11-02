@@ -25,7 +25,6 @@ import traceback
 from asyncio import CancelledError, Task
 from dataclasses import dataclass
 from logging import getLogger
-from pathlib import Path
 from typing import Any, AsyncGenerator
 
 from uvicorn import Server
@@ -339,6 +338,14 @@ def create_uvicorn_daemon(token: str, host: str, port: int) -> Server:
     return uvicorn_server
 
 
+async def serve_uvicorn(server: Server, shared_socket: Any | None = None) -> None:
+    """Run Uvicorn on a pre-bound socket when the launcher supplied one."""
+    if shared_socket is None:
+        await server.serve()
+    else:
+        await server.serve(sockets=[shared_socket])
+
+
 class SSEServerDaemon(BaseSSESandbox):
     """Server-side daemon for handling sandboxed code execution.
 
@@ -346,9 +353,11 @@ class SSEServerDaemon(BaseSSESandbox):
     streaming of output via Server-Sent Events.
     """
 
-    __slots__ = ("uvicorn", "task", "port", "bind_host", "stopped")
+    __slots__ = ("uvicorn", "task", "port", "bind_host", "stopped", "shared_socket")
 
-    def __init__(self, token: str, *, port: int, bind_host: str = "127.0.0.1") -> None:
+    def __init__(
+        self, token: str, *, port: int, bind_host: str = "127.0.0.1", shared_socket: Any | None = None
+    ) -> None:
         """Initialize SSE server daemon.
 
         Args:
@@ -362,6 +371,7 @@ class SSEServerDaemon(BaseSSESandbox):
         self.port = port
         self.bind_host = bind_host
         self.stopped = True
+        self.shared_socket = shared_socket
 
     @property
     def active_request(self) -> int:
@@ -378,15 +388,12 @@ class SSEServerDaemon(BaseSSESandbox):
         *,
         envs: Envs,
         all_rules: AllRules,
-        temp: Path,
     ) -> AllRules:
         """Update security rules for server daemon.
 
         Args:
             envs: Environment variables.
             all_rules: Current security rules.
-            temp: Run-time directory shared with the sandbox. Accepted for the
-                `BaseDaemon` signature; the rebuilt rules do not use it.
 
         Returns:
             Updated security rules for server context.
@@ -454,7 +461,7 @@ class SSEServerDaemon(BaseSSESandbox):
                 try:
                     start_event.set()
                     assert asyncio.get_running_loop() == get_sandbox_loop()
-                    await self.uvicorn.serve()
+                    await serve_uvicorn(self.uvicorn, self.shared_socket)
                 except asyncio.CancelledError:
                     # logger.debug("Receive cancel server")
                     self._accept_incoming = False
@@ -478,6 +485,9 @@ class SSEServerDaemon(BaseSSESandbox):
 
                 await start_event.wait()
                 while self.uvicorn and not self.uvicorn.started:
+                    if self.task.done():
+                        await self.task
+                        raise RuntimeError("Uvicorn server stopped before startup")
                     await asyncio.sleep(POLLING_DELAY)
             self._accept_incoming = True
             self.stopped = False

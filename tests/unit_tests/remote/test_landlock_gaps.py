@@ -306,7 +306,7 @@ class TestApplyLandlock:
 
 class TestProviderActivation:
     def test_no_socket_rules_still_activate_an_empty_default_deny_network_policy(
-        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+        self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         captured: dict[str, Any] = {}
         monkeypatch.setattr(ll, "_landlock_available", lambda: True)
@@ -318,18 +318,18 @@ class TestProviderActivation:
 
         monkeypatch.setattr(ll, "_apply_landlock", apply)
 
-        ll.LandlockSSEDaemon("token").update_rules_and_activate(envs=Envs({}), all_rules=EmptyRules, temp=tmp_path)
+        ll.LandlockSSEDaemon("token").update_rules_and_activate(envs=Envs({}), all_rules=EmptyRules)
 
         assert captured["net_ports"] == []
 
-    def test_only_a_read_write_access_is_granted_write(self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    def test_only_a_read_write_access_is_granted_write(self, monkeypatch: pytest.MonkeyPatch) -> None:
         captured: dict[str, Any] = {}
         monkeypatch.setattr(ll, "_landlock_available", lambda: True)
         monkeypatch.setattr(ll, "_set_no_new_privs", lambda: None)
         monkeypatch.setattr(ll, "_collect_landlock_paths", lambda *args: [("/a", "rw"), ("/b", "ro")])
         monkeypatch.setattr(ll, "_apply_landlock", lambda paths, net_ports=None: captured.update(paths=paths))
 
-        ll.LandlockSSEDaemon("token").update_rules_and_activate(envs=Envs({}), all_rules=EmptyRules, temp=tmp_path)
+        ll.LandlockSSEDaemon("token").update_rules_and_activate(envs=Envs({}), all_rules=EmptyRules)
 
         assert captured["paths"] == [("/a", True), ("/b", False)]
 

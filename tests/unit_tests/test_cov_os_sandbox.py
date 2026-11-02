@@ -4,7 +4,6 @@
 
 import asyncio
 import threading
-from pathlib import Path
 from typing import Any, Callable, Iterator
 
 import pytest  # type: ignore[import-untyped]
@@ -272,7 +271,7 @@ class _SSEDaemon(BaseSSESandbox):
     def __init__(self, token: str, **kwargs: Any) -> None:
         super().__init__(token, max_connect_retry=1)
 
-    def update_rules_and_activate(self, *, envs: Any, all_rules: AllRules, temp: Path) -> AllRules:
+    def update_rules_and_activate(self, *, envs: Any, all_rules: AllRules) -> AllRules:
         return all_rules
 
     async def _start(

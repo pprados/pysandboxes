@@ -7,7 +7,6 @@ import socket
 import sys
 from concurrent.futures import TimeoutError as FutureTimeoutError
 from datetime import timedelta
-from pathlib import Path
 from typing import Any, Callable, Dict, cast
 
 import aiohttp
@@ -345,6 +344,5 @@ class BaseSSESandbox(BaseDaemon):
         *,
         all_rules: AllRules,
         envs: Envs,
-        temp: Path,
     ) -> AllRules:
         return all_rules

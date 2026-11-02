@@ -9,6 +9,8 @@ import pytest  # type: ignore[import-untyped]
 # Read by py-sandbox-test.profile to expose the interpreter's library tree, which is
 # not /usr/local/lib everywhere (a macOS runner has none).
 os.environ.setdefault("PYTHON_BASE_PREFIX", sys.base_prefix)
+# The shared integration profile exposes this ignored runtime directory for writes.
+Path(__file__).resolve().parents[2].joinpath("tmp").mkdir(exist_ok=True)
 # Read by the same profile for the system configuration directory: Windows has no /etc,
 # its hosts and services files live under System32\drivers\etc.
 if sys.platform == "win32":

@@ -12,7 +12,6 @@ import logging
 import os
 import re
 import sys
-import tempfile
 import types
 import uuid
 
@@ -370,6 +369,7 @@ def activate_sandboxes(
     envs: Environ | None = None,
     *,
     rules_provider: str | None = None,
+    run_provider: bool = True,
 ) -> None:
     """Apply OS-provider rule tweaks then Python-level guards.
 
@@ -380,11 +380,13 @@ def activate_sandboxes(
             only (e.g. ``"none"`` in the QEMU guest so we do not import aiohttp via
             qemu/subprocess daemons). The ``all_rules`` passed into the provider still
             describe the real configuration including ``os_sandbox``.
+        run_provider: When False, the OS provider is not called at all: the confinement was applied before this
+            process started. The Python guards are armed whatever its value.
     """
     if envs is None:
         envs = os.environ
     provider_key = rules_provider if rules_provider is not None else all_rules.os_sandbox
-    if provider_key:
+    if run_provider and provider_key:
         from pysandboxes._os_sandbox import providers_factory
 
         if provider_key not in providers_factory:
@@ -392,19 +394,10 @@ def activate_sandboxes(
         os_provider: BaseDaemon = providers_factory[provider_key](
             str(uuid.uuid4()),
         )
-        # Offer the opportunity to update the rules (add, remove, etc.)
-        # The directory does not outlive the call: the only provider that writes into
-        # a `temp` does so for the netfilter FIFOs, and those need a `pipe_path`, which
-        # this call site has none of. A bare `mkdtemp()` here left one empty directory
-        # behind per sandboxed process -- thousands of them, since this runs on every
-        # activation. Removing it before the guards are armed also keeps the unlink out
-        # of the file guard's way.
-        with tempfile.TemporaryDirectory() as temp_dir:
-            all_rules = os_provider.update_rules_and_activate(
-                all_rules=all_rules,
-                envs=Envs(envs),
-                temp=Path(temp_dir),
-            )
+        # Offer the opportunity to update the rules (add, remove, etc.). No provider writes a file here, so no
+        # directory is made for it: one per sandboxed process was left behind, and inside an AppContainer the
+        # process cannot even remove the one it made.
+        all_rules = os_provider.update_rules_and_activate(all_rules=all_rules, envs=Envs(envs))
 
     # Apply the rules
     if all_rules.use_py_sandbox:
