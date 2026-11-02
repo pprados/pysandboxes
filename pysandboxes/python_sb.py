@@ -417,7 +417,7 @@ def _save_coverage() -> None:
     """
     try:
         current = getattr(getattr(sys.modules.get("coverage"), "Coverage", None), "current", None)
-        measured = current() if callable(current) else None
+        measured: Any = current() if callable(current) else None
         if measured is not None:
             measured.stop()
             measured.save()

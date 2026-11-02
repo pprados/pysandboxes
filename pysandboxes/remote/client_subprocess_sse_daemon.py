@@ -259,7 +259,9 @@ async def launch_sandbox(
             subprocess_kwargs["stdin"] = stdin
 
         attempts = FIREJAIL_START_ATTEMPTS if use_fifo and Path(cmd[0]).name == "firejail" else 1
-        for attempt in range(1, attempts + 1):
+        attempt = 0
+        while True:
+            attempt += 1
             process = await asyncio.create_subprocess_exec(
                 *cmd,
                 **subprocess_kwargs,
