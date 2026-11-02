@@ -24,6 +24,7 @@ on:
 jobs:
   providers:
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
     strategy:
       fail-fast: false
       matrix:
@@ -64,10 +65,11 @@ jobs:
 
     - name: Provider suites
       if: ${{ !cancelled() }}  # runs even when the guard layer failed: both results are wanted
+      timeout-minutes: 20
       env:
         PYSANDBOXES_FAIL_ON_SKIP: "1"
       run: >-
-        uv run pytest -rs -m 'not slow'
+        uv run pytest -rs -x --tb=short --durations=10 -m 'not slow'
         tests/integration_tests/test_guards_with_providers.py
         tests/integration_tests/test_usage_with_providers.py
 
@@ -83,9 +85,10 @@ jobs:
 
     - name: AppContainer integration
       if: ${{ matrix.os == 'windows-latest' && !cancelled() }}
+      timeout-minutes: 15
       env:
         PYSANDBOXES_FAIL_ON_SKIP: "1"
       run: >-
-        uv run pytest -rs
+        uv run pytest -rs -x --tb=short --durations=10
         tests/integration_tests/remote/test_appcontainer.py
         tests/integration_tests/test_temp_cleanup.py
