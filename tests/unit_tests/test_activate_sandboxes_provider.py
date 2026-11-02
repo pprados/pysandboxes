@@ -45,6 +45,22 @@ def test_rules_provider_overrides_the_configured_provider(providers: list[str], 
     assert providers == ["none"]
 
 
+def test_the_none_provider_is_given_no_directory_to_remove(
+    monkeypatch: pytest.MonkeyPatch, providers: list[str], rules: Any
+) -> None:
+    made: list[str] = []
+
+    def refuse(*_: Any, **__: Any) -> None:
+        made.append("made")
+        raise AssertionError("a temporary directory was made for the none provider")
+
+    monkeypatch.setattr("pysandboxes.py_sandbox.tempfile.TemporaryDirectory", refuse)
+
+    activate_sandboxes(rules, rules_provider="none")
+
+    assert providers == ["none"] and made == []
+
+
 def test_an_unknown_provider_is_refused(providers: list[str], rules: Any) -> None:
     with pytest.raises(ValueError, match="Unknown os-sandbox name: nope"):
         activate_sandboxes(rules, rules_provider="nope")
