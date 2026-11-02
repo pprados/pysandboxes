@@ -62,7 +62,7 @@ Planned work, in no committed order:
     - [X] ~~App Sandbox~~ (rejected: not compatible with the approach)
     - [x] sandbox-exec
     - [ ] Collima
-  - [ ] Windows
+  - [X] Windows
     - [X] AppContainer
     - [ ] Windows Sandbox
   - [ ] Network strategies
