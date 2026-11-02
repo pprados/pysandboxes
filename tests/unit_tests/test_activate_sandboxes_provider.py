@@ -62,6 +62,12 @@ def test_the_provider_is_handed_the_rules_and_the_environment_and_no_directory(
     assert received == [{"all_rules", "envs"}]
 
 
+def test_a_process_confined_before_it_started_does_not_call_its_provider(providers: list[str], rules: Any) -> None:
+    activate_sandboxes(rules, run_provider=False)
+
+    assert providers == []
+
+
 def test_an_unknown_provider_is_refused(providers: list[str], rules: Any) -> None:
     with pytest.raises(ValueError, match="Unknown os-sandbox name: nope"):
         activate_sandboxes(rules, rules_provider="nope")

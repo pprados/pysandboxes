@@ -501,7 +501,6 @@ def main() -> int:
         # charged to the user's rules just the same -- a profile naming its modules one
         # by one, as a learned one does, then dies on the harness's imports.
         import pysandboxes.remote.python_in_sb as python_in_sb_module
-
         import pysandboxes.remote.qemu_guest_console_io  # noqa: F401
 
         module_args = sandboxes_args if sandboxes_parsed._python_sb else list(python_main_args)
@@ -523,12 +522,14 @@ def main() -> int:
 
     # Guest runs user code inside the VM: do not load qemu/subprocess daemons here
     # (they pull aiohttp/native stack and can segfault in the minimal guest).
+    # The AppContainer trampoline confines this process before it starts: nothing is left for the provider to do
+    # here. The Python guards are armed all the same.
+    confined_by_parent = sys.platform == "win32" and all_rules.os_sandbox == "appcontainer"
     activate_sandboxes(
         all_rules,
         os.environ,
-        rules_provider=(
-            "none" if python_main_args or (sys.platform == "win32" and all_rules.os_sandbox == "appcontainer") else None
-        ),
+        rules_provider="none" if python_main_args else None,
+        run_provider=not confined_by_parent,
     )
     # From here on, this process *is* the sandbox, and the learning mode must be
     # armed at the same moment as the guards. Every deferred import the harness

@@ -369,6 +369,7 @@ def activate_sandboxes(
     envs: Environ | None = None,
     *,
     rules_provider: str | None = None,
+    run_provider: bool = True,
 ) -> None:
     """Apply OS-provider rule tweaks then Python-level guards.
 
@@ -379,11 +380,13 @@ def activate_sandboxes(
             only (e.g. ``"none"`` in the QEMU guest so we do not import aiohttp via
             qemu/subprocess daemons). The ``all_rules`` passed into the provider still
             describe the real configuration including ``os_sandbox``.
+        run_provider: When False, the OS provider is not called at all: the confinement was applied before this
+            process started. The Python guards are armed whatever its value.
     """
     if envs is None:
         envs = os.environ
     provider_key = rules_provider if rules_provider is not None else all_rules.os_sandbox
-    if provider_key:
+    if run_provider and provider_key:
         from pysandboxes._os_sandbox import providers_factory
 
         if provider_key not in providers_factory:
