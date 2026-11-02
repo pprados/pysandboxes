@@ -1,7 +1,7 @@
 # AppContainer (Windows)
 
-> **Implementation status:** implemented on this feature branch and not yet released. The local Windows VM suites
-> pass as both administrator and standard user. Release support remains gated on the Windows CI job passing.
+> **Implementation status:** implemented and not yet released. The local Windows VM suites pass as both
+> administrator and standard user. Release support remains gated on the Windows CI job passing.
 
 The `appcontainer` provider combines a Windows AppContainer token with a Job Object. It provides an OS boundary
 for native code on Windows, where `subprocess` only separates processes and the Python guards can be bypassed by
@@ -18,6 +18,10 @@ The child runs `sys.executable -m pysandboxes.remote.main_sandbox`, like the oth
 trampoline grants the package SID access only to paths needed for the run, starts the SSE listener outside the
 AppContainer, and hands its socket to the suspended child. A Job Object UI restriction set limits the window
 station access needed by Python on service sessions such as SSH and CI runners.
+
+The child is confined before it starts, so it does not call the provider again: `main_sandbox` passes
+`run_provider=False` to `activate_sandboxes`. The Python guards (files, network, imports, environment, API calls and
+`eval-*`) are armed in the child all the same.
 
 ## Rule enforcement
 
@@ -84,19 +88,28 @@ The Makefile workflow is:
 
 ```bash
 make windows-vm          # Create/start the local Windows VM and provision SSH/Python
-make windows-tests       # Copy the test inputs and run provider suites as admin and sbuser
+make windows-tests       # The cross-os.yml steps, as the VM administrator
+make windows-tests-user  # The appcontainer suites, as the standard user sbuser
 make windows-vm-stop     # Stop the VM
 make windows-vm-clean    # Remove the VM and its local key/state
 ```
 
-`windows-tests` runs with `PYSANDBOXES_FAIL_ON_SKIP=1`, both as the VM administrator and as the standard user
-`sbuser`. It stages repository files over SSH rather than relying on a VM network share. The VM recipe installs
-OpenSSH, provisions a separate `sbuser` account, and installs Python machine-wide. The test target copies that
-runtime into `sbuser`'s profile so the standard user can grant its AppContainer capability access recursively.
+Both test targets run with `PYSANDBOXES_FAIL_ON_SKIP=1` and stage the repository files over SSH rather than relying
+on a VM network share. `windows-tests` runs what `cross-os.yml` runs on Windows: the registry and guard unit tests,
+the shared provider suites, then `test_appcontainer.py` and `test_temp_cleanup.py`. `windows-tests-user` runs the
+`appcontainer` rows of the shared suites and those two files as `sbuser`, which is how the provider is meant to be
+used: no administrator rights. It first copies the interpreter into the profile of `sbuser`, which then owns the
+DACL of the runtime that the provider grants to the AppContainer; a runtime installed machine-wide by an
+administrator cannot be granted by a standard user, as the section above says.
+
+The VM recipe installs OpenSSH, provisions the separate `sbuser` account, and installs Python machine-wide under
+`C:\uv-python`; `scripts/windows-vm/grant-runtime.ps1` gives the `pysandboxesRuntime` capability read access to it.
+A VM created before `sbuser` existed has no such account: run `make windows-vm-clean` once, or provision it by
+hand with the commands of `scripts/windows-vm/install.bat`.
 
 Release support is gated on the Windows integration tests and shared provider suites passing in both CI and this
-VM. The `win32` provider registration is present on this branch so CI exercises it; do not publish the provider
-until the Windows CI job passes.
+VM. The `win32` provider registration is present so that CI exercises it; do not publish the provider until the
+Windows CI job passes.
 
 ## Known limits
 

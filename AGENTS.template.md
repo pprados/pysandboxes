@@ -6,8 +6,8 @@ Python guards plus one OS provider among `none`, `subprocess`, `landlock`, `bwra
 and `qemu`. Docker and Podman are not providers of their own: a container runs the `unshare` provider, with
 `--privileged` for Docker.
 
-An AppContainer provider is implemented for Windows on its feature branch. Its local VM suites pass as
-administrator and standard user; do not describe it as supported in a release until Windows CI passes.
+An AppContainer provider is implemented for Windows. Its local VM suites pass as administrator and standard
+user; do not describe it as supported in a release until Windows CI passes.
 
 All code is in English.
 

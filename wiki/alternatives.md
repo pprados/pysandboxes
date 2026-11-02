@@ -218,8 +218,8 @@ allow rule per human approval.
   categories (`guard_api`), and code arriving as a string (the `eval-*` sub-language: parsed, rewritten, run
   under a budget and a timeout). It is the only one granular to the function (`@sandbox`). Its results are
   unpickled under a guard ([Transport unpickle guard](transport-unpickle-guard.md)). Five interchangeable
-  kernel providers are available. The AppContainer provider is implemented on the feature branch and passed
-  the local Windows VM matrix; release support awaits the Windows CI run.
+  kernel providers are available. The AppContainer provider is implemented and passed the local Windows VM
+  matrix; release support awaits the Windows CI run.
 - **Weaknesses**: no layer 7, no TLS interception, no credential brokering. A granted secret enters the
   sandbox in clear. There is no built-in list of private ranges or metadata addresses: the profile author has
   to write the `DENY` rules. No rule can name ICMP. `landlock` cannot filter UDP. A change
