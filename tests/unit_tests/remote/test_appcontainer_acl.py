@@ -10,6 +10,8 @@ from contextlib import nullcontext
 from tempfile import TemporaryFile
 from types import SimpleNamespace
 
+import pytest
+
 from pysandboxes.all_rules import EmptyRules
 from pysandboxes.guard_files import FSExposeRule, IgnoreRule
 from pysandboxes.guard_socket import Action, Direction, Kind, SocketMask, SocketRule
@@ -135,10 +137,10 @@ def test_read_only_grant_reuses_windows_appcontainer_access(tmp_path: Path, monk
     path = tmp_path / "system"
     monkeypatch.setattr(appcontainer_acl, "_has_broad_appcontainer_read_access", lambda target: True)
 
-    def fail_if_acl_is_changed(target: Path, sddl: str) -> None:
+    def fail_if_acl_is_changed(*args: object) -> None:
         raise AssertionError("Existing AppContainer read access should be reused")
 
-    monkeypatch.setattr(appcontainer_acl, "_set_acl_sddl", fail_if_acl_is_changed)
+    monkeypatch.setattr(appcontainer_acl, "_grant_dacl", fail_if_acl_is_changed)
 
     appcontainer_acl.apply_acl(path, "package", "RX")
 
@@ -159,23 +161,20 @@ def test_runtime_acl_tree_grants_existing_objects_and_inheritance(tmp_path: Path
     ]
 
 
-def test_file_acl_grant_omits_inheritance_flags(tmp_path: Path, monkeypatch) -> None:  # type: ignore[no-untyped-def]
-    path = tmp_path / "config.bin"
-    path.touch()
-    script_variables: dict[str, str] = {}
+@pytest.mark.parametrize(
+    ("is_dir", "rights", "mask"),
+    [(False, "M", appcontainer_acl._MODIFY), (True, "RX", appcontainer_acl._READ_EXECUTE)],
+)
+def test_grant_inherits_only_on_a_directory(tmp_path: Path, monkeypatch, is_dir: bool, rights: str, mask: int) -> None:  # type: ignore[no-untyped-def]
+    path = tmp_path / "target"
+    path.mkdir() if is_dir else path.touch()
+    grants: list[tuple[Path, str, int, bool]] = []
     monkeypatch.setattr(appcontainer_acl, "_has_broad_appcontainer_read_access", lambda target: False)
+    monkeypatch.setattr(appcontainer_acl, "_grant_dacl", lambda *args: grants.append(args))
 
-    def run_script(script: str, variables: dict[str, str], *, locked: bool = False) -> str:
-        script_variables.update(variables)
-        assert "if ($env:PYSB_IS_DIR -eq 'true')" in script
-        return "descriptor"
+    appcontainer_acl.apply_acl(path, "package", rights)
 
-    monkeypatch.setattr(appcontainer_acl, "_run_acl_script", run_script)
-    monkeypatch.setattr(appcontainer_acl, "_set_acl_sddl", lambda target, sddl: None)
-
-    appcontainer_acl.apply_acl(path, "package", "M")
-
-    assert script_variables["PYSB_IS_DIR"] == "false"
+    assert grants == [(path, "package", mask, is_dir)]
 
 
 def test_lock_file_waits_through_contention(monkeypatch) -> None:  # type: ignore[no-untyped-def]

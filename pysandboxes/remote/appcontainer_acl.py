@@ -3,6 +3,7 @@
 """Pure planning helpers for the Windows AppContainer access-control layer."""
 
 import base64
+import ctypes
 import errno
 import glob
 import os
@@ -11,7 +12,7 @@ import subprocess
 import sys
 import time
 from collections.abc import Iterator
-from contextlib import contextmanager
+from contextlib import ExitStack, contextmanager
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -142,38 +143,12 @@ def _apply_acl(path: Path, sid: str, rights: str, *, runtime: bool = False, run_
             broad = _has_broad_appcontainer_read_access(path)
         if broad:
             return
-    access = "ReadAndExecute" if rights == "RX" else "Modify"
-    script = (
-        "$acl = Get-Acl -LiteralPath $env:PYSB_PATH; "
-        "$desired = [Enum]::Parse([System.Security.AccessControl.FileSystemRights], $env:PYSB_RIGHTS); "
-        "$existing = @($acl.Access | Where-Object { $_.IdentityReference.Value -eq $env:PYSB_SID "
-        "-and $_.AccessControlType -eq 'Allow' -and (($_.FileSystemRights -band $desired) -eq $desired) "
-        "-and ($env:PYSB_IS_DIR -ne 'true' -or "
-        "(($_.InheritanceFlags -band [System.Security.AccessControl.InheritanceFlags]::ContainerInherit) -ne 0 "
-        "-and ($_.InheritanceFlags -band [System.Security.AccessControl.InheritanceFlags]::ObjectInherit) -ne 0)) }); "
-        "if ($existing.Count -eq 0) { "
-        "$sid = New-Object -TypeName System.Security.Principal.SecurityIdentifier -ArgumentList $env:PYSB_SID; "
-        "$inherit = [System.Security.AccessControl.InheritanceFlags]::None; "
-        "if ($env:PYSB_IS_DIR -eq 'true') { $inherit = "
-        "[System.Security.AccessControl.InheritanceFlags]::ContainerInherit -bor "
-        "[System.Security.AccessControl.InheritanceFlags]::ObjectInherit }; "
-        "$rule = New-Object -TypeName System.Security.AccessControl.FileSystemAccessRule -ArgumentList "
-        "@($sid, $desired, $inherit, [System.Security.AccessControl.PropagationFlags]::None, "
-        "[System.Security.AccessControl.AccessControlType]::Allow); $acl.AddAccessRule($rule) }; "
-        "$acl.GetSecurityDescriptorSddlForm([System.Security.AccessControl.AccessControlSections]::Access)"
-    )
+    mask = _READ_EXECUTE if rights == "RX" else _MODIFY
     try:
-        variables = {
-            "PYSB_PATH": str(path),
-            "PYSB_SID": sid,
-            "PYSB_RIGHTS": access,
-            "PYSB_IS_DIR": str(path.is_dir()).lower(),
-        }
+        inherit = path.is_dir()
         if run_sid is None:
-            with _traced(f"  run_acl_script {path}"):
-                sddl = _run_acl_script(script, variables).strip()
-            with _traced(f"  set_acl_sddl {path}"):
-                _set_acl_sddl(path, sddl)
+            with _traced(f"  grant_dacl {path}"):
+                _grant_dacl(path, sid, mask, inherit)
         else:
             with _acl_lock():
                 runs = _read_run_journal()
@@ -185,10 +160,8 @@ def _apply_acl(path: Path, sid: str, rights: str, *, runtime: bool = False, run_
                     grants.append(path_text)
                     _write_run_journal(runs)
                 try:
-                    with _traced(f"  run_acl_script {path}"):
-                        sddl = _run_acl_script(script, variables, locked=True).strip()
-                    with _traced(f"  set_acl_sddl {path}"):
-                        _set_acl_sddl(path, sddl)
+                    with _traced(f"  grant_dacl {path}"):
+                        _grant_dacl(path, sid, mask, inherit)
                     if runtime and path.is_dir() and not _runtime_acl_cached(path, sid):
                         _apply_acl_tree(path, sid)
                         _cache_runtime_acl(path, sid)
@@ -206,20 +179,152 @@ def _apply_acl(path: Path, sid: str, rights: str, *, runtime: bool = False, run_
         raise OSError(f"Cannot grant AppContainer access to {path}: {error}") from error
 
 
+_READ_EXECUTE = 0x1200A9
+_MODIFY = 0x1301BF
+_ALL_APPLICATION_PACKAGES = ("S-1-15-2-1", "S-1-15-2-2")
+_DACL_INFORMATION = 0x00000004
+_PROTECTED_DACL = 0x80000000
+_UNPROTECTED_DACL = 0x20000000
+_SE_DACL_PROTECTED = 0x1000
+_SUB_CONTAINERS_AND_OBJECTS_INHERIT = 3
+_ACL_SIZE_INFORMATION = 2
+_ACE_SID_OFFSET = 8
+
+
+class _Trustee(ctypes.Structure):
+    _fields_ = [
+        ("pMultipleTrustee", ctypes.c_void_p),
+        ("MultipleTrusteeOperation", ctypes.c_uint32),
+        ("TrusteeForm", ctypes.c_uint32),
+        ("TrusteeType", ctypes.c_uint32),
+        ("ptstrName", ctypes.c_void_p),
+    ]
+
+
+class _ExplicitAccess(ctypes.Structure):
+    _fields_ = [
+        ("grfAccessPermissions", ctypes.c_uint32),
+        ("grfAccessMode", ctypes.c_uint32),
+        ("grfInheritance", ctypes.c_uint32),
+        ("Trustee", _Trustee),
+    ]
+
+
+class _AclSizeInformation(ctypes.Structure):
+    _fields_ = [("AceCount", ctypes.c_uint32), ("AclBytesInUse", ctypes.c_uint32), ("AclBytesFree", ctypes.c_uint32)]
+
+
+class _AceHeader(ctypes.Structure):
+    _fields_ = [
+        ("AceType", ctypes.c_ubyte),
+        ("AceFlags", ctypes.c_ubyte),
+        ("AceSize", ctypes.c_uint16),
+        ("Mask", ctypes.c_uint32),
+    ]
+
+
+def _win32_apis() -> tuple[Any, Any]:
+    """Return advapi32 and kernel32 with the prototypes of the security functions used here."""
+    advapi32 = ctypes.__dict__["WinDLL"]("advapi32", use_last_error=True)
+    kernel32 = ctypes.__dict__["WinDLL"]("kernel32", use_last_error=True)
+    pointer, dword, out = ctypes.c_void_p, ctypes.c_uint32, ctypes.POINTER(ctypes.c_void_p)
+    advapi32.ConvertStringSidToSidW.argtypes = (ctypes.c_wchar_p, out)
+    advapi32.GetNamedSecurityInfoW.argtypes = (ctypes.c_wchar_p, dword, dword, pointer, pointer, out, pointer, out)
+    advapi32.GetNamedSecurityInfoW.restype = dword
+    advapi32.GetSecurityDescriptorControl.argtypes = (pointer, ctypes.POINTER(ctypes.c_uint16), ctypes.POINTER(dword))
+    advapi32.SetEntriesInAclW.argtypes = (dword, ctypes.POINTER(_ExplicitAccess), pointer, out)
+    advapi32.SetEntriesInAclW.restype = dword
+    advapi32.SetNamedSecurityInfoW.argtypes = (ctypes.c_wchar_p, dword, dword, pointer, pointer, pointer, pointer)
+    advapi32.SetNamedSecurityInfoW.restype = dword
+    advapi32.GetAclInformation.argtypes = (pointer, pointer, dword, dword)
+    advapi32.GetAce.argtypes = (pointer, dword, out)
+    advapi32.EqualSid.argtypes = (pointer, pointer)
+    kernel32.LocalFree.argtypes = (pointer,)
+    kernel32.LocalFree.restype = pointer
+    return advapi32, kernel32
+
+
+def _check_status(status: int) -> None:
+    if status:
+        raise ctypes.__dict__["WinError"](status)
+
+
+def _check_call(succeeded: int) -> None:
+    if not succeeded:
+        raise ctypes.__dict__["WinError"](ctypes.__dict__["get_last_error"]())
+
+
+@contextmanager
+def _sid_pointer(sid: str) -> Iterator[ctypes.c_void_p]:
+    advapi32, kernel32 = _win32_apis()
+    pointer = ctypes.c_void_p()
+    _check_call(advapi32.ConvertStringSidToSidW(sid, ctypes.byref(pointer)))
+    try:
+        yield pointer
+    finally:
+        kernel32.LocalFree(pointer)
+
+
+@contextmanager
+def _dacl_of(path: Path) -> Iterator[tuple[ctypes.c_void_p, bool]]:
+    """Yield a path's DACL and whether it is protected from inheritance, without translating any SID to a name."""
+    advapi32, kernel32 = _win32_apis()
+    dacl = ctypes.c_void_p()
+    descriptor = ctypes.c_void_p()
+    _check_status(
+        advapi32.GetNamedSecurityInfoW(
+            str(path), 1, _DACL_INFORMATION, None, None, ctypes.byref(dacl), None, ctypes.byref(descriptor)
+        )
+    )
+    try:
+        control = ctypes.c_uint16()
+        revision = ctypes.c_uint32()
+        _check_call(advapi32.GetSecurityDescriptorControl(descriptor, ctypes.byref(control), ctypes.byref(revision)))
+        yield dacl, bool(control.value & _SE_DACL_PROTECTED)
+    finally:
+        kernel32.LocalFree(descriptor)
+
+
+def _grant_dacl(path: Path, sid: str, mask: int, inherit: bool) -> None:
+    """Merge an allow entry for ``sid`` into a path's DACL, keeping its inheritance protection."""
+    advapi32, kernel32 = _win32_apis()
+    with _sid_pointer(sid) as sid_pointer, _dacl_of(path) as (dacl, protected):
+        access = _ExplicitAccess(
+            mask, 1, _SUB_CONTAINERS_AND_OBJECTS_INHERIT if inherit else 0, _Trustee(None, 0, 0, 0, sid_pointer.value)
+        )
+        merged = ctypes.c_void_p()
+        _check_status(advapi32.SetEntriesInAclW(1, ctypes.byref(access), dacl, ctypes.byref(merged)))
+        try:
+            flag = _PROTECTED_DACL if protected else _UNPROTECTED_DACL
+            _check_status(
+                advapi32.SetNamedSecurityInfoW(str(path), 1, _DACL_INFORMATION | flag, None, None, merged, None)
+            )
+        finally:
+            kernel32.LocalFree(merged)
+
+
+def _has_allow_ace(path: Path, sids: tuple[str, ...], mask: int) -> bool:
+    """Return whether a path's DACL holds an allow entry covering ``mask`` for one of ``sids``."""
+    advapi32, _ = _win32_apis()
+    with ExitStack() as stack, _dacl_of(path) as (dacl, _):
+        if not dacl.value:
+            return False
+        pointers = [stack.enter_context(_sid_pointer(sid)) for sid in sids]
+        size = _AclSizeInformation()
+        _check_call(advapi32.GetAclInformation(dacl, ctypes.byref(size), ctypes.sizeof(size), _ACL_SIZE_INFORMATION))
+        for index in range(size.AceCount):
+            entry = ctypes.c_void_p()
+            _check_call(advapi32.GetAce(dacl, index, ctypes.byref(entry)))
+            header = _AceHeader.from_address(entry.value or 0)
+            if header.AceType == 0 and header.Mask & mask == mask:
+                if any(advapi32.EqualSid((entry.value or 0) + _ACE_SID_OFFSET, pointer) for pointer in pointers):
+                    return True
+    return False
+
+
 def _has_broad_appcontainer_read_access(path: Path) -> bool:
     """Return whether Windows already grants read/execute access to all AppContainers."""
-    script = (
-        "$acl = Get-Acl -LiteralPath $env:PYSB_PATH; $sids = @('S-1-15-2-1', 'S-1-15-2-2'); "
-        "$names = @($sids | ForEach-Object { "
-        "(New-Object System.Security.Principal.SecurityIdentifier($_)).Translate( "
-        "[System.Security.Principal.NTAccount]).Value }); "
-        "$desired = [System.Security.AccessControl.FileSystemRights]::ReadAndExecute; "
-        "$existing = @($acl.Access | Where-Object { "
-        "($sids -contains $_.IdentityReference.Value -or $names -contains $_.IdentityReference.Value) "
-        "-and $_.AccessControlType -eq 'Allow' "
-        "-and (($_.FileSystemRights -band $desired) -eq $desired) }); $existing.Count -gt 0"
-    )
-    return _run_acl_script(script, {"PYSB_PATH": str(path)}).strip().lower() == "true"
+    return _has_allow_ace(path, _ALL_APPLICATION_PACKAGES, _READ_EXECUTE)
 
 
 def mask_acl(path: Path, package_sid: str, runtime_sid: str) -> None:
@@ -294,7 +399,6 @@ def _run_acl_script(script: str, variables: dict[str, str], *, locked: bool = Fa
 
 def _set_acl_sddl(path: Path, sddl: str) -> None:
     """Set only a path's DACL so ordinary users do not need SACL privileges."""
-    import ctypes
     from ctypes import wintypes
 
     advapi32 = ctypes.__dict__["WinDLL"]("advapi32", use_last_error=True)

@@ -295,5 +295,6 @@ jobs:
         PYSANDBOXES_FAIL_ON_SKIP: "1"
       run: >-
         uv run pytest -rs -x --tb=short --durations=10
+        tests/unit_tests/remote/test_appcontainer_acl_native.py
         tests/integration_tests/remote/test_appcontainer.py
         tests/integration_tests/test_temp_cleanup.py

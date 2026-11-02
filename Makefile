@@ -166,7 +166,7 @@ windows-vm:
 
 # Windows also runs the `appcontainer` provider: the "AppContainer integration" step of cross-os.yml.
 WINDOWS_VM_PYTEST ?= $(CROSS_OS_PYTEST) \
-	"uv run pytest -rs tests/integration_tests/remote/test_appcontainer.py tests/integration_tests/test_temp_cleanup.py"
+	"uv run pytest -rs tests/unit_tests/remote/test_appcontainer_acl_native.py tests/integration_tests/remote/test_appcontainer.py tests/integration_tests/test_temp_cleanup.py"
 # As in cross-os.yml, a skipped integration test fails the run; the whole suite skips what Windows cannot run.
 WINDOWS_VM_FAIL_ON_SKIP ?= 1
 
