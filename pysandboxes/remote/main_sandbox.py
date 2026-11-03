@@ -525,6 +525,11 @@ def main() -> int:
     # The AppContainer trampoline confines this process before it starts: nothing is left for the provider to do
     # here. The Python guards are armed all the same.
     confined_by_parent = sys.platform == "win32" and all_rules.os_sandbox == "appcontainer"
+    if confined_by_parent:
+        from .appcontainer_acl import PRIVATE_FOLDER_ENV, with_private_folder
+
+        if PRIVATE_FOLDER_ENV in os.environ:
+            all_rules = with_private_folder(all_rules, os.environ[PRIVATE_FOLDER_ENV])
     activate_sandboxes(
         all_rules,
         os.environ,

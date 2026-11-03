@@ -5,6 +5,7 @@
 from ipaddress import ip_network
 import builtins
 import errno
+import os
 from pathlib import Path
 from contextlib import nullcontext
 from tempfile import TemporaryFile
@@ -17,6 +18,7 @@ from pysandboxes.guard_files import FSExposeRule, IgnoreRule
 from pysandboxes.guard_socket import Action, Direction, Kind, SocketMask, SocketRule
 from pysandboxes.remote import appcontainer_acl
 from pysandboxes.remote.appcontainer_acl import (
+    with_private_folder,
     build_acl_plan,
     has_ignore_in_writable_exposure,
     has_user_network_rules,
@@ -58,6 +60,18 @@ def test_network_capabilities_omit_only_injected_inbound_sse_rule() -> None:
     assert has_user_network_rules((outbound,), 43210)
     inbound = outbound._replace(directions=(Direction.IN,), config=ConfigLine("net=ALLOW|TCP|*|43210|IN", Path(), 1))
     assert network_capabilities((inbound,), 43210) == ("internetClientServer",)
+
+
+def test_the_private_folder_is_added_in_read_write_ahead_of_the_rules(tmp_path: Path) -> None:
+    existing = FSExposeRule(str(tmp_path / "kept") + os.sep, False, ConfigLine("expose-ro=", tmp_path, 1))
+    rules = EmptyRules._replace(file_rules=(existing,))
+
+    result = with_private_folder(rules, str(tmp_path / "pysb.run"))
+
+    first, *others = result.file_rules
+    assert isinstance(first, FSExposeRule)
+    assert first.path == str(tmp_path / "pysb.run") + os.sep and first.write
+    assert others == [existing]
 
 
 def test_ignore_under_writable_exposure_is_reported(tmp_path: Path) -> None:

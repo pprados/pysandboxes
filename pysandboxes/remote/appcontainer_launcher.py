@@ -13,6 +13,7 @@ from pathlib import Path
 from typing import Any
 
 from .appcontainer_acl import (
+    PRIVATE_FOLDER_ENV,
     ACLGrant,
     apply_acl,
     begin_run,
@@ -174,6 +175,24 @@ def _create_profile(name: str) -> tuple[ctypes.c_void_p, str]:
         raise
 
 
+def _private_folder(package_sid: str) -> str:
+    """Return the folder Windows keeps for an AppContainer, where its application data goes."""
+    userenv = _win_dll("userenv")
+    ole32 = _win_dll("ole32")
+    get_folder = userenv.GetAppContainerFolderPath
+    get_folder.argtypes = (wintypes.LPCWSTR, ctypes.POINTER(ctypes.c_void_p))
+    get_folder.restype = ctypes.c_long
+    ole32.CoTaskMemFree.argtypes = (ctypes.c_void_p,)
+    path = ctypes.c_void_p()
+    hr = get_folder(package_sid, ctypes.byref(path))
+    if hr & 0x80000000:
+        raise OSError(f"GetAppContainerFolderPath failed with HRESULT 0x{hr & 0xFFFFFFFF:08X}")
+    try:
+        return ctypes.wstring_at(path.value or 0)
+    finally:
+        ole32.CoTaskMemFree(path)
+
+
 def _delete_profile(name: str) -> None:
     userenv = _win_dll("userenv")
     delete = userenv.DeleteAppContainerProfile
@@ -317,7 +336,8 @@ def run(plan_path: Path, config_path: Path, python_args: list[str] | None = None
         child_command = [*plan["child_command"], *(python_args or []), "--_named-pipe", str(config_path)]
         shared_path = Path(plan["shared_socket_path"])
         child_command.extend(("--_shared-socket", str(shared_path)))
-        process_info = _create_process(child_command, dict(plan["env"]), package_sid_ptr, capability_sids)
+        child_env = {**plan["env"], PRIVATE_FOLDER_ENV: _private_folder(package_sid)}
+        process_info = _create_process(child_command, child_env, package_sid_ptr, capability_sids)
         job = create_kill_on_close_job()
         assign(job, process_info.dwProcessId)
         set_ui_restrictions(job)

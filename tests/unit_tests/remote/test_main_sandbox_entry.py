@@ -15,6 +15,7 @@ import pytest  # type: ignore[import-untyped]
 import pysandboxes
 from pysandboxes.all_rules import AllRules, EmptyRules
 from pysandboxes.remote import main_sandbox
+from pysandboxes.remote.appcontainer_acl import PRIVATE_FOLDER_ENV
 from pysandboxes.remote.daemon_parameters import DaemonParameters
 from pysandboxes.sb_types import Envs
 
@@ -153,6 +154,30 @@ def test_the_provider_is_skipped_only_for_a_process_the_appcontainer_trampoline_
 
     (_, kwargs), *_ = harness.named("activate")
     assert kwargs["run_provider"] is run_provider
+
+
+def test_the_private_folder_of_an_appcontainer_is_exposed_to_the_guards(
+    harness: _Harness, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    monkeypatch.setattr(sys, "platform", "win32")
+    harness.environ[PRIVATE_FOLDER_ENV] = str(tmp_path / "pysb.run")
+
+    _run(monkeypatch, tmp_path, EmptyRules._replace(os_sandbox="appcontainer"))
+
+    (args, _), *_ = harness.named("activate")
+    rule, *_ = args[0].file_rules
+    assert rule.path == os.path.join(str(tmp_path / "pysb.run"), "") and rule.write
+
+
+def test_no_private_folder_is_exposed_to_a_process_the_appcontainer_did_not_confine(
+    harness: _Harness, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    harness.environ[PRIVATE_FOLDER_ENV] = str(tmp_path / "pysb.run")
+
+    _run(monkeypatch, tmp_path, EmptyRules._replace(os_sandbox="appcontainer"))
+
+    (args, _), *_ = harness.named("activate")
+    assert args[0].file_rules == EmptyRules.file_rules
 
 
 def test_python_sb_runs_the_program_with_the_unparsed_arguments(

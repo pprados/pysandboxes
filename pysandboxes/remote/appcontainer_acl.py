@@ -19,6 +19,21 @@ from typing import Any
 from ..all_rules import AllRules
 from ..guard_files import FSExposeRule, IgnoreRule
 from ..guard_socket import Action, Direction, SocketRule
+from ..sb_types import ConfigLine
+
+PRIVATE_FOLDER_ENV = "PYSANDBOXES_APPCONTAINER_FOLDER"
+
+
+def with_private_folder(all_rules: AllRules, folder: str) -> AllRules:
+    """Add the private folder of the AppContainer to the rules, in read-write.
+
+    Windows answers an AppContainer asking for its application data folder with a folder of its own, named after the
+    run, so no profile can list it. It belongs to the run and goes away with it: opening it grants nothing more.
+    """
+    rule = FSExposeRule(
+        path=os.path.join(folder, ""), write=True, config=ConfigLine("<implicit appcontainer folder>", Path(), 0)
+    )
+    return all_rules._replace(file_rules=(rule,) + all_rules.file_rules)
 
 
 @dataclass(frozen=True)
