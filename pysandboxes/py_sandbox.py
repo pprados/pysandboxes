@@ -12,6 +12,7 @@ import logging
 import os
 import re
 import sys
+import tempfile
 import types
 import uuid
 
@@ -403,6 +404,9 @@ def activate_sandboxes(
 
     # Apply the rules
     if all_rules.use_py_sandbox:
+        # Find the temporary directory now: tempfile caches it, and a library imported later (portalocker, via
+        # crewai) asks for it once the file guard no longer lets the search probe /tmp.
+        tempfile.gettempdir()
         env_patch_rules = guard_envs.patch_rules(all_rules.learn)
         file_patch_rules = guard_files.patch_rules(all_rules.learn)
         socket_patch_rules = guard_socket.patch_rules(all_rules.learn)

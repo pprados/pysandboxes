@@ -7,7 +7,7 @@ from typing import Any
 
 import pytest
 
-from pysandboxes import _os_sandbox
+from pysandboxes import _os_sandbox, py_sandbox
 from pysandboxes.py_sandbox import activate_sandboxes, load_and_parse_config
 
 
@@ -83,6 +83,33 @@ def test_a_process_confined_before_it_started_still_loads_its_provider_module(
     activate_sandboxes(rules, run_provider=False)
 
     assert looked_up == ["subprocess"]
+
+
+def test_the_temporary_directory_is_found_before_the_guards_are_armed(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    profile = tmp_path / "armed.profile"
+    profile.write_text("os-sandbox=subprocess\n")
+    journal: list[str] = []
+
+    class _Stop(Exception):
+        pass
+
+    def arm(learn: bool) -> Any:
+        journal.append("arm")
+        raise _Stop
+
+    def find_tempdir() -> str:
+        journal.append("tempdir")
+        return ""
+
+    monkeypatch.setattr(py_sandbox.tempfile, "gettempdir", find_tempdir)
+    monkeypatch.setattr(py_sandbox.guard_envs, "patch_rules", arm)
+
+    with pytest.raises(_Stop):
+        activate_sandboxes(load_and_parse_config(profile))
+
+    assert journal == ["tempdir", "arm"]
 
 
 def test_an_unknown_provider_is_refused(providers: list[str], rules: Any) -> None:
