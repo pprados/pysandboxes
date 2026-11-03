@@ -68,6 +68,23 @@ def test_a_process_confined_before_it_started_does_not_call_its_provider(provide
     assert providers == []
 
 
+def test_a_process_confined_before_it_started_still_loads_its_provider_module(
+    monkeypatch: pytest.MonkeyPatch, rules: Any
+) -> None:
+    looked_up: list[str] = []
+
+    class _Factory(dict[str, Any]):
+        def __getitem__(self, key: str) -> Any:
+            looked_up.append(key)
+            return super().__getitem__(key)
+
+    monkeypatch.setattr(_os_sandbox, "providers_factory", _Factory(subprocess=lambda token: None))
+
+    activate_sandboxes(rules, run_provider=False)
+
+    assert looked_up == ["subprocess"]
+
+
 def test_an_unknown_provider_is_refused(providers: list[str], rules: Any) -> None:
     with pytest.raises(ValueError, match="Unknown os-sandbox name: nope"):
         activate_sandboxes(rules, rules_provider="nope")

@@ -3,3 +3,5 @@
 # crewai keeps its data under %LOCALAPPDATA% on Windows, where Linux uses ~/.local/share.
 expose-rw=~/AppData/Local/CrewAI/crewai-demo
 expose-rw=~/AppData/Local/crewai/credentials
+# portalocker, imported by crewai, asks tempfile for a writable directory at import.
+expose-rw=${TEMP}
