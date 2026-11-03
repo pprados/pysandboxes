@@ -442,6 +442,23 @@ def test_read_host_file_falls_back_to_the_default_windows_root_when_unset(
     assert "fallback-only.example" in dns
 
 
+@pytest.mark.skipif(sys.platform == "win32", reason="the simulated path needs a POSIX filesystem")
+def test_read_host_file_skips_a_line_that_does_not_start_with_an_address(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    monkeypatch.setattr("sys.platform", "win32")
+    monkeypatch.setenv("SystemRoot", str(tmp_path))
+    (tmp_path / "System32\\drivers\\etc\\hosts").write_text(
+        "ip-10-0-132-74.compute.internal 198.51.100.45\n198.51.100.46 kept.example\n"
+    )
+
+    dns, inverse_dns = gs._read_host_file()
+
+    assert "kept.example" in dns
+    assert "ip-10-0-132-74.compute.internal" not in dns
+    assert len(inverse_dns) >= 1
+
+
 def test_read_host_file_returns_empty_tables_on_an_unsupported_platform(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr("sys.platform", "aix")
 

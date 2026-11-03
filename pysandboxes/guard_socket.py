@@ -1618,10 +1618,14 @@ def _read_host_file() -> tuple[
             line = line.strip()
             if line:
                 ip, *hosts = line.split()
+                try:
+                    address = ip_address(ip)
+                except ValueError:
+                    continue
                 if hosts:
-                    inverse_dns.setdefault(ip_address(ip), set()).add(hosts[0])
+                    inverse_dns.setdefault(address, set()).add(hosts[0])
                 for host in hosts:
-                    dns.setdefault(host, set()).add(ip_address(ip))
+                    dns.setdefault(host, set()).add(address)
     for host, ips in _LOOPBACK_HOSTS.items():
         if host in dns:
             continue
