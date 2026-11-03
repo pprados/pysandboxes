@@ -528,8 +528,9 @@ def main() -> int:
     if confined_by_parent:
         from .appcontainer_acl import PRIVATE_FOLDER_ENV, with_private_folder
 
-        if PRIVATE_FOLDER_ENV in os.environ:
-            all_rules = with_private_folder(all_rules, os.environ[PRIVATE_FOLDER_ENV])
+        private_folder = os.environ.pop(PRIVATE_FOLDER_ENV, None)
+        if private_folder is not None:
+            all_rules = with_private_folder(all_rules, private_folder)
     activate_sandboxes(
         all_rules,
         os.environ,

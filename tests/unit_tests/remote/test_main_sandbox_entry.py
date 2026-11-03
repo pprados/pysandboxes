@@ -167,6 +167,7 @@ def test_the_private_folder_of_an_appcontainer_is_exposed_to_the_guards(
     (args, _), *_ = harness.named("activate")
     rule, *_ = args[0].file_rules
     assert rule.path == os.path.join(str(tmp_path / "pysb.run"), "") and rule.write
+    assert PRIVATE_FOLDER_ENV not in harness.environ
 
 
 def test_no_private_folder_is_exposed_to_a_process_the_appcontainer_did_not_confine(
