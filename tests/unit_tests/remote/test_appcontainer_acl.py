@@ -2,12 +2,12 @@
 # License: Apache V2
 """Tests for AppContainer ACL rule planning."""
 
-from ipaddress import ip_network
 import builtins
 import errno
 import os
-from pathlib import Path
 from contextlib import nullcontext
+from ipaddress import ip_network
+from pathlib import Path
 from tempfile import TemporaryFile
 from types import SimpleNamespace
 
@@ -18,11 +18,11 @@ from pysandboxes.guard_files import FSExposeRule, IgnoreRule
 from pysandboxes.guard_socket import Action, Direction, Kind, SocketMask, SocketRule
 from pysandboxes.remote import appcontainer_acl
 from pysandboxes.remote.appcontainer_acl import (
-    with_private_folder,
     build_acl_plan,
     has_ignore_in_writable_exposure,
     has_user_network_rules,
     network_capabilities,
+    with_private_folder,
 )
 from pysandboxes.sb_types import ConfigLine
 

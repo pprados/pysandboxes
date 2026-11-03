@@ -6,8 +6,7 @@ import sys
 
 import pytest
 
-from pysandboxes.remote import win_window
-from pysandboxes.remote import appcontainer_launcher
+from pysandboxes.remote import appcontainer_launcher, win_window
 
 
 def test_window_helpers_import_without_loading_windows_dlls() -> None:
