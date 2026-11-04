@@ -167,7 +167,7 @@ The OS layer is selected with `os-sandbox=<provider>` in `.py-sandboxes`, or for
 |---|---|---|
 | Linux | yes | `landlock`, `bwrap`, `firejail`, `unshare`, `qemu`, `subprocess` |
 | WSL | yes | the Linux providers, where the kernel and tooling requirements are met |
-| **macOS** | yes | `sandbox-exec` ([Seatbelt](https://github.com/pprados/pysandboxes/wiki/sandbox-exec): files and ports, but no remote host or IP filtering) and `subprocess` |
+| macOS | yes | `sandbox-exec` ([Seatbelt](https://github.com/pprados/pysandboxes/wiki/sandbox-exec): files and ports, but no remote host or IP filtering) and `subprocess` |
 | Windows | yes | `appcontainer` ([limits](https://github.com/pprados/pysandboxes/wiki/appcontainer): file ACLs and network capabilities, but no host or port filtering) and `subprocess` |
 
 Kernel-backed providers (`landlock`, `bwrap`, `firejail`, `unshare`, `qemu`) are Linux technologies. The Python layer, `sandbox-exec` on macOS and `appcontainer` on Windows are exercised by the [cross-OS workflow](https://github.com/pprados/pysandboxes/blob/master/.github/workflows/cross-os.yml). Provider prerequisites: [provider comparison](https://github.com/pprados/pysandboxes/wiki/os-providers).
