@@ -39,7 +39,7 @@ The OCI spec is written under the run directory: read-only root, `/tmp` as a tmp
 | `net=` | ✅ | `iptables` in the private namespace; UDP, TCP, host and port |
 | env rules | ✅ | the OCI `process.env` is the whole environment |
 | `import`, `eval-*` | ❌ | Python layer only |
-| `python-api=` | ✅ | the guard runs in the guest, on the Sentry |
+| `python-api=` | ❌ | Python layer only: with `py-sandbox=false`, `os.system` runs |
 | `/dev/...` exposure | ❌ | the guest has its own `/dev`; a warning is logged |
 
 ## Prerequisites

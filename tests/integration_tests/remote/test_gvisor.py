@@ -173,3 +173,16 @@ def test_no_runsc_process_outlives_the_run(tmp_path: Path) -> None:
     _in_guest(tmp_path, "print('done')")
 
     assert _guest_processes() - before == set()
+
+
+def test_compiled_code_cannot_open_a_path_without_a_rule(tmp_path: Path) -> None:
+    secret = tmp_path / "secret.txt"
+    secret.write_text("secret\n")
+    probe = (
+        "import ctypes\n"
+        f"fd = ctypes.CDLL(None, use_errno=True).open({str(secret)!r}.encode(), 0)\n"
+        "print('NATIVE_OPEN', 'denied' if fd < 0 else 'opened')\n"
+    )
+
+    assert "NATIVE_OPEN denied" in _in_guest(tmp_path, probe)
+    assert "NATIVE_OPEN opened" in _on_host(probe), "the control must reach the file"
