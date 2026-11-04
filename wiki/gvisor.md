@@ -50,7 +50,17 @@ The OCI spec is written under the run directory: read-only root, `/tmp` as a tmp
 
 | Parameter | Default | Meaning |
 |-----------|---------|---------|
-| `gvisor.platform` | `systrap` | `systrap`, `ptrace` or `kvm` |
+| `gvisor.platform` | `systrap` | How `runsc` intercepts the guest's system calls: `systrap`, `ptrace` or `kvm`. Any other value is refused. |
+
+The platform changes speed and host requirements, not the rules: the files, network and environment rules are the same on the three.
+
+| Platform | Mechanism | Needs | 50 000 `os.stat` | Whole run |
+|----------|-----------|-------|:---:|:---:|
+| `systrap` | seccomp and signals | nothing special | 0.17 s | 0.8 s |
+| `ptrace` | `ptrace` of the guest's threads | `ptrace` allowed | 0.42 s | 1.1 s |
+| `kvm` | the guest runs as a KVM virtual machine | read-write `/dev/kvm` | 0.36 s | 0.9 s |
+
+Measured on one host, `py-sandbox=false`, one run each: an order of magnitude, not a benchmark. `unavailable_reason()` runs a guest on the default platform only: a missing `/dev/kvm` shows when the guest starts, not before.
 
 ## Using with Docker
 

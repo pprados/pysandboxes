@@ -249,8 +249,10 @@ py-sandbox=true
 # - subprocess (default elsewhere): isolates code in a separate Python process. Most portable (Linux,
 #   macOS, Windows), but no OS boundary: a compiled extension or a direct syscall
 #   is not confined
-# - landlock, firejail, unshare, bwrap, qemu, etc: Linux kernel-backed sandboxing with
+# - landlock, firejail, unshare, bwrap, qemu, gvisor: Linux kernel-backed sandboxing with
 #   syscall filtering, network isolation
+# - sandbox-exec (macOS) and appcontainer (Windows): opt-in, see wiki/sandbox-exec.md and
+#   wiki/appcontainer.md
 # - none: Disables @sandbox decorator (for testing/debugging only)
 #
 # Note: Some providers may not work in containers without additional privileges.
@@ -291,7 +293,8 @@ remote-result-guard=true
 # ======================================
 # Lines below apply only when os-sandbox matches that provider. Syntax is always
 # <provider>.<key>=<value>; the runtime stores keys without the "<provider>." prefix.
-# See wiki/qemu.md, wiki/bwrap.md, wiki/unshare.md, wiki/firejail.md, etc.
+# See wiki/qemu.md, wiki/bwrap.md, wiki/unshare.md, wiki/firejail.md, wiki/gvisor.md, etc.
+# landlock, sandbox-exec and appcontainer take no <provider>.<key> line.
 
 #######################################################################################
 # QEMU (os-sandbox=qemu)
@@ -329,12 +332,19 @@ remote-result-guard=true
 #
 # qemu.virtfs_security_model — 9p security_model for non-staged mounts
 #   Default: mapped-xattr. Staged trees use "none" automatically for reliable .so mmap.
+#
+# qemu.ld_closure_libs — Libraries copied by the staging (only when qemu.virtfs stages)
+#   full (default): the ldd closure of the interpreter, plus the host's whole /lib/<triplet> and
+#   /usr/lib/<triplet>, so a C extension rarely misses a library.
+#   sparse (aliases minimal, ldd): the ldd closure only, plus a small compatibility list.
+#   Faster and smaller, at the risk of a missing lib*.so.
 
 # qemu.use_kvm=true
 # qemu.memory=2G
 # qemu.show_boot_console=false
 # qemu.start_timeout=90
 # qemu.virtfs=auto
+# qemu.ld_closure_libs=full
 
 #######################################################################################
 # Bubblewrap (os-sandbox=bwrap)
@@ -401,8 +411,33 @@ remote-result-guard=true
 # Typical use: add or override unshare(1) long options the template does not set. The
 # template already enables --net, --user, -r, --mount, --propagation private, --pid, --fork,
 # --kill-child.
+#
+# unshare.proc — The /proc of the sandbox (read by PySandboxes, not passed to unshare)
+#   mount (default): a new /proc is mounted.
+#   none: no /proc at all. Needed in a container that masks parts of /proc (the mount is refused);
+#   code that reads /proc itself, such as /proc/self/fd, then fails.
 
+# unshare.proc=none
 # unshare.<param>=<value>
+
+#######################################################################################
+# gVisor (os-sandbox=gvisor)
+# ==========================
+# Runs the code on gVisor's user-space kernel (runsc), in a network namespace filtered by
+# iptables. Requires runsc with its gvisor-bin directory, unshare, slirp4netns, iptables-restore
+# and ip. A /dev or /proc rule is not honoured (the guest has its own) and is logged.
+# wiki/gvisor.md.
+#
+# gvisor.platform — How the guest's system calls are intercepted (runsc --platform)
+#   systrap (default): seccomp and signals, no special device or privilege. Measured here
+#   (50 000 os.stat): 0.17 s, whole run 0.8 s.
+#   ptrace: ptrace of the guest's threads. Works where systrap does not; the same measure takes
+#   0.42 s, whole run 1.1 s.
+#   kvm: the guest runs as a KVM virtual machine; needs read-write access to /dev/kvm. 0.36 s,
+#   whole run 0.9 s here. Not probed by unavailable_reason(): a host without /dev/kvm fails at
+#   start. Any other value is refused.
+
+# gvisor.platform=systrap
 
 #######################################################################################
 # Subprocess / none (os-sandbox=subprocess | os-sandbox=none)
