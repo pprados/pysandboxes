@@ -21,23 +21,67 @@ from pysandboxes.remote.gvisor_sse_daemon import GVisorSSEDaemon, wait_for_priva
 from pysandboxes.sb_types import ConfigLine, Envs
 
 
-def _fake_which(missing: set[str]) -> Any:
-    return lambda name: None if name in missing else Path("/usr/bin") / name
+def _fake_which(missing: set[str], bin_dir: Path) -> Any:
+    return lambda name: None if name in missing else bin_dir / name
 
 
 def _completed(returncode: int, stderr: bytes = b"") -> subprocess.CompletedProcess[bytes]:
     return subprocess.CompletedProcess([], returncode, b"", stderr)
 
 
+@pytest.fixture
+def host(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> Path:
+    """A host that has everything: every tool, the sidecar directory, /dev/net/tun, and a guest that starts."""
+    bin_dir = tmp_path / "bin"
+    (bin_dir / "gvisor-bin").mkdir(parents=True)
+    tun = tmp_path / "tun"
+    tun.touch()
+    monkeypatch.setattr(gvisor_sse_daemon, "which_command", _fake_which(set(), bin_dir))
+    monkeypatch.setattr(gvisor_sse_daemon, "_TUN_DEVICE", tun)
+    monkeypatch.setattr(gvisor_sse_daemon.subprocess, "run", lambda *a, **k: _completed(0))
+    return tmp_path
+
+
 class TestAvailability:
     @pytest.mark.parametrize("tool", ["runsc", "unshare", "slirp4netns", "iptables-restore", "ip"])
-    def test_a_missing_tool_is_named(self, monkeypatch: pytest.MonkeyPatch, tool: str) -> None:
-        monkeypatch.setattr(gvisor_sse_daemon, "which_command", _fake_which({tool}))
+    def test_a_missing_tool_is_named(self, monkeypatch: pytest.MonkeyPatch, host: Path, tool: str) -> None:
+        monkeypatch.setattr(gvisor_sse_daemon, "which_command", _fake_which({tool}, host / "bin"))
 
         assert tool in (GVisorSSEDaemon.unavailable_reason() or "")
 
-    def test_a_guest_that_cannot_start_is_reported_with_its_error(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        monkeypatch.setattr(gvisor_sse_daemon, "which_command", _fake_which(set()))
+    def test_a_host_that_has_everything_makes_the_provider_available(self, host: Path) -> None:
+        assert GVisorSSEDaemon.unavailable_reason() is None
+
+    def test_runsc_without_its_sidecar_directory_is_named(self, host: Path) -> None:
+        (host / "bin" / "gvisor-bin").rmdir()
+
+        reason = GVisorSSEDaemon.unavailable_reason()
+
+        assert reason is not None and "gvisor-bin" in reason
+
+    def test_the_sidecar_is_looked_for_next_to_the_real_runsc_not_next_to_a_link(
+        self, monkeypatch: pytest.MonkeyPatch, host: Path
+    ) -> None:
+        real = host / "real"
+        (real / "gvisor-bin").mkdir(parents=True)
+        (real / "runsc").touch()
+        (host / "bin" / "gvisor-bin").rmdir()
+        (host / "bin" / "runsc").symlink_to(real / "runsc")
+
+        assert GVisorSSEDaemon.unavailable_reason() is None
+
+    def test_a_missing_tun_device_is_named_with_the_container_remedy(
+        self, monkeypatch: pytest.MonkeyPatch, host: Path
+    ) -> None:
+        monkeypatch.setattr(gvisor_sse_daemon, "_TUN_DEVICE", host / "absent")
+
+        reason = GVisorSSEDaemon.unavailable_reason()
+
+        assert reason is not None and "/dev/net/tun" in reason
+
+    def test_a_guest_that_cannot_start_is_reported_with_its_error(
+        self, monkeypatch: pytest.MonkeyPatch, host: Path
+    ) -> None:
         monkeypatch.setattr(
             gvisor_sse_daemon.subprocess, "run", lambda *a, **k: _completed(1, b"sidecar gvisor_sentry not usable")
         )
@@ -46,21 +90,56 @@ class TestAvailability:
 
         assert reason is not None and "gvisor_sentry" in reason
 
-    def test_a_guest_that_starts_makes_the_provider_available(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        monkeypatch.setattr(gvisor_sse_daemon, "which_command", _fake_which(set()))
-        monkeypatch.setattr(gvisor_sse_daemon.subprocess, "run", lambda *a, **k: _completed(0))
+    def test_a_filter_that_cannot_load_is_reported_before_any_guest_runs(
+        self, monkeypatch: pytest.MonkeyPatch, host: Path
+    ) -> None:
+        def run(cmd: list[str], *args: Any, **kwargs: Any) -> subprocess.CompletedProcess[bytes]:
+            if "iptables-restore" in cmd[-2]:
+                return _completed(1, b"iptables-restore: line 1 failed")
+            return _completed(0)
 
-        assert GVisorSSEDaemon.unavailable_reason() is None
+        monkeypatch.setattr(gvisor_sse_daemon.subprocess, "run", run)
 
-    def test_a_smoke_that_hangs_makes_it_unavailable(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        monkeypatch.setattr(gvisor_sse_daemon, "which_command", _fake_which(set()))
+        reason = GVisorSSEDaemon.unavailable_reason()
 
+        assert reason is not None and "iptables-restore" in reason
+
+    def test_a_smoke_that_hangs_makes_it_unavailable(self, monkeypatch: pytest.MonkeyPatch, host: Path) -> None:
         def hang(*args: Any, **kwargs: Any) -> None:
             raise subprocess.TimeoutExpired("runsc", 1)
 
         monkeypatch.setattr(gvisor_sse_daemon.subprocess, "run", hang)
 
         assert GVisorSSEDaemon.unavailable_reason() is not None
+
+
+class TestPlatform:
+    def test_a_known_platform_is_accepted(self) -> None:
+        rules = EmptyRules._replace(os_sandbox_params=ImmutableDict({"platform": "ptrace"}))
+
+        assert GVisorSSEDaemon._platform(rules) == "ptrace"
+
+    def test_kvm_without_a_usable_kvm_device_is_refused_with_its_reason(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
+        monkeypatch.setattr(gvisor_sse_daemon, "_KVM_DEVICE", tmp_path / "absent")
+        rules = EmptyRules._replace(os_sandbox_params=ImmutableDict({"platform": "kvm"}))
+
+        with pytest.raises(SandBoxError, match="/dev/kvm|kvm"):
+            GVisorSSEDaemon._platform(rules)
+
+    def test_kvm_with_a_usable_kvm_device_is_accepted(self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+        device = tmp_path / "kvm"
+        device.touch()
+        monkeypatch.setattr(gvisor_sse_daemon, "_KVM_DEVICE", device)
+        rules = EmptyRules._replace(os_sandbox_params=ImmutableDict({"platform": "kvm"}))
+
+        assert GVisorSSEDaemon._platform(rules) == "kvm"
+
+    def test_the_default_platform_needs_no_device(self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+        monkeypatch.setattr(gvisor_sse_daemon, "_KVM_DEVICE", tmp_path / "absent")
+
+        assert GVisorSSEDaemon._platform(EmptyRules) == "systrap"
 
 
 class TestRules:

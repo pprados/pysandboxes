@@ -46,6 +46,7 @@ dependencies = [
 # Optional extras per OS sandbox provider (pip install pysandboxes[firejail], etc.)
 bwrap = []
 firejail = []
+gvisor = []
 landlock = []
 subprocess = []
 sandbox-exec = []
@@ -53,7 +54,7 @@ unshare = []
 # Install all provider extras: pip install pysandboxes[all]
 # Self-referential: no duplication; pip resolves all provider extras.
 all = [
-    "pysandboxes[bwrap,firejail,landlock,sandbox-exec,subprocess,unshare]",
+    "pysandboxes[bwrap,firejail,gvisor,landlock,sandbox-exec,subprocess,unshare]",
 ]
 
 [project.urls]

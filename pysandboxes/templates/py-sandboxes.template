@@ -428,14 +428,30 @@ remote-result-guard=true
 # and ip. A /dev or /proc rule is not honoured (the guest has its own) and is logged.
 # wiki/gvisor.md.
 #
-# gvisor.platform — How the guest's system calls are intercepted (runsc --platform)
-#   systrap (default): seccomp and signals, no special device or privilege. Measured here
-#   (50 000 os.stat): 0.17 s, whole run 0.8 s.
-#   ptrace: ptrace of the guest's threads. Works where systrap does not; the same measure takes
-#   0.42 s, whole run 1.1 s.
-#   kvm: the guest runs as a KVM virtual machine; needs read-write access to /dev/kvm. 0.36 s,
-#   whole run 0.9 s here. Not probed by unavailable_reason(): a host without /dev/kvm fails at
-#   start. Any other value is refused.
+# gvisor.platform — How runsc catches the system calls of the guest (runsc --platform)
+#   The guest never calls the host kernel: each of its system calls is caught and answered by the
+#   Sentry, gVisor's kernel written in Go that runs in user space. The platform is only the way the
+#   call is caught. The files, network and environment rules are the same on the three values,
+#   and none of them boots a Linux kernel (that is what os-sandbox=qemu does).
+#
+#   systrap (default)
+#     The guest runs in ordinary host threads under a seccomp filter: a system call raises a signal
+#     that the Sentry handles. Needs no device and no privilege, and works in a container or a
+#     virtual machine. Best choice unless the host forbids it.
+#   ptrace
+#     The Sentry follows the guest's threads with ptrace and stops them at each system call. The
+#     most widely supported, and the slowest: each call costs a context switch. Use it where systrap
+#     cannot run, for example where seccomp is restricted. Needs ptrace to be allowed on the host.
+#   kvm
+#     The Sentry runs as the kernel of a KVM virtual machine, and the guest as its user space: the
+#     processor, not signals, catches the calls. It is still gVisor's Sentry, not a Linux kernel,
+#     and the host system calls the Sentry makes are the same. It needs read-write access to
+#     /dev/kvm, and adds the host's KVM code to what the guest can reach. Pays off on bare metal for
+#     programs that make many system calls; slow inside a virtual machine (nested virtualization).
+#
+#   Measured on one host (50 000 os.stat in the guest, whole run): systrap 0.17 s and 0.8 s,
+#   ptrace 0.42 s and 1.1 s, kvm 0.36 s and 0.9 s. An order of magnitude, not a benchmark: measure
+#   your own workload. Any other value is refused, and so is kvm when /dev/kvm is not usable.
 
 # gvisor.platform=systrap
 

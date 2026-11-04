@@ -51,8 +51,10 @@ LINUX_REQUIRED=(
 LINUX_PROVIDER_TOOLS=(
   "bwrap:bubblewrap:bubblewrap"
   "firejail:firejail:firejail"
+  "unshare:util-linux:util-linux"
   "slirp4netns:slirp4netns:slirp4netns"
   "iptables:iptables:iptables"
+  "iptables-restore:iptables:iptables"
   "ip:iproute2:iproute"
   "qemu-system-x86_64:qemu-system-x86:qemu-system-x86-core"
   "qemu-img:qemu-utils:qemu-img"

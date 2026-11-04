@@ -88,18 +88,27 @@ case "$os" in
     echo
     echo "== OS providers (a provider without its tool skips its tests, which then prove nothing about it)"
     for entry in "${LINUX_PROVIDER_TOOLS[@]}"; do check_entry optional "$entry" "its provider rows skip"; done
-    if ! command -v runsc >/dev/null 2>&1 || [ ! -d "$(dirname "$(command -v runsc)")/gvisor-bin" ]; then
-      missing_optional "runsc" "is missing, or has no gvisor-bin directory next to it: the gvisor rows skip (https://gvisor.dev/docs/user_guide/install/)"
+    if ! command -v runsc >/dev/null 2>&1; then
+      missing_optional "runsc" "is missing: the gvisor rows skip (https://gvisor.dev/docs/user_guide/install/)"
+    elif [ ! -d "$(dirname "$(readlink -f "$(command -v runsc)")")/gvisor-bin" ]; then
+      missing_optional "gvisor-bin" "is missing next to $(command -v runsc): runsc needs its sidecar directory, install the whole runsc package"
+    else
+      ok "runsc" "$(command -v runsc), with its gvisor-bin directory"
+    fi
+    if [ -r /dev/net/tun ] && [ -w /dev/net/tun ]; then
+      ok "/dev/net/tun" "usable"
+    else
+      missing_optional "/dev/net/tun" "absent or not writable: slirp4netns cannot start, so the unshare, bwrap and gvisor rows that filter the network skip"
     fi
 
     echo
     echo "== Kernel"
     check_kernel_setting /proc/sys/kernel/apparmor_restrict_unprivileged_userns 0 \
-      "bwrap and unshare cannot create a user namespace: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0 (see wiki/unshare.md for the risk)"
+      "bwrap, unshare and gvisor cannot create a user namespace: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0 (see wiki/unshare.md for the risk)"
     check_kernel_setting /proc/sys/kernel/unprivileged_userns_clone 1 \
       "sudo sysctl -w kernel.unprivileged_userns_clone=1"
     if [ -r /proc/sys/user/max_user_namespaces ] && [ "$(cat /proc/sys/user/max_user_namespaces)" = 0 ]; then
-      missing_optional "max_user_namespaces" "is 0: user namespaces are off, so bwrap and unshare cannot run"
+      missing_optional "max_user_namespaces" "is 0: user namespaces are off, so bwrap, unshare and gvisor cannot run"
     fi
     if [ -r /sys/kernel/security/lsm ] && grep -q landlock /sys/kernel/security/lsm; then
       ok "landlock" "enabled (/sys/kernel/security/lsm)"
@@ -109,7 +118,7 @@ case "$os" in
     if [ -r /dev/kvm ] && [ -w /dev/kvm ]; then
       ok "/dev/kvm" "usable"
     else
-      missing_optional "/dev/kvm" "absent or not writable: qemu falls back to the slow TCG row, and the Windows and macOS VMs cannot run (sudo usermod -aG kvm \$USER, then log in again)"
+      missing_optional "/dev/kvm" "absent or not writable: qemu falls back to the slow TCG row, gvisor.platform=kvm cannot run, and the Windows and macOS VMs cannot run (sudo usermod -aG kvm \$USER, then log in again)"
     fi
 
     echo

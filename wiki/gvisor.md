@@ -44,7 +44,9 @@ The OCI spec is written under the run directory: read-only root, `/tmp` as a tmp
 
 ## Prerequisites
 
-`runsc` with its sidecar directory (the `runsc` package of the [gVisor apt repository](https://gvisor.dev/docs/user_guide/install/)), `unshare`, `slirp4netns`, `iptables-restore` and `ip`. `unavailable_reason()` runs a real guest as a probe, so a host that forbids user namespaces (for example `kernel.apparmor_restrict_unprivileged_userns=1`) is reported with the reason, never silently weakened.
+`runsc` with its sidecar directory `gvisor-bin` next to it (the `runsc` package of the [gVisor apt repository](https://gvisor.dev/docs/user_guide/install/)), `unshare`, `slirp4netns`, `iptables-restore`, `ip`, and read-write access to `/dev/net/tun`.
+
+`unavailable_reason()` checks them in this order and reports the first that fails, with its remedy: a missing tool, the `gvisor-bin` directory (looked for next to the real `runsc`, links followed), `/dev/net/tun` (in a container: `--device /dev/net/tun`), an empty filter that `iptables-restore --test` cannot load, then a real guest (`runsc do /bin/true`). A host that forbids user namespaces, for example `kernel.apparmor_restrict_unprivileged_userns=1`, fails at the guest. Nothing is silently weakened. `gvisor.platform=kvm` also needs read-write `/dev/kvm`; it is refused at launch when missing, as the probe runs on the default platform only.
 
 ## Configuration parameters
 
@@ -52,15 +54,15 @@ The OCI spec is written under the run directory: read-only root, `/tmp` as a tmp
 |-----------|---------|---------|
 | `gvisor.platform` | `systrap` | How `runsc` intercepts the guest's system calls: `systrap`, `ptrace` or `kvm`. Any other value is refused. |
 
-The platform changes speed and host requirements, not the rules: the files, network and environment rules are the same on the three.
+The guest never calls the host kernel: the Sentry, gVisor's kernel written in Go and run in user space, answers each system call. The platform is only the way the call is caught, so the files, network and environment rules are the same on the three, and none of them boots a Linux kernel (`qemu` does).
 
 | Platform | Mechanism | Needs | 50 000 `os.stat` | Whole run |
 |----------|-----------|-------|:---:|:---:|
-| `systrap` | seccomp and signals | nothing special | 0.17 s | 0.8 s |
-| `ptrace` | `ptrace` of the guest's threads | `ptrace` allowed | 0.42 s | 1.1 s |
-| `kvm` | the guest runs as a KVM virtual machine | read-write `/dev/kvm` | 0.36 s | 0.9 s |
+| `systrap` | seccomp filter: a system call raises a signal the Sentry handles | nothing special, works in a container or a VM | 0.17 s | 0.8 s |
+| `ptrace` | the Sentry stops the guest's threads at each call with `ptrace`, one context switch per call | `ptrace` allowed; the most widely supported | 0.42 s | 1.1 s |
+| `kvm` | the Sentry runs as the kernel of a KVM virtual machine, the guest as its user space | read-write `/dev/kvm`; slow in nested virtualization | 0.36 s | 0.9 s |
 
-Measured on one host, `py-sandbox=false`, one run each: an order of magnitude, not a benchmark. `unavailable_reason()` runs a guest on the default platform only: a missing `/dev/kvm` shows when the guest starts, not before.
+`kvm` is not a Linux VM with a kernel of its own: it is still the Sentry, it makes the same host system calls, and it adds the host's KVM code to what the guest can reach. It pays off on bare metal for programs that make many system calls. Measured on one host, `py-sandbox=false`, one run each: an order of magnitude, not a benchmark. `unavailable_reason()` runs a guest on the default platform only: a missing `/dev/kvm` shows when the guest starts, not before.
 
 ## Using with Docker
 

@@ -48,6 +48,9 @@ logger = logging.getLogger(__name__)
 _REQUIRED_TOOLS = ("runsc", "unshare", "slirp4netns", "iptables-restore", "ip")
 _PLATFORMS = ("systrap", "ptrace", "kvm")
 _SMOKE_TIMEOUT = 20.0
+_TUN_DEVICE = Path("/dev/net/tun")
+_KVM_DEVICE = Path("/dev/kvm")
+_EMPTY_FILTER = b"*filter\n:INPUT DROP [0:0]\n:OUTPUT DROP [0:0]\nCOMMIT\n"
 NETNS_TIMEOUT = 10.0
 _HOST_PATH = "/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin"
 
@@ -99,7 +102,8 @@ class GVisorSSEDaemon(BaseSubProcessDaemon):
     @classmethod
     @override
     def unavailable_reason(cls) -> str | None:
-        """Return why gVisor cannot run here, or None: missing tools, or a guest that does not start.
+        """Return why gVisor cannot run here, or None: a missing tool or device, a filter that does not load, or a
+        guest that does not start.
 
         post: __return__ is None or len(__return__) > 0
         """
@@ -107,14 +111,40 @@ class GVisorSSEDaemon(BaseSubProcessDaemon):
         if missing:
             return f"{', '.join(missing)} not found, required for the gvisor provider"
         runsc = which_command("runsc")
-        assert runsc is not None
+        iptables_restore = which_command("iptables-restore")
+        assert runsc is not None and iptables_restore is not None
+        sidecar = runsc.resolve().parent / "gvisor-bin"
+        if not sidecar.is_dir():
+            return f"{sidecar} not found: runsc starts from a sidecar directory next to it, install the whole package"
+        if not os.access(_TUN_DEVICE, os.R_OK | os.W_OK):
+            return f"{_TUN_DEVICE} is not accessible, slirp4netns needs it (in a container: --device /dev/net/tun)"
+        in_private_netns = ["unshare", "--user", "--map-root-user", "--net", "--"]
         with tempfile.TemporaryDirectory() as state:
-            cmd = [
-                "unshare", "--user", "--map-root-user", "--net", "--",
-                str(runsc), "--ignore-cgroups", "--network=host", f"--root={state}", "do", "/bin/true",
-            ]  # fmt: skip
             try:
-                result = subprocess.run(cmd, capture_output=True, timeout=_SMOKE_TIMEOUT, check=False)
+                loaded = subprocess.run(
+                    [*in_private_netns, str(iptables_restore), "--test"],
+                    input=_EMPTY_FILTER,
+                    capture_output=True,
+                    timeout=_SMOKE_TIMEOUT,
+                    check=False,
+                )
+                if loaded.returncode != 0:
+                    detail = loaded.stderr.decode(errors="replace").strip()[-300:]
+                    return f"iptables-restore cannot load a filter here: {detail}"
+                result = subprocess.run(
+                    [
+                        *in_private_netns,
+                        str(runsc),
+                        "--ignore-cgroups",
+                        "--network=host",
+                        f"--root={state}",
+                        "do",
+                        "/bin/true",
+                    ],
+                    capture_output=True,
+                    timeout=_SMOKE_TIMEOUT,
+                    check=False,
+                )
             except (subprocess.TimeoutExpired, OSError) as error:
                 return f"gvisor could not start a guest: {error}"
         if result.returncode != 0:
@@ -170,6 +200,8 @@ class GVisorSSEDaemon(BaseSubProcessDaemon):
         platform = str(all_rules.os_sandbox_params.get("platform", "")) or "systrap"
         if platform not in _PLATFORMS:
             raise SandBoxError(f"gvisor.platform={platform!r} is not one of {', '.join(_PLATFORMS)}")
+        if platform == "kvm" and not os.access(_KVM_DEVICE, os.R_OK | os.W_OK):
+            raise SandBoxError(f"gvisor.platform=kvm needs read-write access to {_KVM_DEVICE}")
         return platform
 
     @staticmethod
