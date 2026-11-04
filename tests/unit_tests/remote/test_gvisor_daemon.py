@@ -153,6 +153,19 @@ class TestRules:
         assert [r.rule for r in other] == ["expose-ro=/data"]
 
 
+class _FakeSlirp:
+    """A slirp4netns process that records that it was killed."""
+
+    def __init__(self) -> None:
+        self.killed = False
+
+    def kill(self) -> None:
+        self.killed = True
+
+    def wait(self, timeout: float | None = None) -> int:
+        return -9
+
+
 class TestLaunchCommand:
     def _launch(
         self, tmp_path: Path, envs: dict[str, str] | None = None, **rule_overrides: Any
@@ -170,6 +183,30 @@ class TestLaunchCommand:
         args, env = daemon.subprocess_cmd(rules, {}, tmp_path / "run" / "pipe", tmp_path / "run")
         spec = json.loads((tmp_path / "run" / "gvisor" / "config.json").read_text())
         return args, dict(env), spec
+
+    def test_a_restart_stops_the_slirp4netns_of_the_sandbox_that_died(self, tmp_path: Path) -> None:
+        # slirp4netns outlives its target and keeps the forwarded host port: the new one could not take it back.
+        (tmp_path / "run").mkdir()
+        old = _FakeSlirp()
+        daemon = GVisorSSEDaemon("token")
+        daemon.port = 4242
+        daemon._slirp_process_holder[0] = old  # type: ignore[assignment]
+        daemon._slirp_shutdown_event.clear()
+
+        daemon.subprocess_cmd(EmptyRules, {}, tmp_path / "run" / "pipe", tmp_path / "run")
+
+        assert old.killed, "the slirp4netns of the previous start is still alive"
+        assert daemon._slirp_process_holder[0] is None
+        assert not daemon._slirp_shutdown_event.is_set(), "the watcher of the new start must not be told to stop"
+
+    def test_a_first_start_has_no_previous_slirp4netns_to_stop(self, tmp_path: Path) -> None:
+        (tmp_path / "run").mkdir()
+        daemon = GVisorSSEDaemon("token")
+        daemon.port = 4242
+
+        daemon.subprocess_cmd(EmptyRules, {}, tmp_path / "run" / "pipe", tmp_path / "run")
+
+        assert not daemon._slirp_shutdown_event.is_set()
 
     def test_the_launcher_creates_a_private_user_and_network_namespace_first(self, tmp_path: Path) -> None:
         args, _, _ = self._launch(tmp_path)

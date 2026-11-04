@@ -262,6 +262,7 @@ class GVisorSSEDaemon(BaseSubProcessDaemon):
         self._ready_file = work / "ready"
         self._ready_file.unlink(missing_ok=True)
         self._ports_spec = slirp_extract_port_forwards(all_rules, self.port, log_wildcard=False)
+        self._kill_slirp()
         self._slirp_shutdown_event.clear()
         fd, api_socket = tempfile.mkstemp()
         os.close(fd)

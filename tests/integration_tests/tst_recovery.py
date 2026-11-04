@@ -24,13 +24,19 @@ def _echo(value: str) -> str:
     return value
 
 
+# What runs the sandbox side. Under gVisor the interpreter lives inside the Sentry, which is not a host process
+# of its own: the host sees `runsc-sandbox ... boot`, and that is what a crash of the sandbox takes down.
+_SANDBOX_MARKERS = (b"main_sandbox", b"runsc-sandbox")
+
+
 def _sandbox_pids() -> list[int]:
-    """The interpreters running the sandbox side: the launcher the daemon holds may be a wrapper around one."""
+    """The processes running the sandbox side: the launcher the daemon holds may be a wrapper around one."""
     found = []
     for entry in Path("/proc").iterdir():
         if entry.name.isdigit():
             try:
-                if b"main_sandbox" in (entry / "cmdline").read_bytes():
+                cmdline = (entry / "cmdline").read_bytes()
+                if any(marker in cmdline for marker in _SANDBOX_MARKERS):
                     found.append(int(entry.name))
             except OSError:
                 continue
