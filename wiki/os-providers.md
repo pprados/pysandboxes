@@ -139,30 +139,58 @@ To pin a provider so the environment cannot downgrade it, write it literally, e.
 An `expose-ro` or `expose-rw` rule naming a directory under `/run` gives those sockets back: write one only for a
 socket the program really needs.
 
-## Paranoia level
-Depending on your level of paranoia, you can choose a suitable approach.
+## Choosing by threat and cost
 
-| Paranoia | Py-sandbox       | os-sandbox     | docker/pod | --privileged |
-|:--------:|------------------|----------------|:----------:|:------------:|
-|    0     | python           | None           |     No     |              |
-|    1     | python-sb        | subprocess     |     No     |              |
-|    2     | with sandboxes() | subprocess     |     No     |              |
-|    3     | python-sb        | landlock       |     No     |              |
-|    4     | with sandboxes() | landlock       |     No     |              |
-|    5     | python-sb        | unshare        |     No     |              |
-|    6     | with sandboxes() | unshare        |     No     |              |
-|    7     | python-sb        | bwrap/firejail |     No     |              |
-|    8     | with sandboxes() | bwrap/firejail |     No     |              |
-|    9     | python-sb        | qemu + kvm     |     No     |              |
-|    10    | with sandboxes() | qemu + kvm     |     No     |              |
-|    11    | python-sb        | landlock       |    Yes     |      No      |
-|    12    | with sandboxes() | landlock       |    Yes     |      No      |
-|    13    | python-sb        | unshare        |    Yes     |     Yes      |
-|    14    | with sandboxes() | unshare        |    Yes     |     Yes      |
-|    15    | python-sb        | bwrap/firejail |    Yes     |     yes      |
-|    16    | with sandboxes() | bwrap/firejail |    Yes     |     yes      |
-|    17    | python-sb        | qemu           |    Yes     |      no      |
-|    18    | with sandboxes() | qemu           |    Yes     |      no      |
+Pick the provider from what the code you run can do, then check what the isolation costs. The two layers add up:
+keep `py-sandbox` on, and put one OS provider around it (see [Recommendations](#recommendations)).
+
+| Threat | Typical code | Python layer | OS provider | What stops the attack |
+|---|---|:---:|---|---|
+| Mistakes, no attacker | Your own scripts | on | `subprocess` | Process separation and the guards. No OS boundary |
+| Hostile Python, no native code | LLM-generated code, plugins | on | `landlock` (default) | The Python guards, plus a kernel ruleset on files and TCP ports |
+| Hostile native code | Dependencies with C extensions, `ctypes`, database drivers | on | `bwrap` or `unshare` | Mount and network namespaces: a path that is not exposed does not exist, the network is filtered |
+| Hostile native code, kernel exploits | Code that may attack the kernel itself | on | `gvisor` | The guest talks to a user-space kernel (Sentry), which makes a small set of host system calls |
+| Worst case, or another CPU | Code you cannot reason about | on | `qemu` | A VM with its own Linux kernel: the host kernel is out of the guest's reach |
+
+`firejail` is a variant of the namespace row for hosts that already have it: it adds resource limits and a seccomp
+filter. `sandbox-exec` (macOS) and `appcontainer` (Windows) are the choices on those systems.
+
+### What each costs
+
+Measured on one host with `py-sandbox=false`, one run each. Start-up counts the Python interpreter (0.13 s with
+`os-sandbox=none`). Read orders of magnitude, not a benchmark: run your own workload.
+
+| Provider | Start-up | 50 000 `os.stat` | Needs | Network filter |
+|---|---:|---:|---|:---:|
+| `none` | 0.13 s | 0.02 s | Nothing | ❌ |
+| `subprocess` | 0.30 s | 0.02 s | Nothing | ❌ |
+| `landlock` | 0.30 s | 0.02 s | Linux 6.7+ (Landlock ABI v4) | TCP ports |
+| `bwrap` | 0.31 s | 0.03 s | `bwrap`, user namespaces; filtering also `slirp4netns`, `iptables` | ✅ |
+| `firejail` | 0.51 s | 0.02 s | `firejail` | ✅ |
+| `unshare` | 1.43 s | 0.03 s | User namespaces, `slirp4netns`, `iptables` | ✅ |
+| `gvisor` (`systrap`) | 0.74 s | 0.16 s | `runsc`, `slirp4netns`, `iptables`, `/dev/net/tun` | ✅ |
+| `qemu` | 12.8 s | 0.06 s | `qemu-system`; KVM makes it faster | ✅ |
+
+Three consequences:
+
+- `gvisor` pays on system calls, not on computation: code that stays in the interpreter runs at the speed of the
+  others, while a loop of `stat`, `open` or socket calls is 6 to 8 times slower. Its `ptrace` and `kvm` platforms are
+  slower still on this host (see [gVisor](gvisor.md)).
+- `qemu` pays once, at start-up. Keep the sandbox alive across calls (`with sandboxes():`) instead of starting one per
+  call.
+- `landlock`, `bwrap` and `firejail` cost almost nothing, which is why the default is not the strongest provider: go
+  up only when the threat in the first table calls for it.
+
+### In Docker, Podman and Kubernetes
+
+A container adds a second boundary around the provider and takes nothing away from it.
+
+- `landlock` and `qemu` run without extra privilege.
+- `bwrap`, `unshare` and `gvisor` create namespaces of their own, which the default container confinement refuses:
+  lower it as each provider page describes, or use `--privileged`.
+- `firejail` does not run in a container, even with `--privileged`.
+- A container does not replace the provider: without one, the sandboxed code is separated from the container by the
+  Python layer alone.
 
 ## Recommendations
 

@@ -14,7 +14,7 @@
 
 ## Disadvantages
 
-- System-call heavy code is slower (about 6x on a loop of `os.stat`).
+- System-call heavy code is slower (6 to 8x on a loop of `os.stat`).
 - A device rule (`expose-ro=/dev/...`) cannot be honoured: the guest has its own `/dev`. The provider logs a warning and the rule is not enforced.
 - The guest `/proc` shows `/proc/gvisor` and `sentry-meminfo`: information, not a boundary.
 - Needs `runsc` **and its sidecar directory** (`/usr/bin/gvisor-bin/`): the binary alone fails at the first guest.
