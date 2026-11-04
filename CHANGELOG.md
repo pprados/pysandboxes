@@ -20,27 +20,20 @@
 `unshare` provider, with `--privileged` for Docker.
 
 
-## [0.9.0] - 2026-11-04
+## [0.0.0] - 202X-XX-XX
 
 ### Added
-- Add the Windows AppContainer provider, which confines files and network with an AppContainer token, and runs without administrator rights.
-- The AppContainer provider gives the sandboxed program read-write access to its own private folder.
-- Configuration profiles can be included only when the platform matches, so OS-specific permissions can be kept in separate files.
+- Add the Windows AppContainer provider (`os-sandbox=appcontainer`), which confines files and network with an
+  AppContainer token, and runs without administrator rights.
+- Configuration profiles can be included only when `sys.platform` matches, so OS-specific permissions can be kept
+  in separate files.
 
 ### Changed
 - Document the AppContainer provider's security limits and the local Windows VM workflow.
-- The AppContainer provider sets and removes file permissions directly through Windows instead of PowerShell, which makes it faster and more reliable.
 
 ### Fixed
-- The qemu container image for Python 3.11 keeps working firewall tools of its own next to the libraries its guest needs.
-- The network guard ignores a hosts file line that does not start with an address instead of failing.
-- The temporary directory is located before the guards are armed, so finding it is no longer blocked by the sandbox.
-- The provider is loaded even when its startup hook does not run.
-- The provider without OS confinement no longer creates a needless temporary directory.
-- The AppContainer provider reliably hides ignored paths from the sandboxed program.
-- The AppContainer provider removes every permission it granted once the run ends.
-- The AppContainer provider no longer reveals the location of its private folder to the sandboxed program.
-- The samples, including the CrewAI one, run on Windows.
+- The `qemu` container image for Python 3.11 keeps a working `iptables-restore` of its own next to the libraries its
+  guest needs.
 
 ## [0.8.0] - 2026-10-31
 
