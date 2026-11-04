@@ -64,7 +64,7 @@ Planned work, in no committed order:
     - [ ] Collima
   - [X] Windows
     - [X] AppContainer
-    - [ ] Windows Sandbox
+    - [X] ~~Windows Sandbox~~ (rejected: AppContainer already confines the process, without a Hyper-V virtual machine)
   - [ ] Network strategies
     - [X] local netfilter and pin DNS
     - [ ] Proxy (SOCKS/HTTP over a Unix socket bound into the sandbox, relayed by socat: 
