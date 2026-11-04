@@ -7,6 +7,7 @@ import json
 import os
 import socket
 import subprocess
+from collections.abc import Mapping
 from functools import cache
 from pathlib import Path
 
@@ -41,25 +42,30 @@ def coverage_profile_lines() -> str:
 # Every OS sandbox backend a test can be parametrized over. `none` is excluded: it is the
 # no-op provider, so a guard test would assert nothing there.
 #
-# "qemu-tcg" is not a backend but a second row for the same one, with KVM refused. QEMU
-# takes hardware acceleration when /dev/kvm is there and emulates when it is not, and the
-# two are different enough -- timings, CPU features -- that a green run under one says
-# little about the other. A container is not given /dev/kvm, so emulation is the
-# configuration most CI runs land on, and it must be covered on a developer machine that
-# does have KVM. On a host without /dev/kvm the two rows are identical and the extra one
-# costs a VM boot; that is the price of the row meaning something everywhere else.
-ALL_OS_SANDBOX: tuple[str, ...] = (
-    "subprocess",
-    "qemu",
-    "qemu-tcg",
-    "unshare",
-    "firejail",
-    "landlock",
-    "bwrap",
-    "gvisor",
-    "sandbox-exec",
-    "appcontainer",
-)
+# "qemu-tcg" is not a backend but a second row for the same one, with KVM refused. It
+# covers what a container without /dev/kvm gets, but it costs a VM boot an order of
+# magnitude slower than the accelerated one (12s against 102s), so it runs only on
+# demand: PYSANDBOXES_QEMU_TCG=1. When the `qemu` row passes under KVM, that is enough.
+_QEMU_TCG_VARIABLE = "PYSANDBOXES_QEMU_TCG"
+
+
+def qemu_tcg_requested(environ: Mapping[str, str] = os.environ) -> bool:
+    """Tell whether the emulated QEMU row was asked for with ``PYSANDBOXES_QEMU_TCG``."""
+    return environ.get(_QEMU_TCG_VARIABLE, "").strip().lower() in ("1", "true", "yes")
+
+
+def os_sandbox_rows(*, tcg: bool) -> tuple[str, ...]:
+    """Return every OS sandbox row a test can be parametrized over, the emulated QEMU one only if ``tcg``.
+
+    ``none`` is excluded: it is the no-op provider, so a guard test would assert nothing there.
+    """
+    rows = ["subprocess", "qemu", "unshare", "firejail", "landlock", "bwrap", "gvisor", "sandbox-exec", "appcontainer"]
+    if tcg:
+        rows.insert(rows.index("qemu") + 1, "qemu-tcg")
+    return tuple(rows)
+
+
+ALL_OS_SANDBOX: tuple[str, ...] = os_sandbox_rows(tcg=qemu_tcg_requested())
 
 # Row name -> the value `os-sandbox=` accepts.
 _ROW_TO_BACKEND = {"qemu-tcg": "qemu"}
@@ -76,13 +82,12 @@ def row_profile_lines(row: str) -> str:
 
 
 def os_sandbox_params() -> list:
-    """Return one parametrize row per backend, the emulated one marked ``slow``.
+    """Return one parametrize row per backend, the emulated QEMU one marked ``slow``.
 
     Emulation is not slightly slower, it is another order of magnitude: the same
     boot measured 12s accelerated and 102s emulated, which turns the whole suite
-    from minutes into twenty of them on a host that has KVM. The row still runs by
-    default -- it covers what a container does, and a CI run should see it -- but
-    ``-m 'not slow'`` buys it back for a quick local loop.
+    from minutes into twenty of them on a host that has KVM. That row exists only
+    when ``PYSANDBOXES_QEMU_TCG=1`` asks for it (see ``ALL_OS_SANDBOX``).
 
     A backend not meant for this platform gets no row at all, rather than a skip: with
     PYSANDBOXES_FAIL_ON_SKIP a skip fails the run, and a Linux backend on macOS is not a

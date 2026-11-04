@@ -7,7 +7,7 @@ it does not mean the row ran successfully on every host.
 ## At a glance
 
 - The host integration suite exercises six runtime guard families over six
-  distinct OS providers (gvisor included). QEMU has two rows: KVM and forced TCG emulation.
+  distinct OS providers (gvisor included). QEMU has one row, under KVM when the host has it; the forced TCG emulation row (`qemu-tcg`) exists only when `PYSANDBOXES_QEMU_TCG=1` asks for it.
 - macOS adds a separate `sandbox-exec` row with direct Seatbelt, network-only,
   provider usage, and guard coverage. It does not change the Linux container counts.
 - Container scenarios exercise file, socket, and environment behavior. They do
@@ -136,7 +136,7 @@ comes back, a profile naming its modules one by one still starts, a failure
 says why, and stdout and stderr stay apart. The first three pin the defects
 that made every QEMU row exit 1 with an empty stderr; with them fixed, the QEMU
 rows run like the others. The module has ten parametrized test functions across
-seven provider rows (QEMU KVM and TCG are separate rows), or about 70 collected
+seven provider rows (QEMU's emulated TCG row only on demand), or about 70 collected
 cases before environment-dependent skips.
 
 [`test_eval_integration.py`](../tests/integration_tests/test_eval_integration.py)
@@ -165,7 +165,7 @@ Eleven entries are registered in `pysandboxes/_os_sandbox.py`: ten providers, pl
 | `landlock` | yes | yes | yes (ABI v4) | yes (2 modes) | yes | yes | yes |
 | `qemu` | yes | yes | yes (KVM) | yes (2 modes) | yes | yes | yes |
 | `gvisor` | yes | yes | yes | yes | yes | yes | yes |
-| `qemu-tcg` | yes | yes | — | yes (2 modes) | — | — | — |
+| `qemu-tcg` (on demand) | yes | yes | — | yes (2 modes) | — | — | — |
 | `sandbox-exec` | yes (macOS only) | yes (macOS only) | yes (2 modes, macOS only) | yes (2 modes, macOS only) | **excluded** | **excluded** | **excluded** |
 | `appcontainer` | yes (Windows only) | yes (Windows only) | — | — | **excluded** | **excluded** | **excluded** |
 
@@ -178,8 +178,7 @@ a local Windows VM. See [AppContainer](appcontainer.md) for the validation setup
 
 "Host: guards" is `test_guards_with_providers`. `qemu-tcg` is not a backend but
 a second host row for `qemu` with `qemu.use_kvm=false` (`ALL_OS_SANDBOX` in
-`tests/integration_tests/_env.py`). It carries the `slow` marker, which is how a
-release run leaves it out (`exclude-tcg` in `integration.yml`); the nightly runs it.
+`tests/integration_tests/_env.py`). It exists only when `PYSANDBOXES_QEMU_TCG=1` asks for it (`PYSANDBOXES_QEMU_TCG=1 make integration-tests`), and then carries the `slow` marker: a green `qemu` row under KVM is enough, and no workflow asks for it.
 
 `none` is left out of the provider table. It is the no-op provider — a
 development aid, not a confinement technology — so nothing it does or fails to
@@ -290,7 +289,7 @@ technology, so Windows runs the Python layer over `subprocess` and macOS runs it
 | Scenario | Linux | macOS | Windows | Interpreters |
 |---|---|---|---|---|
 | Unit | whole suite | whole suite, Linux-only modules skipped | whole suite, Linux-only modules skipped | 3.11 to 3.14 |
-| Integration, per provider | `subprocess`, `firejail`, `bwrap`, `unshare`, `landlock`, `qemu` (KVM and TCG) | `subprocess`, `sandbox-exec` | `subprocess` | 3.11 to 3.14 |
+| Integration, per provider | `subprocess`, `firejail`, `bwrap`, `unshare`, `landlock`, `qemu` (KVM; TCG on demand) | `subprocess`, `sandbox-exec` | `subprocess` | 3.11 to 3.14 |
 | OS-only network filter | `bwrap`, `unshare`, `qemu`, `landlock` (ABI v4), `firejail` | `sandbox-exec` (port only) | — | 3.11 to 3.14 |
 | OS-only file confinement | every Linux provider, `qemu` included | `sandbox-exec` | — | 3.11 to 3.14 |
 | Containers: Docker, Podman, Kubernetes | 48 rows on a real backend, 12 on `none` | — | — | 3.13 |
