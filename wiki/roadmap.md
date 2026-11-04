@@ -27,24 +27,18 @@ Planned work, in no committed order:
     - [X] sub process
     - [X] ~~sub interpreter~~ (rejected: isolating one interpreter from another is not possible)
     - [X] Landlock
-    - [ ] seccomp-bpf alone (without Landlock)
-    - [ ] Capsicum (FreeBSD)
   - [ ] Sandbox utilities
     - [X] firejail
     - [X] unshare
     - [X] bwrap
+    - [ ] gVisor (user space kernel simulation, without docker)
   - [ ] Container
     - [X] Docker (--privileged with unshare)
     - [X] podman (--privileged with unshare)
     - [X] kubernetes
-    - [ ] Flatpak
-    - [ ] rpm-ostree unprivileged
-    - [ ] bwrap-oci
-    - [X] gVisor (user space kernel simulation, without docker)
-    - [ ] Firecracker
+    - [X] ~~Flatpak~~ (rejected: user-facing desktop packaging solution, unsuitable for a low-level programmatic execution library)
   - [ ] VM
     - [X] Qemu
-    - [ ] multipass
     - [ ] lxc
     - [ ] vagrant
   - [ ] micro-VM
@@ -58,13 +52,12 @@ Planned work, in no committed order:
     - [ ] [Cloud Hypervisor](https://github.com/cloud-hypervisor/cloud-hypervisor)
     - [ ] [Cloud morph](https://cloud.morph.so/)
     - [ ] [Agent sandbox](https://agent-sandbox.sigs.k8s.io/docs/getting_started/)
-  - [ ] Apple
+  - [X] Apple
     - [X] ~~App Sandbox~~ (rejected: not compatible with the approach)
     - [x] sandbox-exec
-    - [ ] Collima
   - [X] Windows
     - [X] AppContainer
-    - [X] ~~Windows Sandbox~~ (rejected: AppContainer already confines the process, without a Hyper-V virtual machine)
+    - [X] ~~Windows Sandbox~~ (rejected: a single sandbox can run at a time on a host, incompatible with concurrent or nested `sandboxes()`)
   - [ ] Network strategies
     - [X] local netfilter and pin DNS
     - [ ] Proxy (SOCKS/HTTP over a Unix socket bound into the sandbox, relayed by socat: 
