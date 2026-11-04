@@ -8,7 +8,7 @@ import signal
 import subprocess
 import sys
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 import pytest
 
@@ -190,7 +190,7 @@ class TestLaunchCommand:
         old = _FakeSlirp()
         daemon = GVisorSSEDaemon("token")
         daemon.port = 4242
-        daemon._slirp_process_holder[0] = old  # type: ignore[assignment]
+        daemon._slirp_process_holder[0] = cast(Any, old)
         daemon._slirp_shutdown_event.clear()
 
         daemon.subprocess_cmd(EmptyRules, {}, tmp_path / "run" / "pipe", tmp_path / "run")
