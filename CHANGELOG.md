@@ -20,20 +20,25 @@
 `unshare` provider, with `--privileged` for Docker.
 
 
-## [0.0.0] - 202X-XX-XX
+## [0.9.0] - 2026-11-04
 
 ### Added
-- Add the Windows AppContainer provider (`os-sandbox=appcontainer`), which confines files and network with an
-  AppContainer token, and runs without administrator rights.
-- Configuration profiles can be included only when `sys.platform` matches, so OS-specific permissions can be kept
-  in separate files.
+- Add the Windows AppContainer provider, which confines files and network with an AppContainer token and runs without administrator rights.
+- The sandboxed program gets read-write access to its AppContainer private folder.
+- Configuration profiles can be included only on a matching platform, so OS-specific permissions can be kept in separate files.
 
 ### Changed
 - Document the AppContainer provider's security limits and the local Windows VM workflow.
 
 ### Fixed
-- The `qemu` container image for Python 3.11 keeps a working `iptables-restore` of its own next to the libraries its
-  guest needs.
+- The qemu container image for Python 3.11 ships the firewall tools its guest needs, not only their libraries.
+- A hosts file line that does not start with an address is ignored instead of disturbing name resolution.
+- The temporary directory is found before the guards are armed.
+- The sandbox provider is loaded even when its startup hook does not run.
+- The AppContainer provider hides the private folder location from the sandboxed program.
+- The AppContainer provider masks ignored paths reliably and removes its access grants after each run, without relying on PowerShell.
+- The AppContainer provider no longer creates a temporary directory when no OS sandbox is selected.
+- The samples, including the CrewAI one, run on Windows.
 
 ## [0.8.0] - 2026-10-31
 
