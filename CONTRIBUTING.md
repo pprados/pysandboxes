@@ -20,7 +20,7 @@ the Seatbelt `sandbox-exec` of macOS and the `appcontainer` of Windows, so what 
 
 | Your system | What runs | Needs |
 |---|---|---|
-| Linux, or WSL2 | everything: the Python layer and the providers `landlock`, `bwrap`, `firejail`, `unshare`, `qemu` | the packages and kernel settings below |
+| Linux, or WSL2 | everything: the Python layer and the providers `landlock`, `bwrap`, `firejail`, `unshare`, `qemu`, `gvisor` | the packages and kernel settings below |
 | macOS | the Python layer over `subprocess` and the `sandbox-exec` provider, which is what `cross-os.yml` proves on macOS | Xcode command line tools, uv; GNU sed, jq and coreutils (`make setup-macos`) for the release-script tests, which are left out without them |
 | native Windows | the Python layer over `subprocess` and the `appcontainer` provider, which is what `cross-os.yml` proves on Windows | uv, git, GNU make, a bash (Git Bash) |
 
@@ -46,7 +46,9 @@ The `uv`-managed Python is deliberate: a distribution Python, such as Ubuntu 24.
 otherwise, fails 4 unit tests and 29 provider tests of this repository. On Linux and WSL2 it installs these
 packages with `apt-get` or `dnf`: `git`, `make`, `curl`, a C compiler, `bubblewrap`, `firejail`, `slirp4netns`,
 `iptables`, `iproute2`, `qemu-system-x86`, `qemu-utils` and `genisoimage`, then `uv` if it is missing. `YES=1 make init`
-accepts every question except the one on AppArmor.
+accepts every question except the one on AppArmor. `runsc`, which the `gvisor` provider needs, is not a distribution
+package: install it with its `gvisor-bin` directory from the [gVisor apt repository](https://gvisor.dev/docs/user_guide/install/),
+and `make doctor` reports it when it is missing.
 
 Ubuntu 24.04 restricts unprivileged user namespaces through AppArmor, and `bwrap` and `unshare` need them. `make init`
 offers `kernel.apparmor_restrict_unprivileged_userns=0`, now and at every boot (`/etc/sysctl.d/60-pysandboxes.conf`).
@@ -105,7 +107,7 @@ The [`wiki/`](wiki/Home.md) directory holds the documentation a contributor need
 - [`implementation.md`](wiki/implementation.md): how the framework is put together;
 - [`weaknesses.md`](wiki/weaknesses.md) and the two security assessments: what the Python layer does not stop,
   and the attacks already studied;
-- one page per OS provider (`bwrap.md`, `firejail.md`, `unshare.md`, `qemu.md`, `landlock.md`, `sandbox-exec.md`,
+- one page per OS provider (`bwrap.md`, `firejail.md`, `unshare.md`, `qemu.md`, `gvisor.md`, `landlock.md`, `sandbox-exec.md`,
   `appcontainer.md`), and
   [`eval.md`](wiki/eval.md) for the `eval-*` rules;
 - [`tests.md`](wiki/tests.md): which suite covers what, and the gaps;

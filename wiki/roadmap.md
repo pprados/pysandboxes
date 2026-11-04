@@ -40,7 +40,7 @@ Planned work, in no committed order:
     - [ ] Flatpak
     - [ ] rpm-ostree unprivileged
     - [ ] bwrap-oci
-    - [ ] gVisor (user space kernel simulation, without docker)
+    - [X] gVisor (user space kernel simulation, without docker)
     - [ ] Firecracker
   - [ ] VM
     - [X] Qemu

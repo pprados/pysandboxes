@@ -2,7 +2,7 @@
 
 This page is for maintainers. A signed tag pushed by the maintainer is the only way to publish: the wheel goes to
 test.pypi.org for a pre-release (`X.Y.Z` followed by `a`, `b` or `rc` and a number) or to pypi.org for a final version
-(`vX.Y.Z`), then five container images go to Docker Hub.
+(`vX.Y.Z`), then six container images go to Docker Hub.
 
 ## Publishing a pre-release
 
@@ -85,7 +85,7 @@ yanking only hides it.
 | `images` | Dispatches `images.yml` on the tag and waits for it (`dispatch-images.sh`; a called workflow would not receive the secrets of the `dockerhub` environment): it checks the tag again, then one runner per Python 3.11 to 3.14 resolves the newest patch of `python:<python>-slim`, builds the five images from the published wheel on it, smoke-tests them, pushes them to `docker.io/pprados/<image>` |
 | `advance-master` | Final tags only: fast-forwards `master` to the tagged commit, never forced |
 
-The images are `python-sb`, `python-sb-landlock`, `python-sb-unshare`, `python-sb-bwrap` and `python-sb-qemu`,
+The images are `python-sb`, `python-sb-landlock`, `python-sb-unshare`, `python-sb-bwrap`, `python-sb-qemu` and `python-sb-gvisor`,
 `linux/amd64`. The smoke test checks that each provider image runs every tool its provider invokes.
 `.github/scripts/image-tags.sh` lists their tags, in the manner of the official `python` images, the pysandboxes
 version prefixed with `sb`: `<patch>-sb<version>` and `<python>-sb<version>` for every release, `sb<version>` for
@@ -168,5 +168,5 @@ Already in place. Recreate them only if they are lost:
 | `verify-published`: "published but not visible yet" | The index's CDN (test.pypi.org or pypi.org) has not served the file within 10 min. Re-run the failed jobs |
 | `verify-published`: the wheel "differs" | The index (test.pypi.org or pypi.org) holds another file for this version (a re-run rebuilt a different wheel; the upload is skipped when the version exists). Publish the next number |
 | `images` fails at the smoke test | An image lacks the version or a provider binary. Nothing pushed |
-| `images` fails while pushing | Part of the five images may be published. Re-run the failed jobs: the same tags are overwritten |
+| `images` fails while pushing | Part of the six images may be published. Re-run the failed jobs: the same tags are overwritten |
 | `advance-master` fails | The `master` environment lacks `MASTER_DEPLOY_KEY`, or the key is wrong or read-only, or `master` is not an ancestor of the tag. Merge nothing, investigate, then push the tagged commit to `master` by hand |

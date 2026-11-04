@@ -400,7 +400,7 @@ sample-tests:
 # confines nothing, so the confinement scenarios fail there by design; qemu boots a VM per sandbox.
 # Pythons outermost: each change of UV_PYTHON rebuilds the sample venvs. Serial: mcp-client's port is fixed.
 SAMPLE_PYTHONS = 3.11 3.12 3.13 3.14
-SAMPLE_PROVIDERS = subprocess landlock bwrap firejail unshare
+SAMPLE_PROVIDERS = subprocess landlock bwrap firejail unshare gvisor
 ## Make the samples' suites on every Python and every OS provider (run before a minor or a given final release)
 sample-tests-matrix:
 	@status=0; \

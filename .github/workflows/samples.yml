@@ -38,7 +38,7 @@ jobs:
       fail-fast: false
       matrix:
         python-version: ["3.11", "3.12", "3.13", "3.14"]
-        os-sandbox: [subprocess, landlock, bwrap, firejail, unshare]
+        os-sandbox: [subprocess, landlock, bwrap, firejail, unshare, gvisor]
 
     # Pins the interpreter for every uv call in the sample Makefiles, and tells
     # sample-tests-% which version it is running: a sample whose requires-python
@@ -90,6 +90,15 @@ jobs:
         sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0 || true
         sudo sed -i -E '/^[[:space:]]*restricted-network[[:space:]]+/d' /etc/firejail/firejail.config
         echo 'restricted-network no' | sudo tee -a /etc/firejail/firejail.config
+
+    # runsc comes with a sidecar directory (/usr/bin/gvisor-bin): the apt package installs both, a lone binary
+    # fails at its first guest. The key and repository are those of Dockerfile-gvisor.
+    - name: Install gVisor
+      run: |
+        curl -fsSL https://gvisor.dev/archive.key | sudo gpg --dearmor -o /usr/share/keyrings/gvisor-archive-keyring.gpg
+        echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/gvisor-archive-keyring.gpg] https://storage.googleapis.com/gvisor/releases release main" \
+          | sudo tee /etc/apt/sources.list.d/gvisor.list
+        sudo apt-get update && sudo apt-get install -y runsc
 
     # The SAMPLES list lives in the root Makefile, so a sample commented out
     # there disappears here too. Sequential on purpose: these suites arm real
