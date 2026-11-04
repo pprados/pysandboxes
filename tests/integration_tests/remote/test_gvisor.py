@@ -2,8 +2,9 @@
 # License: Apache V2
 """What a real gVisor guest can reach on the host, the Python layer disarmed so only the guest holds.
 
-Each probe runs under ``python-sb`` with ``py-sandbox=false``. A probe that could not fail proves nothing, so
-each one is also run without the sandbox, where it must report what the guest is meant to be denied.
+A probe that proves the guest holds on its own runs under ``python-sb`` with ``py-sandbox=false`` (``os_only``);
+the others run with the Python layer armed, as a user would. A probe that could not fail proves nothing, so each
+confinement probe is also run without the sandbox, where it must report what the guest is meant to be denied.
 """
 
 import os
@@ -22,10 +23,10 @@ _SKIP_REASON = provider_skip_reason("gvisor")
 pytestmark = pytest.mark.skipif(_SKIP_REASON is not None, reason=_SKIP_REASON or "")
 
 
-def _profile(tmp_path: Path, *rules: str) -> Path:
+def _profile(tmp_path: Path, *rules: str, os_only: bool) -> Path:
     profile = tmp_path / "gvisor.profile"
     lines = [
-        "py-sandbox=false",
+        f"py-sandbox={'false' if os_only else 'true'}",
         "os-sandbox=gvisor",
         "python-import=*",
         "expose-ro=.",
@@ -37,12 +38,12 @@ def _profile(tmp_path: Path, *rules: str) -> Path:
     return profile
 
 
-def _in_guest(tmp_path: Path, code: str, *rules: str, env: dict[str, str] | None = None) -> str:
+def _in_guest(tmp_path: Path, code: str, *rules: str, env: dict[str, str] | None = None, os_only: bool = False) -> str:
     cmd = [
         sys.executable,
         "-m",
         "pysandboxes.python_sb",
-        f"--pysandboxes-config={_profile(tmp_path, *rules)}",
+        f"--pysandboxes-config={_profile(tmp_path, *rules, os_only=os_only)}",
         "-c",
         code,
     ]
@@ -83,7 +84,7 @@ for name in ({str(read_only)!r}, {str(read_write)!r}):
         print("REFUSED", name, type(e).__name__)
 """
 
-    out = _in_guest(tmp_path, probe, f"expose-ro={read_only}", f"expose-rw={read_write}")
+    out = _in_guest(tmp_path, probe, f"expose-ro={read_only}", f"expose-rw={read_write}", os_only=True)
 
     assert f"REFUSED {read_only}" in out
     assert f"WRITTEN {read_write}" in out
@@ -103,7 +104,7 @@ print("EXPOSED", os.path.exists({str(exposed / "f")!r}))
 print("HIDDEN", os.path.exists({str(hidden / "f")!r}))
 """
 
-    out = _in_guest(tmp_path, probe, f"expose-ro={exposed}")
+    out = _in_guest(tmp_path, probe, f"expose-ro={exposed}", os_only=True)
 
     assert "EXPOSED True" in out, "the control: what a rule exposes is there"
     assert "HIDDEN False" in out
@@ -123,7 +124,7 @@ except OSError as e:
     print("REFUSED", type(e).__name__)
 """
 
-    assert "REFUSED" in _in_guest(tmp_path, probe, f"expose-ro={exposed}")
+    assert "REFUSED" in _in_guest(tmp_path, probe, f"expose-ro={exposed}", os_only=True)
     assert "READ SECRET" in _on_host(probe), "the probe reads it outside"
 
 
@@ -135,7 +136,7 @@ def test_an_ignored_file_inside_an_exposed_directory_is_empty(tmp_path: Path) ->
         f"print('OTHER', open({str(tmp_path / 'other')!r}).read())"
     )
 
-    out = _in_guest(tmp_path, probe, f"expose-ro={tmp_path}", "ignore=.env")
+    out = _in_guest(tmp_path, probe, f"expose-ro={tmp_path}", "ignore=.env", os_only=True)
 
     assert "OTHER VISIBLE" in out, "the control: the rest of the directory is there"
     assert "ENV ''" in out
@@ -146,7 +147,7 @@ def test_the_host_environment_does_not_leak_into_the_guest(tmp_path: Path) -> No
     probe = "import os; print('SECRET', os.environ.get('GVISOR_PROBE_SECRET')); print('HOME', os.environ.get('HOME'))"
     env = {"GVISOR_PROBE_SECRET": "leaked"}
 
-    out = _in_guest(tmp_path, probe, env=env)
+    out = _in_guest(tmp_path, probe, env=env, os_only=True)
 
     assert "SECRET None" in out
     assert "HOME None" in out, "runsc invents HOME=/ when the spec sets none"
@@ -156,7 +157,7 @@ def test_the_host_environment_does_not_leak_into_the_guest(tmp_path: Path) -> No
 def test_the_process_table_of_the_guest_is_its_own(tmp_path: Path) -> None:
     probe = "import os; print('PIDS', len([n for n in os.listdir('/proc') if n.isdigit()]))"
 
-    guest = int(re.search(r"PIDS (\d+)", _in_guest(tmp_path, probe)).group(1))  # type: ignore[union-attr]
+    guest = int(re.search(r"PIDS (\d+)", _in_guest(tmp_path, probe, "expose-ro=/proc")).group(1))  # type: ignore[union-attr]
     host = int(re.search(r"PIDS (\d+)", _on_host(probe)).group(1))  # type: ignore[union-attr]
 
     assert guest < 10 < host, f"guest sees {guest} processes, the host {host}"
@@ -184,5 +185,5 @@ def test_compiled_code_cannot_open_a_path_without_a_rule(tmp_path: Path) -> None
         "print('NATIVE_OPEN', 'denied' if fd < 0 else 'opened')\n"
     )
 
-    assert "NATIVE_OPEN denied" in _in_guest(tmp_path, probe)
+    assert "NATIVE_OPEN denied" in _in_guest(tmp_path, probe, os_only=True)
     assert "NATIVE_OPEN opened" in _on_host(probe), "the control must reach the file"

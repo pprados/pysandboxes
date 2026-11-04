@@ -87,6 +87,17 @@ def test_a_device_is_not_exposed_and_the_rule_is_reported(tmp_path: Path, caplog
     assert "/dev/null" in caplog.text, "a rule the guest cannot honour is reported, not silently dropped"
 
 
+@pytest.mark.parametrize("path", ["/dev", "/dev/", "/proc", "/proc/", "/proc/self", "/proc/sys"])
+def test_the_host_dev_and_proc_are_never_bound_into_the_guest(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture, path: str
+) -> None:
+    with caplog.at_level(logging.WARNING):
+        ro, rw = _exposures(tmp_path, _expose(path), _expose(path, write=True))
+
+    assert not any(p.rstrip("/") == path.rstrip("/") for p in ro + rw), "the guest has a /dev and a /proc of its own"
+    assert path.rstrip("/") in caplog.text
+
+
 def test_the_interpreter_paths_are_exposed_read_only(tmp_path: Path) -> None:
     runtime = tmp_path / "venv"
     runtime.mkdir()

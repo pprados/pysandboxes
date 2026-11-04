@@ -14,6 +14,7 @@ from ..guard_files import FSExposeRule, IgnoreRule
 logger = logging.getLogger(__name__)
 
 _SYSTEM_PATHS = ("/usr", "/etc", "/bin", "/sbin", "/lib", "/lib64")
+_GUEST_OWNED = ("/dev", "/proc")
 
 
 def _strip(path: str) -> str:
@@ -23,6 +24,14 @@ def _strip(path: str) -> str:
     post: __return__ != ''
     """
     return path.rstrip("/") or "/"
+
+
+def _is_guest_owned(path: str) -> bool:
+    """Tell whether ``path`` is ``/dev`` or ``/proc``, or below one: the guest has its own, which a bind would hide.
+
+    post: not __return__ or path.rstrip('/').split('/')[1] in ('dev', 'proc')
+    """
+    return any(path.rstrip("/") == owned or path.startswith(owned + "/") for owned in _GUEST_OWNED)
 
 
 def _is_inside(path: str, exposed: list[str]) -> bool:
@@ -54,14 +63,15 @@ def exposures(
 
     ``guest_dir`` holds the config the guest reads, and nothing else: the run directory, with the spec, the
     filter and the config pipe, is never exposed. Only a rule makes a path writable.
-    A rule naming a device cannot be honoured in the guest, which has devices of its own: it is reported.
+    A rule naming ``/dev`` or ``/proc`` cannot be honoured in the guest, which has its own: it is reported, as
+    binding the host one would show the guest the host.
     A path missing on the host is left out, as ``runsc`` refuses to start on a bind of a missing source.
 
     pre: guest_dir.startswith('/')
     post: guest_dir in __return__[0] and guest_dir not in __return__[1]
     post: len(set(__return__[0])) == len(__return__[0])
     post: len(set(__return__[1])) == len(__return__[1])
-    post: not any(p.startswith('/dev/') for p in __return__[0] + __return__[1])
+    post: not any(_is_guest_owned(p) for p in __return__[0] + __return__[1])
     post: all(_is_writable_by_a_rule(all_rules, path) for path in __return__[1])
     """
     ro = [p for p in _SYSTEM_PATHS if os.path.exists(p)]
@@ -72,8 +82,8 @@ def exposures(
         if not isinstance(rule, FSExposeRule):
             continue
         path = _strip(rule.path)
-        if path.startswith("/dev/"):
-            logger.warning("gvisor cannot expose %s: the guest has its own /dev; the rule is not enforced", path)
+        if _is_guest_owned(path):
+            logger.warning("gvisor cannot expose %s: the guest has its own /dev and /proc; not enforced", path)
         elif os.path.exists(path):
             (rw if rule.write and path != guest_dir else ro).append(path)
     return list(dict.fromkeys(ro)), list(dict.fromkeys(rw))
