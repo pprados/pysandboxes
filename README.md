@@ -5,7 +5,7 @@ https://github.com/user-attachments/assets/3700b690-0e86-408e-a3e7-e299268bfc25
 [![Python versions](https://img.shields.io/badge/python-3.11%2B-blue.svg)](https://pypi.org/project/pysandboxes/)
 [![Status](https://img.shields.io/pypi/status/pysandboxes.svg)](https://pypi.org/project/pysandboxes/)
 [![License](https://img.shields.io/pypi/l/pysandboxes.svg)](https://github.com/pprados/pysandboxes/blob/master/LICENSE.txt)
-[![Platform](https://img.shields.io/badge/platform-Linux%20%7C%20macOS-lightgrey.svg)](#platform-support)
+[![Platform](https://img.shields.io/badge/platform-Linux%20%7C%20macOS%20%7C%20Windows-lightgrey.svg)](#platform-support)
 
 > Put `python-sb` in front of `python`: the program can then only touch what a readable policy file allows. Py-Sandboxes is an execution harness for Python: it wraps the program, enforces the policy, and learns it by watching the program run.
 
@@ -46,7 +46,7 @@ The [quick demo](https://github.com/pprados/pysandboxes/tree/master/samples/quic
 
 # Quick start
 
-Linux or macOS, Python 3.11.5 to 3.14. Replace `python` with `python-sb` in the command that starts your application:
+Linux, macOS or Windows, Python 3.11.5 to 3.14. Replace `python` with `python-sb` in the command that starts your application:
 
 ```bash
 uvx python-sb -m my_module          # without installing anything
