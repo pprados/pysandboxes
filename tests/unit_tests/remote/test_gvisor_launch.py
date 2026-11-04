@@ -101,10 +101,11 @@ class _Launcher:
     def guest_args(self) -> list[str]:
         return json.loads(self.spec.read_text())["process"]["args"]
 
-    def start(self, *user_args: str) -> subprocess.Popen[bytes]:
+    def start(self, *user_args: str, stdin: int | None = None) -> subprocess.Popen[bytes]:
         # What python-sb and launch_sandbox append to every command line: the user's arguments, then the pipe.
         return subprocess.Popen(
             ["sh", "-c", self.script(), "gvisor-launcher", *user_args, "--_named-pipe", str(self.fifo)],
+            stdin=stdin,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
         )
@@ -133,6 +134,24 @@ class TestLauncherScript:
         launcher.ready.touch()
         launcher.feed(b"PAYLOAD")
         assert process.wait(timeout=10) == 0
+
+    def test_the_guest_reads_a_blocking_stdin_even_when_the_host_one_is_not(self, tmp_path: Path) -> None:
+        # runsc copies the non-blocking flag of the host stdin to the guest, whose reads then fail with EAGAIN.
+        launcher = _Launcher(tmp_path)
+        launcher.runsc.write_text(
+            f"#!/bin/sh\n{shlex.quote(sys.executable)} -c "
+            f"\"import os; open({str(launcher.log)!r}, 'w').write(str(os.get_blocking(0)))\"\n"
+        )
+        read_end, write_end = os.pipe()
+        os.set_blocking(read_end, False)
+        launcher.ready.touch()
+        launcher.feed(b"PAYLOAD")
+
+        assert launcher.start(stdin=read_end).wait(timeout=10) == 0
+
+        os.close(read_end)
+        os.close(write_end)
+        assert launcher.calls() == ["True"]
 
     def test_the_filter_is_loaded_before_the_guest_starts(self, tmp_path: Path) -> None:
         launcher = _Launcher(tmp_path)

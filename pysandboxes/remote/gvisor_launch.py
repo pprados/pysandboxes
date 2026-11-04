@@ -24,8 +24,10 @@ def netfilter_rules(all_rules: AllRules, port: int) -> tuple[str, ...]:
     return (*rules[:index], daemon, *rules[index:])
 
 
+# Also makes stdin blocking: runsc gives the guest the host flag, and a parent that set it breaks the guest's reads.
 _APPEND_GUEST_ARGS = (
-    "import json, sys\n"
+    "import json, os, sys\n"
+    "os.set_blocking(0, True)\n"
     "spec_file, fifo, config_copy, *appended = sys.argv[1:]\n"
     "spec = json.load(open(spec_file))\n"
     "spec['process']['args'] += [config_copy if arg == fifo else arg for arg in appended]\n"
