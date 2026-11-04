@@ -274,6 +274,7 @@ async def run_server(process_config: DaemonParameters, shared_socket: Any | None
         "unshare",
         "landlock",
         "bwrap",
+        "gvisor",
         "qemu",
         "sandbox-exec",
     )

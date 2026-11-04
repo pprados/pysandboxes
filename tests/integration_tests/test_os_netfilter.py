@@ -34,7 +34,7 @@ _GATEWAY = "10.0.2.2"
 # loopback this suite connects to. Its default deny is covered by tests/integration_tests/remote/test_appcontainer.py.
 _PROVIDERS = tuple(
     provider
-    for provider in ("bwrap", "unshare", "qemu", "landlock", "sandbox-exec")
+    for provider in ("bwrap", "unshare", "qemu", "landlock", "gvisor", "sandbox-exec")
     if not unsupported_platform_reason(provider)
 )
 _FIREJAIL_BRIDGE = os.environ.get("PYSANDBOXES_FIREJAIL_TEST_BRIDGE", "docker0")

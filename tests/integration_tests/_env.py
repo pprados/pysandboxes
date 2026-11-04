@@ -56,6 +56,7 @@ ALL_OS_SANDBOX: tuple[str, ...] = (
     "firejail",
     "landlock",
     "bwrap",
+    "gvisor",
     "sandbox-exec",
     "appcontainer",
 )

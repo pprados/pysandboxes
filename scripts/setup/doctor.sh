@@ -88,6 +88,9 @@ case "$os" in
     echo
     echo "== OS providers (a provider without its tool skips its tests, which then prove nothing about it)"
     for entry in "${LINUX_PROVIDER_TOOLS[@]}"; do check_entry optional "$entry" "its provider rows skip"; done
+    if ! command -v runsc >/dev/null 2>&1 || [ ! -d "$(dirname "$(command -v runsc)")/gvisor-bin" ]; then
+      missing_optional "runsc" "is missing, or has no gvisor-bin directory next to it: the gvisor rows skip (https://gvisor.dev/docs/user_guide/install/)"
+    fi
 
     echo
     echo "== Kernel"

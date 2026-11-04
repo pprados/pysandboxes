@@ -54,6 +54,7 @@ _PROVIDER_SPECS: dict[str, tuple[str, str, frozenset[str]]] = {
     "unshare": ("remote.unshare_sse_daemon", "UnshareSSEDaemon", _LINUX),
     "landlock": ("remote.landlock_daemon", "LandlockSSEDaemon", _LINUX),
     "qemu": ("remote.qemu_sse_daemon", "QemuSSEDaemon", _LINUX),
+    "gvisor": ("remote.gvisor_sse_daemon", "GVisorSSEDaemon", _LINUX),
     "sandbox-exec": ("remote.sandbox_exec_daemon", "SandboxExecSSEDaemon", _DARWIN),
 }
 

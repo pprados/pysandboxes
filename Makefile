@@ -3,7 +3,7 @@ SHELL=/bin/bash
 	unit-tests integration-tests container-tests sample-tests sample-tests-matrix all-tests gh-tests gh-all-tests \
 	spell_check spell_fix pip-audit pip-audit-all clean extra-clean help \
 	api_docs_build api_docs_clean api_docs_linkcheck \
-	build-images build-image-base build-image-landlock build-image-unshare build-image-bwrap build-image-qemu build-image-docker build-image-podman build-image-clean \
+	build-images build-image-base build-image-landlock build-image-unshare build-image-bwrap build-image-qemu build-image-gvisor build-image-docker build-image-podman build-image-clean \
 	minikube-ready minikube-build-images lock validate inspector github-push-test init \
 	clean-sandbox-temps quick-demo-gif \
 	windows-vm windows-tests windows-tests-user windows-tests-all windows-vm-stop windows-vm-clean macos-vm macos-tests macos-vm-stop \
@@ -92,7 +92,7 @@ minikube-ready:
 # They are loaded, not rebuilt there: `minikube docker-env` now points at an ssh:// daemon, where buildx
 # falls back to its docker-container driver and fails to start BuildKit.
 MINIKUBE_IMAGES := python-sb:latest python-sb-landlock:latest python-sb-unshare:latest python-sb-bwrap:latest \
-	python-sb-qemu:latest
+	python-sb-qemu:latest python-sb-gvisor:latest
 minikube-build-images: build-images
 	@if command -v minikube >/dev/null 2>&1 && minikube status >/dev/null 2>&1; then \
 	  for IMAGE in $(MINIKUBE_IMAGES); do \
@@ -317,7 +317,8 @@ mutation-status:
 
 CROSSHAIR_MODULES ?= pysandboxes/tools.py pysandboxes/netfilter.py pysandboxes/eval_rules.py pysandboxes/main_logger.py \
 	pysandboxes/guard_import.py pysandboxes/guard_files.py pysandboxes/guard_socket.py pysandboxes/guard_api.py \
-	pysandboxes/guard_envs.py pysandboxes/eval_transform.py pysandboxes/guard_eval.py pysandboxes/immutable_dict.py
+	pysandboxes/guard_envs.py pysandboxes/eval_transform.py pysandboxes/guard_eval.py pysandboxes/immutable_dict.py \
+	pysandboxes/remote/gvisor_bundle.py pysandboxes/remote/gvisor_launch.py
 CROSSHAIR_TIMEOUT ?= 10
 ## Look for counterexamples to the PEP 316 contracts of the docstrings (crosshair): make crosshair [CROSSHAIR_MODULES="pysandboxes/tools.py"] [CROSSHAIR_TIMEOUT=10]
 crosshair:
@@ -399,7 +400,7 @@ sample-tests:
 # confines nothing, so the confinement scenarios fail there by design; qemu boots a VM per sandbox.
 # Pythons outermost: each change of UV_PYTHON rebuilds the sample venvs. Serial: mcp-client's port is fixed.
 SAMPLE_PYTHONS = 3.11 3.12 3.13 3.14
-SAMPLE_PROVIDERS = subprocess landlock bwrap firejail unshare
+SAMPLE_PROVIDERS = subprocess landlock bwrap firejail unshare gvisor
 ## Make the samples' suites on every Python and every OS provider (run before a minor or a given final release)
 sample-tests-matrix:
 	@status=0; \
@@ -658,9 +659,10 @@ dist: .make-dist
 #                +-- python-sb-unshare   Dockerfile-unshare ...... build-image-unshare
 #                +-- python-sb-bwrap     Dockerfile-bwrap ........ build-image-bwrap
 #                +-- python-sb-qemu      Dockerfile-qemu ......... build-image-qemu
+#                +-- python-sb-gvisor    Dockerfile-gvisor ....... build-image-gvisor
 #
-# Make encodes this: .make-build-image-{landlock,unshare,bwrap,qemu} all prereq .make-build-image-base.
-# PYTHON_VERSION from uv. VARIANT = base | landlock | unshare | bwrap | qemu.
+# Make encodes this: .make-build-image-{landlock,unshare,bwrap,qemu,gvisor} all prereq .make-build-image-base.
+# PYTHON_VERSION from uv. VARIANT = base | landlock | unshare | bwrap | qemu | gvisor.
 # No firejail: inside a container it runs unconfined, even with --privileged and --force.
 PYTHON_VERSION := $(shell uv run python -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')" 2>/dev/null || echo "3.11")
 VARIANT ?= qemu
@@ -740,6 +742,19 @@ QEMU_PKG      := $(if $(filter aarch64 arm64,$(UNAME_M)),qemu-system-aarch64,qem
 	done; \
 	touch .make-build-image-qemu
 
+.make-build-image-gvisor: .make-build-image-base Dockerfile-gvisor
+	@for CONTAINER_CMD in $(CONTAINER_CMDS); do \
+	  if ! command -v $$CONTAINER_CMD >/dev/null 2>&1; then continue; fi; \
+	  echo "Building python-sb-gvisor:$(PYTHON_VERSION), python-sb-gvisor:latest with $$CONTAINER_CMD..."; \
+	  $$CONTAINER_CMD build \
+	  	--build-arg PYTHON_VERSION=$(PYTHON_VERSION) \
+	  	-t python-sb-gvisor:$(PYTHON_VERSION) \
+	  	-t python-sb-gvisor:latest \
+	  	-t python-sb-gvisor:gvisor \
+	  	-f Dockerfile-gvisor . || exit 1; \
+	done; \
+	touch .make-build-image-gvisor
+
 # Build base image python-sb (Python + wheel); required by all provider images below
 build-image-base: .make-build-image-base
 
@@ -755,15 +770,19 @@ build-image-bwrap: .make-build-image-bwrap
 # Build qemu image (FROM python-sb): python-sb-qemu:$(PYTHON_VERSION), python-sb-qemu:latest
 build-image-qemu: .make-build-image-qemu
 
+# Build gvisor image (FROM python-sb): python-sb-gvisor:$(PYTHON_VERSION), python-sb-gvisor:latest
+build-image-gvisor: .make-build-image-gvisor
+
 ## Build all provider images (and base first); see dependency graph above (for minikube: make minikube-build-images)
 build-images: Dockerfile .make-dist \
 	.make-build-image-base \
 	.make-build-image-landlock \
 	.make-build-image-unshare \
 	.make-build-image-bwrap \
-	.make-build-image-qemu
+	.make-build-image-qemu \
+	.make-build-image-gvisor
 
-IMAGE_STAMPS := .make-build-image-base .make-build-image-landlock .make-build-image-unshare .make-build-image-bwrap .make-build-image-qemu
+IMAGE_STAMPS := .make-build-image-base .make-build-image-landlock .make-build-image-unshare .make-build-image-bwrap .make-build-image-qemu .make-build-image-gvisor
 
 # The sentinels say "built", never "built *where*", so they are dropped on both sides:
 # before, because they record a build against the previous daemon and would leave every
@@ -784,7 +803,7 @@ build-image-clean:
 	@echo "Pruning build caches and forcing rebuild..."
 	@command -v docker >/dev/null 2>&1 && docker builder prune -f || true
 	@command -v podman >/dev/null 2>&1 && (podman builder prune -f 2>/dev/null || podman system prune -f 2>/dev/null) || true
-	@rm -f .make-build-image-base .make-build-image-landlock .make-build-image-unshare .make-build-image-bwrap .make-build-image-qemu
+	@rm -f .make-build-image-base .make-build-image-landlock .make-build-image-unshare .make-build-image-bwrap .make-build-image-qemu .make-build-image-gvisor
 	@$(MAKE) build-images
 
 # ---------------------------------------------------------------------------------------

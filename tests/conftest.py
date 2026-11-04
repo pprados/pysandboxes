@@ -31,6 +31,8 @@ _LINUX_ONLY_TESTS = [
     "unit_tests/test_qemu_*.py",
     "unit_tests/remote/test_bwrap_*.py",
     "unit_tests/remote/test_*landlock*.py",
+    "unit_tests/remote/test_gvisor_*.py",
+    "integration_tests/remote/test_gvisor.py",
     "unit_tests/remote/test_qemu_*.py",
     "unit_tests/remote/test_*unshare*.py",
     "unit_tests/remote/test_*firejail*.py",

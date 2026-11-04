@@ -20,7 +20,7 @@ in_image() {
     "$engine" run --rm "$image:$tag" "$@"
 }
 
-for image in python-sb python-sb-landlock python-sb-unshare python-sb-bwrap python-sb-qemu; do
+for image in python-sb python-sb-landlock python-sb-unshare python-sb-bwrap python-sb-qemu python-sb-gvisor; do
     held=$(in_image "$image" python -c "import importlib.metadata as m; print(m.version('pysandboxes'))")
     if [[ $held != "$version" ]]; then
         echo "::error::$image:$tag holds pysandboxes $held, expected $version"
@@ -40,6 +40,13 @@ in_image python-sb-bwrap nsenter --version
 in_image python-sb-qemu qemu-system-x86_64 --version
 in_image python-sb-qemu genisoimage --version
 in_image python-sb-qemu iptables-restore --version
+# runsc starts from a sidecar directory that has to sit next to it: the binary alone fails at the first guest.
+in_image python-sb-gvisor runsc --version
+in_image python-sb-gvisor ls /usr/bin/gvisor-bin/gvisor_sentry
+in_image python-sb-gvisor unshare --version
+in_image python-sb-gvisor iptables-restore --version
+in_image python-sb-gvisor ip -V
+in_image python-sb-gvisor slirp4netns --version
 # shellcheck disable=SC2016  # expanded inside the image, where the variable is set
 in_image python-sb-qemu sh -c 'ls "$PYSANDBOXES_VM_IMAGES_DIR"/* >/dev/null'
 if [[ -c $kvm ]]; then
@@ -54,4 +61,4 @@ python-sb --pysandboxes-config=/tmp/probe.py-sandboxes -c "print(\"guest-ok\")"'
 else
     echo "::warning::no $kvm: the qemu guest of python-sb-qemu:$tag is not run"
 fi
-echo "The five images hold pysandboxes $version"
+echo "The six images hold pysandboxes $version"

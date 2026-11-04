@@ -7,13 +7,13 @@ it does not mean the row ran successfully on every host.
 ## At a glance
 
 - The host integration suite exercises six runtime guard families over six
-  distinct OS providers. QEMU has two rows: KVM and forced TCG emulation.
+  distinct OS providers (gvisor included). QEMU has two rows: KVM and forced TCG emulation.
 - macOS adds a separate `sandbox-exec` row with direct Seatbelt, network-only,
   provider usage, and guard coverage. It does not change the Linux container counts.
 - Container scenarios exercise file, socket, and environment behavior. They do
   not exercise `guard_eval`, `guard_api`, or `guard_import`.
-- `unshare` and `bwrap` are not run with `--privileged` in the unprivileged rows: they get reduced privileges, and
-  all twelve rows run, on Docker, Podman and Kubernetes (see [Container conditions](#c-container-conditions)).
+- `unshare`, `bwrap` and `gvisor` are not run with `--privileged` in the unprivileged rows: they get reduced privileges, and
+  all their rows run, on Docker, Podman and Kubernetes (see [Container conditions](#c-container-conditions)).
 - Test counts below are approximate collected-case counts. Provider availability,
   workflow filters, and sample environments change how many cases actually run.
 
@@ -73,7 +73,7 @@ of it:
 | [`test.yml`](../.github/workflows/test.yml) | Unit | 3.11, 3.12, 3.13, 3.14 | ~15160 | every push and pull request |
 | [`integration.yml`](../.github/workflows/integration.yml) | Integration | 3.11, 3.12, 3.13, 3.14 | ~1310 | `full-gate.yml` (nightly, release tag) or dispatch |
 | [`containers.yml`](../.github/workflows/containers.yml) | Containers | 3.13 | ~60 | `full-gate.yml` (nightly, release tag) or dispatch |
-| [`samples.yml`](../.github/workflows/samples.yml) | Samples | 3.11, 3.12, 3.13, 3.14 × subprocess, landlock, bwrap, firejail, unshare | ~4460 | `full-gate.yml` (nightly, release tag) or dispatch |
+| [`samples.yml`](../.github/workflows/samples.yml) | Samples | 3.11, 3.12, 3.13, 3.14 × subprocess, landlock, bwrap, firejail, unshare, gvisor | ~4460 | `full-gate.yml` (nightly, release tag) or dispatch |
 | **Total** | | | **~20990** | |
 
 The samples row is not a clean multiplication: a sample whose `requires-python`
@@ -153,7 +153,7 @@ that loads a profile exercises it implicitly.
 
 ## B. OS_SANDBOX backends
 
-Ten entries are registered in `pysandboxes/_os_sandbox.py`: nine providers, plus
+Eleven entries are registered in `pysandboxes/_os_sandbox.py`: ten providers, plus
 `_sse_server`, which is internal and not user-selectable.
 
 | Backend | Host: `tst_usage` | Host: guards | OS-only netfilter | OS-only files | Docker | Podman | Kubernetes |
@@ -164,6 +164,7 @@ Ten entries are registered in `pysandboxes/_os_sandbox.py`: nine providers, plus
 | `unshare` | yes | yes | yes (2 modes) | yes (2 modes) | yes (privileged) | yes (privileged) | yes (privileged) |
 | `landlock` | yes | yes | yes (ABI v4) | yes (2 modes) | yes | yes | yes |
 | `qemu` | yes | yes | yes (KVM) | yes (2 modes) | yes | yes | yes |
+| `gvisor` | yes | yes | yes | yes | yes | yes | yes |
 | `qemu-tcg` | yes | yes | — | yes (2 modes) | — | — | — |
 | `sandbox-exec` | yes (macOS only) | yes (macOS only) | yes (2 modes, macOS only) | yes (2 modes, macOS only) | **excluded** | **excluded** | **excluded** |
 | `appcontainer` | yes (Windows only) | yes (Windows only) | — | — | **excluded** | **excluded** | **excluded** |
@@ -207,7 +208,7 @@ network. The Python guards also refuse what the OS filter should, so a broken
 filter leaves the grid green. The
 [`test_os_netfilter.py`](../tests/integration_tests/test_os_netfilter.py)
 scenario checks OS-only network enforcement with `py-sandbox=false` for
-`bwrap`, `unshare`, `qemu`, and (when Landlock ABI v4 is available) `landlock`,
+`bwrap`, `unshare`, `qemu`, `gvisor`, and (when Landlock ABI v4 is available) `landlock`,
 under both `python-sb` and daemon mode. It pairs a denied connection with a
 permitted control connection. [`remote/test_bwrap.py`](../tests/integration_tests/remote/test_bwrap.py)
 also exercises the bwrap daemon with the network-filtered profile.
@@ -247,8 +248,8 @@ interpreter.
 | Condition | Rows | Status |
 |---|---|---|
 | `landlock`, `qemu` — privileged and unprivileged | 24 | run |
-| `unshare`, `bwrap` — privileged | 12 | run |
-| `unshare`, `bwrap` — unprivileged, reduced privileges | 12 | run |
+| `unshare`, `bwrap`, `gvisor` — privileged | 18 | run |
+| `unshare`, `bwrap`, `gvisor` — unprivileged, reduced privileges | 18 | run |
 
 Both backends build their own namespaces and mounts, which the default container
 confinement refuses. Neither needs `--privileged`: the unprivileged rows add the
@@ -257,6 +258,7 @@ least that worked, measured per engine with the real `tst_usage` scenario.
 | Backend | Docker | Podman | Kubernetes pod |
 |---|---|---|---|
 | `bwrap` | `--cap-add SYS_ADMIN`, `seccomp=unconfined` and `apparmor=unconfined` (each is needed) | `--cap-add SYS_ADMIN` | `SYS_ADMIN`, `seccompProfile` and `appArmorProfile` `Unconfined` |
+| `gvisor` | `--cap-add NET_ADMIN --device /dev/net/tun`, `seccomp=unconfined` and `apparmor=unconfined` | `--cap-add NET_ADMIN --device /dev/net/tun` | `SYS_ADMIN` and `NET_ADMIN`, `seccompProfile` and `appArmorProfile` `Unconfined` |
 | `unshare`, with `UNSHARE_PROC=none` | `--cap-add NET_ADMIN --device /dev/net/tun --cap-add SYS_ADMIN --security-opt apparmor=unconfined` | `--cap-add NET_ADMIN --device /dev/net/tun` | `SYS_ADMIN` and `NET_ADMIN`, `seccompProfile` and `appArmorProfile` `Unconfined` |
 
 Docker's default AppArmor profile and seccomp filter block what these providers
@@ -320,7 +322,7 @@ parametrized over every backend, but the only assertion is about environment
 variables. And the container grid runs one interpreter against a
 `requires-python` that claims four: raising it means building and tagging the
 per-version images, since the grid asks for `:latest`. That is not a code change:
-the five `Dockerfile*` already take `ARG PYTHON_VERSION`, and the Makefile
+the six `Dockerfile*` already take `ARG PYTHON_VERSION`, and the Makefile
 derives it from the venv's interpreter. What holds it back is runtime, since the
 container job is already budgeted at 300 minutes for a single version, most of it
 QEMU booting under emulation.

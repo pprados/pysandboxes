@@ -12,13 +12,18 @@
 |          | ✅ sandbox-exec  |            | ☐ Regexp  |
 |          | ✅ Docker¹       |            | ☐ DoS     |
 |          | ✅ Podman¹       |            |           |
-|          | ☐ gVisor        |            |           |
+|          | ✅ gVisor        |            |           |
 |          | ☐ micro-VM      |            |           |
 |          | ✅ appcontainer  |            |           |
 
 ¹ Docker and Podman are not providers of their own: a container runs the
 `unshare` provider, with `--privileged` for Docker.
 
+
+## [0.0.0] - 202X-XX-XX
+
+### Added
+- Add the gVisor provider (`os-sandbox=gvisor`): the guest runs on a user-space kernel, with file, network and environment rules enforced by the OS, and a dedicated `python-sb-gvisor` image.
 
 ## [0.9.0] - 2026-11-04
 
