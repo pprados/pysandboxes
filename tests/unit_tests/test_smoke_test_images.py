@@ -10,7 +10,14 @@ import pytest
 
 SCRIPT = Path(__file__).parents[2] / ".github" / "scripts" / "smoke-test-images.sh"
 VERSION = "0.1.0b5"
-IMAGES = ["python-sb", "python-sb-landlock", "python-sb-unshare", "python-sb-bwrap", "python-sb-qemu"]
+IMAGES = [
+    "python-sb",
+    "python-sb-landlock",
+    "python-sb-unshare",
+    "python-sb-bwrap",
+    "python-sb-qemu",
+    "python-sb-gvisor",
+]
 
 # Stands for docker: logs `run --rm <image> <command...>`; prints the version held in $FAKE_DIR/version-<image>
 # (else $FAKE_VERSION) for the importlib.metadata probe; fails when "<image> <command>" is listed in $FAKE_DIR/broken.
@@ -55,7 +62,7 @@ def _calls(fake: Path) -> list[str]:
     return (fake / "calls").read_text().splitlines()
 
 
-def test_five_sound_images_pass(fake: Path) -> None:
+def test_six_sound_images_pass(fake: Path) -> None:
     assert _smoke(fake).returncode == 0
 
 
@@ -81,6 +88,12 @@ PROVIDER_TOOLS = [
     "python-sb-bwrap nsenter --version",
     "python-sb-qemu qemu-system-x86_64 --version",
     "python-sb-qemu genisoimage --version",
+    "python-sb-gvisor runsc --version",
+    "python-sb-gvisor ls /usr/bin/gvisor-bin/gvisor_sentry",
+    "python-sb-gvisor unshare --version",
+    "python-sb-gvisor iptables-restore --version",
+    "python-sb-gvisor ip -V",
+    "python-sb-gvisor slirp4netns --version",
 ]
 
 

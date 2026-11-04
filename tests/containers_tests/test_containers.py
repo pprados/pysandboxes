@@ -77,6 +77,7 @@ all_os_sandbox_provider: list[str] = [
     "unshare",
     "bwrap",
     "qemu",
+    "gvisor",
 ]
 
 # Providers that create their own namespaces and mounts. The default container confinement refuses them, but they
@@ -88,8 +89,12 @@ _NO_SECCOMP = ["--security-opt", "seccomp=unconfined"]
 _SYS_ADMIN = ["--cap-add", "SYS_ADMIN"]
 _SLIRP = ["--cap-add", "NET_ADMIN", "--device", "/dev/net/tun"]
 reduced_privilege_flags: dict[str, dict[str, list[str]]] = {
-    "docker": {"bwrap": [*_SYS_ADMIN, *_NO_SECCOMP, *_NO_APPARMOR], "unshare": [*_SLIRP, *_SYS_ADMIN, *_NO_APPARMOR]},
-    "podman": {"bwrap": _SYS_ADMIN, "unshare": _SLIRP},
+    "docker": {
+        "bwrap": [*_SYS_ADMIN, *_NO_SECCOMP, *_NO_APPARMOR],
+        "unshare": [*_SLIRP, *_SYS_ADMIN, *_NO_APPARMOR],
+        "gvisor": [*_SLIRP, *_NO_SECCOMP, *_NO_APPARMOR],
+    },
+    "podman": {"bwrap": _SYS_ADMIN, "unshare": _SLIRP, "gvisor": _SLIRP},
 }
 # Set in the environment of the row: unshare runs without a /proc, as a container cannot unmask the paths it needs.
 reduced_privilege_env: dict[str, str] = {"unshare": "UNSHARE_PROC=none"}
@@ -634,6 +639,7 @@ _KUBE_UNCONFINED = """      securityContext:
 reduced_privilege_security_context: dict[str, str] = {
     "bwrap": _KUBE_UNCONFINED.format(capabilities="            - SYS_ADMIN"),
     "unshare": _KUBE_UNCONFINED.format(capabilities="            - SYS_ADMIN\n            - NET_ADMIN"),
+    "gvisor": _KUBE_UNCONFINED.format(capabilities="            - SYS_ADMIN\n            - NET_ADMIN"),
 }
 
 
