@@ -152,8 +152,8 @@ fuzz = [
 skip = '*/.git,*/.venv,*/node_modules,*/.mypy_cache,*/.pytest_cache,*/.ruff_cache,*/dist,*/.ia_backup,*/graphify-out,*/htmlcov,*/docs/api,*/.agents,*/_bmad,*/wiki/bmad,*/PPR,*/audits,*/TODO.md,point_etape.md,*_fr.md,*/research/build,*.tex,*.bib,*.bbl,*.mmd,*.pdf,*.svg,*.yaml,*.ipynb,*.lock,*.min.js,*.css,package-lock.json'
 # Ignore latin etc
 ignore-regex = '.*(Stati Uniti|Tense=Pres).*'
-# Short byte fragments used in transport tests.
-ignore-words-list = 'caf,hel'
+# Short byte fragments used in transport tests; `bu` is the SDDL code of the Builtin Users group.
+ignore-words-list = 'caf,hel,bu'
 
 [tool.black]
 line-length = 120
