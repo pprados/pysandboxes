@@ -98,6 +98,8 @@ reduced_privilege_flags: dict[str, dict[str, list[str]]] = {
 }
 # Set in the environment of the row: unshare runs without a /proc, as a container cannot unmask the paths it needs.
 reduced_privilege_env: dict[str, str] = {"unshare": "UNSHARE_PROC=none"}
+# Set in every row: the filtered network of bwrap is unverified in a container, which keeps the network of the host.
+always_env: dict[str, str] = {"bwrap": "BWRAP_UNSHARE_NET=no"}
 
 
 # os_sandbox,py_sandbox,privileged (pytest.param tuples for parametrize)
@@ -105,7 +107,9 @@ reduced_privilege_env: dict[str, str] = {"unshare": "UNSHARE_PROC=none"}
 # Run on host: pytest tests/integration_tests/test_usage_with_providers.py -k qemu
 def _row_env(os_sandbox: str, privileged: bool) -> str:
     """The environment a row adds to the command: what the reduced privileges of the container call for."""
-    return "" if privileged or os_sandbox not in reduced_privilege_env else f"{reduced_privilege_env[os_sandbox]} "
+    env = [] if privileged or os_sandbox not in reduced_privilege_env else [reduced_privilege_env[os_sandbox]]
+    env += [always_env[os_sandbox]] if os_sandbox in always_env else []
+    return "".join(f"{item} " for item in env)
 
 
 def _all_os_sandbox_params() -> list:
