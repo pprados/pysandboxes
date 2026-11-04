@@ -45,13 +45,13 @@ number.
 
 ## Publishing a final version
 
-`make publish-patch` and `make publish-minor` run `make release` (`validate` and `all-tests`) first, take the last
-final tag (`v0.0.0` without one) bumped by patch or minor, date the `[0.0.0]` entry of `CHANGELOG.md` in a signed
-commit, tag and push. `make publish-final VERSION=X.Y.Z` does the same with the version given, which must be greater
-than the last final tag: it sets the first number of a series, such as `0.5.0`. Before tagging, `make publish-minor`
-and `make publish-final` also run `make sample-tests-matrix`: every sample on every Python under `subprocess`,
-`landlock`, `bwrap`, `firejail` and `unshare`, the grid `samples.yml` runs in CI. The tag holds no open entry; the
-first merge into `develop` after the release opens a new `[0.0.0]` entry.
+`make publish-patch` and `make publish-minor` run no test on the machine: they take the last final tag (`v0.0.0`
+without one) bumped by patch or minor, date the `[0.0.0]` entry of `CHANGELOG.md` in a signed commit, tag and push.
+`make publish-final VERSION=X.Y.Z` does the same with the version given, which must be greater than the last final
+tag: it sets the first number of a series, such as `0.5.0`. The tests run on GitHub, in `release.yml`, which reuses a
+green nightly of the same commit. `make release` (`validate` and `all-tests`) and `make sample-tests-matrix` remain
+available to run the same checks locally, on demand. The tag holds no open entry; the first merge into `develop`
+after the release opens a new `[0.0.0]` entry.
 
 The first final version publishes the `[0.0.0]` entry as written. From the next one on, `scripts/changelog-draft.sh`
 rewrites it before the tag: an LLM (`claude -p`, without tools, from the maintainer's logged-in shell) merges the

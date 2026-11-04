@@ -35,9 +35,9 @@ make clean                   # Clean build artifacts
 make lock                    # Refresh uv.lock, which is versioned
 make dist                    # Build distribution packages
 make publish-pre-release VERSION=X.Y.ZbN  # Tag and push a pre-release (published to test.pypi.org by the CI)
-make publish-minor           # Full local check and sample-tests-matrix, then tag and push the next minor final version (published to pypi.org by the CI)
-make publish-patch           # Full local check, then tag and push the next patch final version (published to pypi.org by the CI)
-make publish-final VERSION=X.Y.Z  # Full local check and sample-tests-matrix, then tag and push the given final version, greater than the last (published to pypi.org by the CI)
+make publish-minor           # Tag and push the next minor final version (tested on GitHub, then published to pypi.org by the CI)
+make publish-patch           # Tag and push the next patch final version (tested on GitHub, then published to pypi.org by the CI)
+make publish-final VERSION=X.Y.Z  # Tag and push the given final version, greater than the last (tested on GitHub, then published to pypi.org by the CI)
 make help                    # Show all commands
 ```
 

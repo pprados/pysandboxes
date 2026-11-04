@@ -812,9 +812,10 @@ else
 endif
 
 # ---------------------------------------------------------------------------------------
-# The local full check before a final version. The CI publishes: nothing is uploaded from this machine.
+# An optional local full check. No publish target runs it: release.yml tests the tag on GitHub, and the CI
+# publishes, so nothing is uploaded from this machine.
 .PHONY: release
-## Run the full local check (validate and all-tests) before a final version
+## Run the full local check (validate and all-tests), on demand
 release: validate all-tests
 # qemu-tcg only emulates what qemu runs under KVM: the check leaves it out, like make coverage.
 release: export PYTEST_ADDOPTS = -m "not slow"
@@ -892,19 +893,14 @@ publish-pre-release: quick-demo-gif
 
 # Final versions: the last final tag bumped, the CHANGELOG entry dated, a signed tag pushed after develop;
 # release.yml publishes it to pypi.org once the pypi deployment is approved.
-## Run the full local check, then tag and push the next patch version
+## Tag and push the next patch version, which release.yml tests on GitHub then publishes
 publish-patch: quick-demo-gif
-	$(MAKE) release
 	@scripts/tag-release.sh patch
 
-## Run the full local check and the samples on every Python and provider, then tag and push the next minor version
+## Tag and push the next minor version, which release.yml tests on GitHub then publishes
 publish-minor: quick-demo-gif
-	$(MAKE) release
-	$(MAKE) sample-tests-matrix
 	@scripts/tag-release.sh minor
 
-## Run the full local check and the samples on every Python and provider, then tag and push a given final version: make publish-final VERSION=0.5.0
+## Tag and push a given final version, which release.yml tests on GitHub then publishes: make publish-final VERSION=0.5.0
 publish-final: quick-demo-gif
-	$(MAKE) release
-	$(MAKE) sample-tests-matrix
 	@scripts/tag-release.sh final "$(VERSION)"
