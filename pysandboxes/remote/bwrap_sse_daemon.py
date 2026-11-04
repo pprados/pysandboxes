@@ -330,6 +330,7 @@ class BWrapSSEDaemon(BaseSubProcessDaemon):
         if reason := BWrapSSEDaemon.network_filter_unavailable_reason():
             logger.error("%s. Install them or use bwrap.share-net=yes to keep host network.", reason)
             raise SandBoxError(f"{reason}.")
+        self._stop_previous_slirp()
         self._slirp_shutdown_event.clear()
         slirp_pipe_r, slirp_pipe_w = os.pipe()
         fd, api_socket = tempfile.mkstemp()
@@ -718,6 +719,19 @@ class BWrapSSEDaemon(BaseSubProcessDaemon):
         logger.info("Subprocess daemon is up and running at %s", ping_url)
         self._is_started = True
         self._accept_incoming = True
+
+    def _stop_previous_slirp(self) -> None:
+        """Stop the slirp4netns of a sandbox that died: it does not notice, and keeps the forwarded host ports."""
+        previous = self._slirp_process_holder[0]
+        if previous is None:
+            return
+        try:
+            previous.kill()
+            previous.wait(timeout=5)
+        except Exception:
+            # Already gone, or refusing to die: the new one reports it if a port stays taken.
+            pass
+        self._slirp_process_holder[0] = None
 
     async def _stop(self, max_pending: int) -> None:
         """Stop daemon and slirp4netns when network filtering was used."""

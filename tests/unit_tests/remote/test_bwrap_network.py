@@ -3,6 +3,7 @@
 """Regression: without a socket rule, ``bwrap`` must not keep the host network."""
 
 import os
+import subprocess
 from pathlib import Path
 from typing import Any
 from unittest.mock import MagicMock, patch
@@ -80,6 +81,34 @@ def test_the_child_receives_no_rule_to_apply(tmp_path: Path) -> None:
     config = params["process_config"]
     assert config.netfilter_rules == ()
     assert params["pass_fds"] == ()
+
+
+def test_a_restart_stops_the_slirp_of_the_sandbox_that_died(tmp_path: Path) -> None:
+    """slirp4netns outlives its sandbox and keeps the forwarded host ports: the next start would never answer."""
+    daemon = BWrapSSEDaemon("token")
+    previous = MagicMock()
+    daemon._slirp_process_holder[0] = previous
+    with patch("pysandboxes.remote.bwrap_sse_daemon.which_command", return_value="/usr/bin/tool"):
+        daemon.get_launch_params_for_python_sb(_with_socket_rule(), 0, "t", "", tmp_path / "pipe", tmp_path)
+    previous.kill.assert_called_once_with()
+    previous.wait.assert_called_once_with(timeout=5)
+    assert daemon._slirp_process_holder[0] is None
+
+
+def test_a_first_start_has_no_slirp_to_stop() -> None:
+    daemon = BWrapSSEDaemon("token")
+    daemon._stop_previous_slirp()
+    assert daemon._slirp_process_holder == [None]
+
+
+def test_a_slirp_already_gone_or_stuck_is_dropped_all_the_same() -> None:
+    for error in (ProcessLookupError, subprocess.TimeoutExpired("slirp4netns", 5)):
+        daemon = BWrapSSEDaemon("token")
+        previous = MagicMock()
+        previous.wait.side_effect = error
+        daemon._slirp_process_holder[0] = previous
+        daemon._stop_previous_slirp()
+        assert daemon._slirp_process_holder[0] is None
 
 
 def test_the_filter_is_loaded_before_slirp_and_from_the_sandbox_pid(tmp_path: Path) -> None:
