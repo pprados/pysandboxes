@@ -25,6 +25,9 @@
 ### Added
 - Add the gVisor provider (`os-sandbox=gvisor`): the guest runs on a user-space kernel, with file, network and environment rules enforced by the OS, and a dedicated `python-sb-gvisor` image.
 
+### Changed
+- Remove the provider extras (`pysandboxes[bwrap]`, `[firejail]`, `[landlock]`, `[sandbox-exec]`, `[subprocess]`, `[unshare]` and `[all]`): they installed nothing, as a provider needs system tools, not Python packages.
+
 ## [0.9.0] - 2026-11-04
 
 ### Added

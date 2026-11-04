@@ -17,7 +17,6 @@ Every hit outside landlock's own modules is a place the new provider must appear
 | `pysandboxes/remote/main_sandbox.py` | `assert os_sandbox in (...)` | Add the name to the tuple. |
 | `pysandboxes/templates/<name>.template` | | Launcher providers only, if the command is built from a template. |
 | `pysandboxes/__init__.py` | module docstring | Add the name to the provider list. |
-| `pyproject.toml` | `[project.optional-dependencies]` | Add `<name> = [...]` and add it to `all`. Run `uv lock`. |
 
 ## Tests
 
