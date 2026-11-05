@@ -58,6 +58,7 @@ LINUX_PROVIDER_TOOLS=(
   "ip:iproute2:iproute"
   "qemu-system-x86_64:qemu-system-x86:qemu-system-x86-core"
   "qemu-img:qemu-utils:qemu-img"
+  "7z:7zip:7zip"
   "genisoimage:genisoimage:genisoimage"
 )
 
