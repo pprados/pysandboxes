@@ -118,6 +118,24 @@ To pin a provider so the environment cannot downgrade it, write it literally, e.
 
 > Need help: can you propose a PR to integrate some solution for Apple OS ?
 
+### How the host reaches the sandbox: `remote-endpoint`
+
+`remote-endpoint=auto` is the default: when the provider and the platform allow it, the host binds a Unix socket (mode 0600, private directory) and hands the listening descriptor down to the child, which then needs no file rule and no network rule for the channel and cannot replace the socket. Otherwise the channel stays on a local TCP port (`net=ALLOW|TCP|*|<port>|IN`, injected for the child). `auto` falls back to TCP for a provider that cannot hand a descriptor down, for a fixed `port=`, off Linux and macOS (Windows Python has no `AF_UNIX`), and where no Unix socket can be bound. `remote-endpoint=tcp` forces TCP; `remote-endpoint=unix` is an error where `auto` would fall back.
+
+| Provider | Unix socket |
+|---|---|
+| subprocess | ✅ |
+| landlock | ✅ |
+| bwrap | ✅ |
+| firejail | ✅ |
+| unshare | ✅ |
+| sandbox-exec | ✅ macOS: Seatbelt lets the sandbox accept on the inherited socket, with no network rule |
+| appcontainer | ❌ Windows Python has no `socket.AF_UNIX`; the channel stays on TCP |
+| qemu | ✅ QEMU creates the socket (`hostfwd=unix:`); the guest keeps serving TCP behind the forward |
+| gvisor | ❌ the guest cannot accept on a handed-down socket, and `--host-uds=open` would let it reach host sockets |
+
+Not supported by this layer: Windows named pipes (uvicorn cannot serve on them) and anonymous pipes (no accept loop).
+
 ### Host sockets under `/run`
 
 `/run` holds sockets that reach the host: `/run/docker.sock`, and under `/run/user/<uid>` the session D-Bus bus

@@ -120,7 +120,9 @@ CROSS_OS_PYTEST = \
 	"uv run pytest -rs -m \"not slow\" tests/integration_tests/test_guards_with_providers.py tests/integration_tests/test_usage_with_providers.py"
 # macOS also runs the `sandbox-exec` provider: the "macOS Seatbelt enforcement" step of cross-os.yml.
 MACOS_PYTEST = $(CROSS_OS_PYTEST) \
-	"uv run pytest -rs tests/integration_tests/remote/test_sandbox_exec.py tests/integration_tests/test_os_file_confinement.py tests/integration_tests/test_os_netfilter.py"
+	"uv run pytest -rs tests/integration_tests/remote/test_sandbox_exec.py tests/integration_tests/test_os_file_confinement.py tests/integration_tests/test_os_netfilter.py" \
+	"uv run pytest tests/unit_tests/remote/test_endpoint.py tests/unit_tests/test_remote_endpoint_rule.py" \
+	"uv run pytest -rs tests/integration_tests/remote/test_socket_endpoints.py tests/integration_tests/remote/test_socket_endpoints_fallback.py"
 # What a VM needs of the checkout: it has no git, so the tracked and new files are streamed as a tar.
 VM_SOURCES = git ls-files -co --exclude-standard | tar -cf - -T -
 # hatch-vcs reads the version from git, which a VM does not have.
@@ -166,7 +168,9 @@ windows-vm:
 
 # Windows also runs the `appcontainer` provider: the "AppContainer integration" step of cross-os.yml.
 WINDOWS_VM_PYTEST ?= $(CROSS_OS_PYTEST) \
-	"uv run pytest -rs tests/unit_tests/remote/test_appcontainer_acl_native.py tests/integration_tests/remote/test_appcontainer.py tests/integration_tests/test_temp_cleanup.py"
+	"uv run pytest -rs tests/unit_tests/remote/test_appcontainer_acl_native.py tests/integration_tests/remote/test_appcontainer.py tests/integration_tests/test_temp_cleanup.py" \
+	"uv run pytest tests/unit_tests/remote/test_endpoint.py tests/unit_tests/test_remote_endpoint_rule.py" \
+	"uv run pytest -rs tests/integration_tests/remote/test_socket_endpoints_fallback.py"
 # As in cross-os.yml, a skipped integration test fails the run; the whole suite skips what Windows cannot run.
 WINDOWS_VM_FAIL_ON_SKIP ?= 1
 

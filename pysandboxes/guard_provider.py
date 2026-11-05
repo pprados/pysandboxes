@@ -21,6 +21,32 @@ def learn_lock(rules: ConfigLines) -> ConfigLine | None:
     return None
 
 
+def parse_remote_endpoint(rules: ConfigLines, errors: List[ErrorMsg]) -> Tuple[str, ConfigLines]:
+    """Extract ``remote-endpoint=auto|tcp|unix``, which picks how the host reaches the sandbox; the last line wins.
+
+    Returns:
+        The chosen transport (``auto`` when unset) and the remaining rules.
+    """
+    endpoint = "auto"
+    others: ConfigLines = []
+    for rule in rules:
+        if not rule.rule.startswith("remote-endpoint="):
+            others.append(rule)
+            continue
+        value = rule.rule.split("=", 1)[1].strip().lower()
+        if value in ("auto", "tcp", "unix"):
+            endpoint = value
+        else:
+            errors.append(
+                (
+                    f"{format_ruleref(rule)}: Invalid value {value!r} for remote-endpoint. Use auto, tcp or unix.",
+                    rule.path,
+                    rule.ln,
+                )
+            )
+    return endpoint, others
+
+
 def parse_rules(
     config_path: Path,
     rules: ConfigLines,

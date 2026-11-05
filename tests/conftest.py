@@ -33,6 +33,7 @@ _LINUX_ONLY_TESTS = [
     "unit_tests/remote/test_*landlock*.py",
     "unit_tests/remote/test_gvisor_*.py",
     "integration_tests/remote/test_gvisor.py",
+    "integration_tests/remote/test_gvisor_host_uds.py",
     "unit_tests/remote/test_qemu_*.py",
     "unit_tests/remote/test_*unshare*.py",
     "unit_tests/remote/test_*firejail*.py",
@@ -46,8 +47,11 @@ _MACOS_ONLY_TESTS = ["integration_tests/remote/test_sandbox_exec.py"]
 _WINDOWS_ONLY_TESTS = ["integration_tests/remote/test_appcontainer.py"]
 
 # Modules that run the release scripts (bash, git) the maintainer and the CI use, and the import layering check,
-# whose parser reads the sources with the platform encoding. None of them depends on what Windows runs.
+# whose parser reads the sources with the platform encoding. None of them depends on what Windows runs. Also the tests
+# that need what Windows lacks: AF_UNIX (its Python has none), os.mkfifo (the Seatbelt profile pipe).
 _NOT_ON_WINDOWS_TESTS = [
+    "integration_tests/remote/test_socket_endpoints.py",
+    "unit_tests/remote/test_sandbox_exec_profile.py",
     "unit_tests/test_architecture.py",
     "unit_tests/test_changelog_draft.py",
     "unit_tests/test_checked_commits.py",

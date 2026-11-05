@@ -17,6 +17,7 @@ import errno
 import gc
 import logging
 import os
+import shutil
 import pickle
 import random
 import socket
@@ -43,7 +44,7 @@ from ..tools import Environ, SyncOrAsyncFunc, get_callable_info
 from . import main_shutdown
 from .base_sse_daemon import BaseSSESandbox
 from .daemon_parameters import DaemonParameters
-from .endpoint import TCP, UNIX, Endpoint, format_endpoint
+from .endpoint import FD, TCP, UNIX, Endpoint, format_endpoint, listen_socket, remove_endpoint
 from .endpoint_connector import ENDPOINT_URL, make_session
 from .parameters import (
     INTERVAL_FOR_PING_DAEMON,
@@ -343,8 +344,14 @@ class BaseSubProcessDaemon(BaseSSESandbox):
         "_python_args",
         "_job_handle",
         "restart",
+        "_endpoint_dir",
+        "_listener",
     )
     _job_handle: int | None
+    # True once the provider's launch hands an inherited descriptor down to the sandbox (see ``remote-endpoint=unix``).
+    supports_unix_endpoint: bool = False
+    # False when the provider's own process creates the socket (QEMU ``hostfwd=unix:``) and the guest stays on TCP.
+    endpoint_handed_down: bool = True
 
     async def _on_process_started(self) -> None:
         """Hook called after the subprocess is started but before the ping loop."""
@@ -410,6 +417,8 @@ class BaseSubProcessDaemon(BaseSSESandbox):
         self._last_reset = time.time()
         self._is_started = False
         self.restart = 0
+        self._endpoint_dir: str | None = None
+        self._listener: socket.socket | None = None
 
     def subprocess_cmd(
         self,
@@ -465,6 +474,7 @@ class BaseSubProcessDaemon(BaseSSESandbox):
         """
         self.restart = 0
         self.port = find_free_port() if all_rules.port == -1 else all_rules.port  # pragma: no mutate
+        self._choose_endpoint(all_rules)
 
         await self._re_start(
             all_rules,
@@ -557,18 +567,17 @@ class BaseSubProcessDaemon(BaseSSESandbox):
 
             # Add rules for the communication with the sandbox
             socket_rules: list[SocketRule] = list(all_rules.socket_rules)
-            _new_socket_rules, *_ = socket_parse_rules([ConfigLine(f"net=ALLOW|TCP|*|{self.port}|IN", Path(), 0)], [])
-            socket_rules.extend(_new_socket_rules)
+            if self.endpoint is None or not self.endpoint_handed_down:
+                _new_socket_rules, *_ = socket_parse_rules(
+                    [ConfigLine(f"net=ALLOW|TCP|*|{self.port}|IN", Path(), 0)], []
+                )
+                socket_rules.extend(_new_socket_rules)
 
             from pysandboxes.guard_socket import SocketRules
 
             all_rules = all_rules._replace(socket_rules=SocketRules(socket_rules))
-            if self.endpoint is not None and self.endpoint.kind == UNIX:
-                from ..guard_files import parse_rules as files_parse_rules
-
-                socket_dir = str(Path(self.endpoint.path).parent)
-                _new_file_rules, *_ = files_parse_rules([ConfigLine(f"expose-rw={socket_dir}", Path(), 0)], [])
-                all_rules = all_rules._replace(file_rules=(*all_rules.file_rules, *_new_file_rules))
+            if self.endpoint is not None and self.endpoint.kind == UNIX and self.endpoint_handed_down:
+                self._listener = listen_socket(self.endpoint)
 
             cmds, env = self.subprocess_cmd(
                 all_rules=all_rules,
@@ -577,15 +586,22 @@ class BaseSubProcessDaemon(BaseSSESandbox):
                 temp=Path(tmpdir),
             )
 
-            await self._re_start_cmd(
-                all_rules,
-                cmds,
-                env,
-                pipe_path=pipe_path,
-                port=self.port,
-                log_level=log_level,
-                init_fn=init_fn,
-            )
+            try:
+                await self._re_start_cmd(
+                    all_rules,
+                    cmds,
+                    env,
+                    pipe_path=pipe_path,
+                    port=self.port,
+                    log_level=log_level,
+                    init_fn=init_fn,
+                )
+            finally:
+                # The sandbox owns the listening socket now: with no copy left here, a dead sandbox refuses
+                # connections instead of queuing them.
+                if self._listener is not None:
+                    self._listener.close()
+                    self._listener = None
 
         if first:
             pysandboxes_logger.info("Daemon Sandbox started")
@@ -632,7 +648,7 @@ class BaseSubProcessDaemon(BaseSSESandbox):
             port=port,
             init_fn=init_fn_ref,
             bind_host=self._sse_bind_host(args),
-            endpoint=format_endpoint(self.endpoint) if self.endpoint else None,
+            endpoint=format_endpoint(Endpoint(FD, port=self._listener.fileno())) if self._listener else None,
         )
 
         env: Environ
@@ -648,6 +664,7 @@ class BaseSubProcessDaemon(BaseSSESandbox):
             envs=Envs(env),
             process_config=process_config,
             on_launched=self._on_process_launched,
+            pass_fds=(self._listener.fileno(),) if self._listener else (),
         )
         logger.info(
             "Subprocess launched (pid=%s), waiting for daemon (ping URL resolved each attempt)",
@@ -816,6 +833,7 @@ class BaseSubProcessDaemon(BaseSSESandbox):
             self._process = None
             self._is_started = False
             self.release_sandbox_temp()
+            self._release_endpoint()
 
     def sandbox_temp(self) -> Path:
         """Return a temporary directory for the sandbox to write in, private to this daemon.
@@ -826,6 +844,47 @@ class BaseSubProcessDaemon(BaseSSESandbox):
         if self._sandbox_temp is None:
             self._sandbox_temp = tempfile.TemporaryDirectory(prefix="pysandboxes-tmp-")
         return Path(self._sandbox_temp.name)
+
+    def _choose_endpoint(self, all_rules: AllRules) -> None:
+        """Set ``self.endpoint`` to a private Unix socket when ``remote-endpoint`` and the platform allow it.
+
+        ``auto`` falls back to TCP when the provider cannot hand a descriptor down, when a fixed ``port=`` was asked
+        for, off Linux and macOS (no proof elsewhere), or when a socket cannot be bound here. ``unix`` is an error then.
+        """
+        mode = all_rules.remote_endpoint
+        if mode == "tcp":
+            return
+        reason = None
+        if not self.supports_unix_endpoint:
+            reason = f"the {all_rules.os_sandbox!r} provider cannot hand a socket down"
+        elif mode == "auto" and (all_rules.port != -1 or sys.platform not in ("linux", "darwin")):
+            reason = "a fixed port or a platform without proof asks for TCP"
+        else:
+            directory = tempfile.mkdtemp(prefix="pysb_", dir="/tmp" if os.path.isdir("/tmp") else None)
+            endpoint = Endpoint(UNIX, path=os.path.join(directory, "s"))
+            try:
+                listen_socket(endpoint).close()
+                remove_endpoint(endpoint)
+            except (OSError, ValueError) as error:
+                shutil.rmtree(directory, ignore_errors=True)
+                reason = f"no Unix socket can be bound here ({error})"
+            else:
+                self._endpoint_dir = directory
+                self.endpoint = endpoint
+                return
+        if mode == "unix":
+            raise SandBoxError(f"remote-endpoint=unix is impossible: {reason}. Use remote-endpoint=tcp or auto.")
+        logger.debug("remote-endpoint=auto uses TCP: %s", reason)
+
+    def _release_endpoint(self) -> None:
+        """Close the listening socket and remove the private directory of a Unix endpoint, if any."""
+        if self._listener is not None:
+            self._listener.close()
+            self._listener = None
+        if self._endpoint_dir is not None:
+            shutil.rmtree(self._endpoint_dir, ignore_errors=True)
+            self._endpoint_dir = None
+            self.endpoint = None
 
     def release_sandbox_temp(self) -> None:
         """Remove the directory handed out by :meth:`sandbox_temp`, if any."""
@@ -845,6 +904,8 @@ class SubProcessDaemon(BaseSubProcessDaemon):
 
     Simple subprocess daemon that delegates rule updates to the parent class.
     """
+
+    supports_unix_endpoint = True
 
     def update_rules_and_activate(
         self,

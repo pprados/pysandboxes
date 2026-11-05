@@ -214,6 +214,8 @@ class FireJailSSEDaemon(BaseSubProcessDaemon):
     sandboxed processes with comprehensive OS-level isolation.
     """
 
+    supports_unix_endpoint = True
+
     @classmethod
     @override
     def unavailable_reason(cls) -> str | None:
@@ -338,6 +340,10 @@ class FireJailSSEDaemon(BaseSubProcessDaemon):
         args = [str(which_command("firejail"))]
         for k, v in all_rules.os_sandbox_params.items():  # type: ignore[attr-defined]
             args.append(f"--{k}={v}")
+
+        if self._listener is not None:
+            # firejail closes every descriptor above 2 unless told to keep it.
+            args.append(f"--keep-fd={self._listener.fileno()}")
 
         if logger.getEffectiveLevel() > logging.INFO:
             args.append("--quiet")

@@ -42,7 +42,7 @@ from ..tools import (
     set_is_in_sandbox,
 )
 from .base_sse_daemon import BaseSSESandbox
-from .endpoint import TCP, listen_socket, parse_endpoint, remove_endpoint
+from .endpoint import FD, TCP, UNIX, adopt_listener, listen_socket, parse_endpoint, remove_endpoint
 from .parameters import (
     MAX_CONNECT_RETRY,
     POLLING_DELAY,
@@ -444,7 +444,10 @@ class SSEServerDaemon(BaseSSESandbox):
         """
         set_is_in_sandbox(True)
         if self.listen_endpoint and self.listen_endpoint.kind != TCP and self.shared_socket is None:
-            self.shared_socket = listen_socket(self.listen_endpoint)
+            if self.listen_endpoint.kind == FD:
+                self.shared_socket = adopt_listener(self.listen_endpoint)
+            else:
+                self.shared_socket = listen_socket(self.listen_endpoint)
         if init_fn:
             with user_code():
                 if asyncio.iscoroutinefunction(init_fn):
@@ -554,7 +557,7 @@ class SSEServerDaemon(BaseSSESandbox):
             await self.task
             self.task = None
         self.uvicorn = None
-        if self.listen_endpoint:
+        if self.listen_endpoint and self.listen_endpoint.kind == UNIX:
             remove_endpoint(self.listen_endpoint)
         set_is_in_sandbox(False)
         logger.debug("Remote shutdowned")

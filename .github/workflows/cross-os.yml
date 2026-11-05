@@ -89,6 +89,19 @@ jobs:
         tests/integration_tests/test_os_file_confinement.py
         tests/integration_tests/test_os_netfilter.py
 
+    - name: Host/guest channel, unit
+      if: ${{ !cancelled() }}
+      run: uv run pytest tests/unit_tests/remote/test_endpoint.py tests/unit_tests/test_remote_endpoint_rule.py
+
+    - name: Host/guest channel, macOS
+      if: ${{ matrix.os == 'macos-latest' && !cancelled() }}
+      env:
+        PYSANDBOXES_FAIL_ON_SKIP: "1"
+      run: >-
+        uv run pytest -rs
+        tests/integration_tests/remote/test_socket_endpoints.py
+        tests/integration_tests/remote/test_socket_endpoints_fallback.py
+
     - name: AppContainer integration
       if: ${{ matrix.os == 'windows-latest' && !cancelled() }}
       timeout-minutes: 15
@@ -99,3 +112,9 @@ jobs:
         tests/unit_tests/remote/test_appcontainer_acl_native.py
         tests/integration_tests/remote/test_appcontainer.py
         tests/integration_tests/test_temp_cleanup.py
+
+    - name: Host/guest channel, Windows
+      if: ${{ matrix.os == 'windows-latest' && !cancelled() }}
+      env:
+        PYSANDBOXES_FAIL_ON_SKIP: "1"
+      run: uv run pytest -rs tests/integration_tests/remote/test_socket_endpoints_fallback.py
