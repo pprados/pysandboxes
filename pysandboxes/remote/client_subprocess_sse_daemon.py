@@ -472,14 +472,7 @@ class BaseSubProcessDaemon(BaseSSESandbox):
         """
         self.restart = 0
         self.port = find_free_port() if all_rules.port == -1 else all_rules.port  # pragma: no mutate
-        if all_rules.remote_endpoint == "unix":
-            if not self.supports_unix_endpoint:
-                raise SandBoxError(
-                    f"The {all_rules.os_sandbox!r} provider cannot carry the channel over a Unix socket: "
-                    "use remote-endpoint=tcp."
-                )
-            self._endpoint_dir = tempfile.mkdtemp(prefix="pysb-", dir="/tmp" if os.path.isdir("/tmp") else None)
-            self.endpoint = Endpoint(UNIX, path=os.path.join(self._endpoint_dir, "s"))
+        self._choose_endpoint(all_rules)
 
         await self._re_start(
             all_rules,
@@ -849,6 +842,36 @@ class BaseSubProcessDaemon(BaseSSESandbox):
         if self._sandbox_temp is None:
             self._sandbox_temp = tempfile.TemporaryDirectory(prefix="pysandboxes-tmp-")
         return Path(self._sandbox_temp.name)
+
+    def _choose_endpoint(self, all_rules: AllRules) -> None:
+        """Set ``self.endpoint`` to a private Unix socket when ``remote-endpoint`` and the platform allow it.
+
+        ``auto`` falls back to TCP when the provider cannot hand a descriptor down, when a fixed ``port=`` was asked
+        for, off Linux (no CI proof elsewhere), or when a socket cannot be bound here. ``unix`` is an error then.
+        """
+        mode = all_rules.remote_endpoint
+        if mode == "tcp":
+            return
+        reason = None
+        if not self.supports_unix_endpoint:
+            reason = f"the {all_rules.os_sandbox!r} provider cannot hand a socket down"
+        elif mode == "auto" and (all_rules.port != -1 or not sys.platform.startswith("linux")):
+            reason = "a fixed port or a platform without proof asks for TCP"
+        else:
+            directory = tempfile.mkdtemp(prefix="pysb-", dir="/tmp" if os.path.isdir("/tmp") else None)
+            endpoint = Endpoint(UNIX, path=os.path.join(directory, "s"))
+            try:
+                listen_socket(endpoint).close()
+            except (OSError, ValueError) as error:
+                shutil.rmtree(directory, ignore_errors=True)
+                reason = f"no Unix socket can be bound here ({error})"
+            else:
+                self._endpoint_dir = directory
+                self.endpoint = endpoint
+                return
+        if mode == "unix":
+            raise SandBoxError(f"remote-endpoint=unix is impossible: {reason}. Use remote-endpoint=tcp or auto.")
+        logger.debug("remote-endpoint=auto uses TCP: %s", reason)
 
     def _release_endpoint(self) -> None:
         """Close the listening socket and remove the private directory of a Unix endpoint, if any."""

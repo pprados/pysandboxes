@@ -120,9 +120,9 @@ To pin a provider so the environment cannot downgrade it, write it literally, e.
 
 ### How the host reaches the sandbox: `remote-endpoint`
 
-By default the sandbox serves SSE on a local TCP port, which the profile has to allow for the child (`net=ALLOW|TCP|*|<port>|IN`). `remote-endpoint=unix` replaces it with a Unix socket: the host binds it in a private directory (mode 0600), hands the listening descriptor down to the child, and closes its own copy once the child serves. The child needs no file rule and no network rule for the channel, and cannot replace the socket. Providers that cannot hand the descriptor down refuse `remote-endpoint=unix` at start instead of falling back to TCP.
+`remote-endpoint=auto` is the default: when the provider and the platform allow it, the host binds a Unix socket (mode 0600, private directory) and hands the listening descriptor down to the child, which then needs no file rule and no network rule for the channel and cannot replace the socket. Otherwise the channel stays on a local TCP port (`net=ALLOW|TCP|*|<port>|IN`, injected for the child). `auto` falls back to TCP for a provider that cannot hand a descriptor down, for a fixed `port=`, off Linux, and where no Unix socket can be bound. `remote-endpoint=tcp` forces TCP; `remote-endpoint=unix` is an error where `auto` would fall back.
 
-| Provider | `remote-endpoint=unix` |
+| Provider | Unix socket |
 |---|---|
 | subprocess | ✅ |
 | landlock | ✅ |

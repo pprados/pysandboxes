@@ -64,7 +64,7 @@ Planned work, in no committed order:
     - [X] local netfilter and pin DNS
     - [ ] Proxy (SOCKS/HTTP over a Unix socket bound into the sandbox, relayed by socat: 
     filtering by domain, not only by IP)
-  - [ ] Host/guest channel (`remote-endpoint=unix`: the host binds a 0600 Unix socket and hands the descriptor down, so the sandbox needs no file or network rule for it)
+  - [ ] Host/guest channel (`remote-endpoint=auto|tcp|unix`, `auto` by default and falling back to TCP: the host binds a 0600 Unix socket and hands the descriptor down, so the sandbox needs no file or network rule for it)
     - [X] TCP port (default)
     - [X] subprocess
     - [X] landlock

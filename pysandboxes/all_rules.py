@@ -61,9 +61,9 @@ class AllRules(NamedTuple):
             plus every file an ``include`` pulled in) and the learning output
             file, resolved. Sandboxed code may never write to, rename over, or
             remove these: see ``guard_files.set_protected_config_paths``.
-        remote_endpoint: How the host reaches the sandbox: ``tcp`` (a local port, the default) or ``unix`` (a
-            socket the host binds and hands to the sandbox, which then needs no file or network right for it).
-            Set by ``remote-endpoint`` in the profile.
+        remote_endpoint: How the host reaches the sandbox: ``auto`` (the default: a Unix socket the host binds and
+            hands down when the provider and the platform allow it, a local TCP port otherwise), ``tcp``, or ``unix``
+            (an error when impossible). Set by ``remote-endpoint`` in the profile.
     """
 
     root_path: Path
@@ -85,7 +85,7 @@ class AllRules(NamedTuple):
     remote_result_guard: bool = True
     remote_result_data_only: bool = True
     config_files: frozenset[Path] = frozenset()
-    remote_endpoint: str = "tcp"
+    remote_endpoint: str = "auto"
 
 
 EmptyRules = AllRules(
