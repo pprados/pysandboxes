@@ -15,10 +15,12 @@ import pytest  # type: ignore[import-untyped]
 from aiohttp import ClientConnectorError, ClientSession, web
 
 from pysandboxes.remote.endpoint import (
+    FD,
     TCP,
     UNIX,
     VSOCK,
     Endpoint,
+    adopt_listener,
     client_socket,
     format_endpoint,
     listen_socket,
@@ -44,6 +46,7 @@ def short_dir() -> Iterator[Path]:
         ("unix:///run/sb.sock", Endpoint(UNIX, path="/run/sb.sock")),
         ("vsock://3:5000", Endpoint(VSOCK, host="3", port=5000)),
         ("vsock://any:5000", Endpoint(VSOCK, host="any", port=5000)),
+        ("fd://7", Endpoint(FD, port=7)),
     ],
 )
 def test_every_kind_round_trips(text: str, expected: Endpoint) -> None:
@@ -63,6 +66,8 @@ def test_every_kind_round_trips(text: str, expected: Endpoint) -> None:
         "unix://" + "/a" * 60,
         "vsock://host:5",
         "vsock://3",
+        "fd://x",
+        "fd://",
     ],
 )
 def test_a_malformed_endpoint_is_refused(text: str) -> None:
@@ -178,3 +183,20 @@ async def test_the_client_may_start_before_the_server(short_dir: Path) -> None:
                 assert response.status == 200
         finally:
             await runner.cleanup()
+
+
+def test_an_inherited_descriptor_is_adopted_as_the_same_listener() -> None:
+    sock = listen_socket(Endpoint(TCP, host="127.0.0.1", port=0))
+    descriptor = os.dup(sock.fileno())
+    try:
+        adopted = adopt_listener(Endpoint(FD, port=descriptor))
+        assert adopted.getsockname() == sock.getsockname()
+        assert not adopted.getblocking()
+        adopted.close()
+    finally:
+        sock.close()
+
+
+def test_an_inherited_descriptor_has_no_address_to_connect_to() -> None:
+    with pytest.raises(ValueError):
+        client_socket(Endpoint(FD, port=3))

@@ -1,48 +1,49 @@
 # Copyright (c) 2026, Philippe PRADOS
 # License: Apache V2
-"""A real sandboxed child answering RPC over a Unix socket instead of a TCP port, py-sandbox armed."""
+"""A real sandboxed child answering RPC over a Unix socket the host bound, py-sandbox armed."""
 
 import os
-import shutil
 import stat
-import tempfile
-from collections.abc import Iterator
 from pathlib import Path
 from typing import Any
 
 import pytest  # type: ignore[import-untyped]
 
 from pysandboxes import sandboxes
-from pysandboxes.remote.base_sse_daemon import BaseSSESandbox
-from pysandboxes.remote.endpoint import UNIX, Endpoint
+from pysandboxes.remote import client_subprocess_sse_daemon as csd
+from tests.integration_tests._env import provider_skip_reason
 from tests.unit_tests._unix_sockets import requires_unix_sockets
 
 from .test_rpc import sync_function
 
-config_path = Path(__file__).parent / "py-sandbox-test.profile"
+config_path = Path(__file__).parent / "py-sandbox-unix.profile"
 
 
 @pytest.fixture
-def unix_endpoint(monkeypatch: pytest.MonkeyPatch) -> Iterator[Endpoint]:
-    """Make every daemon created during the test talk over a Unix socket in a short private directory."""
-    directory = Path(tempfile.mkdtemp(prefix="pysb-"))
-    endpoint = Endpoint(UNIX, path=str(directory / "sb.sock"))
-    original = BaseSSESandbox.__init__
+def bound_paths(monkeypatch: pytest.MonkeyPatch) -> list[str]:
+    """Record the path of every socket the host binds for the sandbox."""
+    paths: list[str] = []
+    original = csd.listen_socket
 
-    def init(self: BaseSSESandbox, *args: Any, **kwargs: Any) -> None:
-        original(self, *args, **kwargs)
-        self.endpoint = endpoint
+    def recording(endpoint: Any) -> Any:
+        paths.append(endpoint.path)
+        return original(endpoint)
 
-    monkeypatch.setattr(BaseSSESandbox, "__init__", init)
-    yield endpoint
-    shutil.rmtree(directory, ignore_errors=True)
+    monkeypatch.setattr(csd, "listen_socket", recording)
+    return paths
 
 
 @requires_unix_sockets
-def test_rpc_crosses_a_unix_socket(unix_endpoint: Endpoint) -> None:
+@pytest.mark.parametrize("os_sandbox", ["subprocess"])
+def test_rpc_crosses_a_unix_socket(os_sandbox: str, bound_paths: list[str], monkeypatch: pytest.MonkeyPatch) -> None:
+    if reason := provider_skip_reason(os_sandbox):
+        pytest.skip(reason)
+    monkeypatch.setenv("OS_SANDBOX", os_sandbox)
+
     with sandboxes(sandboxes_config=config_path):
         assert sync_function("a", b="1") == "a 1"
-        assert stat.S_ISSOCK(os.stat(unix_endpoint.path).st_mode)
-        assert stat.S_IMODE(os.stat(unix_endpoint.path).st_mode) == 0o600
+        assert len(bound_paths) == 1
+        assert stat.S_ISSOCK(os.stat(bound_paths[0]).st_mode)
+        assert stat.S_IMODE(os.stat(bound_paths[0]).st_mode) == 0o600
 
-    assert not os.path.exists(unix_endpoint.path)
+    assert not os.path.exists(os.path.dirname(bound_paths[0]))

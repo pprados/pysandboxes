@@ -118,6 +118,16 @@ To pin a provider so the environment cannot downgrade it, write it literally, e.
 
 > Need help: can you propose a PR to integrate some solution for Apple OS ?
 
+### How the host reaches the sandbox: `remote-endpoint`
+
+By default the sandbox serves SSE on a local TCP port, which the profile has to allow for the child (`net=ALLOW|TCP|*|<port>|IN`). `remote-endpoint=unix` replaces it with a Unix socket: the host binds it in a private directory (mode 0600), hands the listening descriptor down to the child, and closes its own copy once the child serves. The child needs no file rule and no network rule for the channel, and cannot replace the socket. Providers that cannot hand the descriptor down refuse `remote-endpoint=unix` at start instead of falling back to TCP.
+
+| Provider | `remote-endpoint=unix` |
+|---|---|
+| subprocess | ✅ |
+
+Not supported by this layer: Windows named pipes (uvicorn cannot serve on them) and anonymous pipes (no accept loop).
+
 ### Host sockets under `/run`
 
 `/run` holds sockets that reach the host: `/run/docker.sock`, and under `/run/user/<uid>` the session D-Bus bus

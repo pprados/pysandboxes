@@ -64,6 +64,19 @@ Planned work, in no committed order:
     - [X] local netfilter and pin DNS
     - [ ] Proxy (SOCKS/HTTP over a Unix socket bound into the sandbox, relayed by socat: 
     filtering by domain, not only by IP)
+  - [ ] Host/guest channel (`remote-endpoint=unix`: the host binds a 0600 Unix socket and hands the descriptor down, so the sandbox needs no file or network rule for it)
+    - [X] TCP port (default)
+    - [X] subprocess
+    - [ ] landlock
+    - [ ] bwrap
+    - [ ] firejail
+    - [ ] qemu (`hostfwd=unix:`, the guest stays on TCP)
+    - [ ] unshare
+    - [ ] sandbox-exec (needs a macOS proof)
+    - [ ] appcontainer (needs a Windows proof)
+    - [ ] gVisor (measure first: runsc `--host-uds` widens what the guest reaches on the host)
+    - [ ] VSOCK for qemu (opt-in: needs `/dev/vhost-vsock` and a Python built with `AF_VSOCK`)
+    - [X] ~~Windows named pipes, anonymous pipes~~ (rejected: uvicorn cannot serve on a named pipe, a pipe has no accept)
 
 - [X] Samples
   - [X] [Agnos](https://www.agno.com/docs/guides/agents-sdk)
