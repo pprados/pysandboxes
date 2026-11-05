@@ -128,6 +128,7 @@ By default the sandbox serves SSE on a local TCP port, which the profile has to 
 | landlock | ✅ |
 | bwrap | ✅ |
 | firejail | ✅ |
+| gvisor | ❌ the guest cannot accept on a handed-down socket, and `--host-uds=open` would let it reach host sockets |
 
 Not supported by this layer: Windows named pipes (uvicorn cannot serve on them) and anonymous pipes (no accept loop).
 
