@@ -4,7 +4,7 @@
 
 **Philippe PRADOS** — [github.com/pprados/pysandboxes](https://github.com/pprados/pysandboxes)
 
-October 2026
+November 2026
 
 ---
 
@@ -139,7 +139,7 @@ the last layer that can still see it".
 | **2** | arbitrary Python bytecode | the Python API layer | imports and sensitive calls — and the vocabulary the profile is written in |
 | **3** | native code (`ctypes`, C extension) | the OS layer, when a kernel-backed provider is active | resources exposed by that provider |
 | **4** | raw syscalls | the OS layer | idem |
-| **5** | kernel compromise | a separate kernel (VM / microVM) | the guest boundary, with higher startup and resource costs |
+| **5** | kernel compromise | an additional kernel boundary (VM / microVM, or a user-space kernel such as gVisor's Sentry) | reducing direct exposure to the host kernel; residual attack surface depends on the mechanism |
 
 ```mermaid
 %% caption: Each rung of attacker capability, and the last layer able to see it
@@ -158,7 +158,7 @@ flowchart LR
         L1["eval-* sub-language"]
         L2["Python API layer"]
         L3["OS layer<br/>kernel-enforced"]
-        L5["Separate kernel<br/>VM / microVM"]
+        L5["Additional kernel boundary<br/>VM / microVM · gVisor Sentry"]
     end
     R1 --> L1
     R2 --> L2
@@ -173,7 +173,10 @@ runs. Import and module identity belong to Python. The Python API guard can
 detect or refuse selected native entry points, but cannot mediate arbitrary
 native operations. Kernel-backed OS providers can restrict many such operations
 at the process boundary; `none` and `subprocess` do not provide that boundary.
-A shared-kernel sandbox also does not protect against kernel compromise.
+A shared-host-kernel access-control sandbox does not protect against compromise
+of that kernel. gVisor instead intercepts application syscalls in its user-space
+Sentry, which uses a restricted host syscall surface. This adds a boundary but
+does not eliminate host-kernel exposure or prove resistance to kernel exploits.
 
 Two useful design principles follow. **Upward blindness**: Python checks cannot
 reliably mediate operations performed directly by native code. **Downward
@@ -183,7 +186,7 @@ cannot replace the Python guards for those decisions.
 ```mermaid
 %% caption: The three layers nest; none of them substitutes for another
 flowchart TB
-    subgraph OS["<b>OS layer</b> — kernel-enforced when a kernel provider is active · rungs 3-4"]
+    subgraph OS["<b>OS layer</b> — provider-specific process boundary · rungs 3-4"]
         subgraph PY["<b>Python layer</b> — legibility, inference, friction · rung 2"]
             subgraph EV["<b>eval-* layer</b> — declared sub-language · rung 1"]
                 SRC["source string<br/>produced by the model"]
@@ -308,6 +311,41 @@ containers do not grant. QEMU places execution behind a separate kernel, with
 different startup and resource costs. The profile can remain stable while the
 operator selects a supported provider, but rule coverage is provider-specific.
 
+### Provider-specific policy translations
+
+The implementation now offers ten providers: `none`, `subprocess`, `landlock`,
+`bwrap`, `firejail`, `unshare`, `qemu`, `gvisor`, `sandbox-exec` and
+`appcontainer`. The first two provide no OS security boundary. The Linux
+providers, macOS Seatbelt and Windows AppContainer translate the common profile
+into different enforcement mechanisms. A common vocabulary does not imply
+equivalent grants.
+
+| Provider | Process boundary and profile translation | Limits relevant to composition |
+|---|---|---|
+| `gvisor` (Linux) | `runsc` runs application syscalls through Sentry; an OCI bundle maps exposed paths, masks ignored paths and supplies the allowed environment. `iptables` filters host and port in a private network namespace. | The provider uses the namespace's network stack, not gVisor's user-space netstack. Device exposure rules cannot be honored and produce warnings. Sentry still depends on host syscalls. |
+| `sandbox-exec` (macOS) | Apple's Seatbelt profile enforces file access and supported protocol, direction and port rules, including for native code. | Apple deprecated the launcher. Seatbelt cannot filter a configured remote host/IP: the grant covers any remote host on the allowed port. DNS grants access to the system resolver socket rather than a pinned DNS server. No separate kernel or filesystem/network namespace. |
+| `appcontainer` (Windows) | An AppContainer token confines the child before execution; file ACLs grant exposed paths and a Job Object controls process lifetime. The child receives a restricted environment. | Network grants select broad public-Internet or private-network capabilities, without OS-level host, port or protocol filtering. Loopback remains blocked. Some system paths and registry keys remain readable; `ignore=` masks only paths present at launch. |
+
+For Seatbelt and AppContainer, the Python socket guard checks network details
+that the OS policy cannot express. Native code can bypass those checks. Thus a
+profile naming one remote host does not establish an OS-enforced one-host
+boundary on either platform. AppContainer denies outbound network access when
+no network capability is granted. These differences are concrete C4 limits and
+show why the translation warnings matter to C1 and C2.
+
+Newly generated profiles select Landlock on Linux when supported, Seatbelt on
+macOS when its executable is available, and `subprocess` otherwise, including
+on Windows. AppContainer requires explicit selection. The selected name is
+written into the profile; an unavailable selected provider fails rather than
+silently switching to a weaker one. Learning still uses `subprocess`.
+
+The implementation details and deployment prerequisites are documented for
+[gVisor](https://github.com/pprados/pysandboxes/blob/develop/wiki/gvisor.md),
+[Seatbelt](https://github.com/pprados/pysandboxes/blob/develop/wiki/sandbox-exec.md)
+and [AppContainer](https://github.com/pprados/pysandboxes/blob/develop/wiki/appcontainer.md).
+The [provider registry](https://github.com/pprados/pysandboxes/blob/develop/pysandboxes/_os_sandbox.py)
+defines platform eligibility and generated-profile defaults.
+
 ## 6. Denial as a signal
 
 A denial can be useful to both an operator and a code generator. Python guards
@@ -397,19 +435,29 @@ module's functions keep `__globals__` bound to the original dict; the arming
 flag can be reached; and native code can call APIs outside Python wrappers.
 The layer raises the cost of sensitive calls from wayward code and records
 some of them in learning mode. Dynamic-code budgets bound selected operations,
-but they do not provide general resource control for the process. Shared-kernel
-backends do not address rung 5. A profile can also grant too much without a
+but they do not provide general resource control for the process. Providers
+that apply access controls in the host kernel do not address rung 5. gVisor
+adds Sentry's syscall boundary; QEMU runs a separate guest kernel. Neither
+mechanism establishes immunity to exploits in its remaining host interfaces.
+A profile can also grant too much without a
 visible failure, so human review remains necessary.
 
-The current repository has roughly 1,410 unit tests, 135 integration tests, 60
-container test rows and about 170 sample tests (12 sample applications), when
-the sample environments are available. These are repository snapshot counts,
-not a single CI run. Integration tests exercise several guard families across
-the six available providers; the host matrix adds a seventh row for QEMU without
-KVM.
+The repository includes unit, integration, container and sample suites. The
+Linux host provider matrix includes gVisor and can add a QEMU row without KVM
+on demand. The cross-OS workflow configures Python 3.11–3.14 on macOS and
+Windows, with shared guard/provider suites, direct Seatbelt file and socket
+checks, and AppContainer integration tests. It treats provider-test skips as
+failures. These are configured checks, not evidence that a particular CI run
+passed. The AppContainer documentation also records local Windows VM validation
+as administrator and standard user.
 Container tests cover filesystem, network and environment behavior; they do not
 exercise the eval, API or import guards, and some provider/container
 combinations are excluded or expected to fail.
+
+The [cross-OS workflow](https://github.com/pprados/pysandboxes/blob/develop/.github/workflows/cross-os.yml)
+and [Linux host matrix](https://github.com/pprados/pysandboxes/blob/develop/tests/integration_tests/_env.py)
+make those test scopes inspectable. Provider-specific network grants in §5
+remain limitations even when the corresponding suites pass.
 
 Tests also pin both sides of important boundaries. For example, the native
 extension import test ensures legitimate C extensions still load; separate
