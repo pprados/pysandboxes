@@ -199,7 +199,7 @@ def _build_profile(
     scratch_dir: Path,
     python_executable: str,
     python_paths: tuple[str, ...],
-    sse_port: int,
+    sse_port: int | None,
 ) -> str:
     """Build an SBPL profile from file and socket rules plus Python runtime needs."""
     runtime_paths = {_path(p) for p in (*python_paths, os.path.dirname(python_executable), *_SYSTEM_READ_PATHS)}
@@ -259,8 +259,9 @@ def _build_profile(
 
     lines.append("(deny network*)")
     lines.extend(_network_rules(all_rules))
-    lines.append(f"(allow network-bind (local tcp {_sbpl_string(f'*:{sse_port}')}))")
-    lines.append(f"(allow network-inbound (local tcp {_sbpl_string(f'*:{sse_port}')}))")
+    if sse_port is not None:
+        lines.append(f"(allow network-bind (local tcp {_sbpl_string(f'*:{sse_port}')}))")
+        lines.append(f"(allow network-inbound (local tcp {_sbpl_string(f'*:{sse_port}')}))")
     return "\n".join(lines) + "\n"
 
 
@@ -295,6 +296,8 @@ def _feed_profile(pipe: Path, profile: str, timeout: float = _PROFILE_PIPE_TIMEO
 class SandboxExecSSEDaemon(BaseSubProcessDaemon):
     """Launch the existing SSE daemon under a generated macOS Seatbelt profile."""
 
+    supports_unix_endpoint = True
+
     @classmethod
     @override
     def unavailable_reason(cls) -> str | None:
@@ -320,7 +323,7 @@ class SandboxExecSSEDaemon(BaseSubProcessDaemon):
             scratch_dir=scratch,
             python_executable=sys.executable,
             python_paths=tuple(path for path in sys.path if path),
-            sse_port=self.port,
+            sse_port=None if self._listener else self.port,
         )
         profile_pipe = temp / "seatbelt.sb"
         os.mkfifo(profile_pipe, 0o600)

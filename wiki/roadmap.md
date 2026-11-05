@@ -72,8 +72,8 @@ Planned work, in no committed order:
     - [X] firejail
     - [X] qemu (`hostfwd=unix:`, the guest stays on TCP)
     - [X] unshare
-    - [ ] sandbox-exec (needs a macOS proof)
-    - [ ] appcontainer (needs a Windows proof)
+    - [X] sandbox-exec (proved in the local macOS 14 VM: Seatbelt lets the sandbox accept on the inherited socket with no network rule)
+    - [ ] appcontainer (blocked: the Windows Python has no `socket.AF_UNIX`, so a Unix socket cannot be bound; stays on TCP. Next: a named pipe, which needs a server other than uvicorn)
     - [X] ~~gVisor~~ (rejected, measured on runsc release-20261102.0: `--host-uds=open` lets the guest connect to host sockets, and a listening socket handed down with `-pass-fd` cannot accept; pinned by `test_gvisor_host_uds.py`)
     - [ ] VSOCK for qemu (opt-in: needs `/dev/vhost-vsock` and a Python built with `AF_VSOCK`)
     - [X] ~~Windows named pipes, anonymous pipes~~ (rejected: uvicorn cannot serve on a named pipe, a pipe has no accept)

@@ -849,7 +849,7 @@ class BaseSubProcessDaemon(BaseSSESandbox):
         """Set ``self.endpoint`` to a private Unix socket when ``remote-endpoint`` and the platform allow it.
 
         ``auto`` falls back to TCP when the provider cannot hand a descriptor down, when a fixed ``port=`` was asked
-        for, off Linux (no CI proof elsewhere), or when a socket cannot be bound here. ``unix`` is an error then.
+        for, off Linux and macOS (no proof elsewhere), or when a socket cannot be bound here. ``unix`` is an error then.
         """
         mode = all_rules.remote_endpoint
         if mode == "tcp":
@@ -857,7 +857,7 @@ class BaseSubProcessDaemon(BaseSSESandbox):
         reason = None
         if not self.supports_unix_endpoint:
             reason = f"the {all_rules.os_sandbox!r} provider cannot hand a socket down"
-        elif mode == "auto" and (all_rules.port != -1 or not sys.platform.startswith("linux")):
+        elif mode == "auto" and (all_rules.port != -1 or sys.platform not in ("linux", "darwin")):
             reason = "a fixed port or a platform without proof asks for TCP"
         else:
             directory = tempfile.mkdtemp(prefix="pysb_", dir="/tmp" if os.path.isdir("/tmp") else None)

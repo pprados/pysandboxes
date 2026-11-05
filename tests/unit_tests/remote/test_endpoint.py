@@ -7,6 +7,7 @@ import os
 import shutil
 import socket
 import stat
+import sys
 import tempfile
 from collections.abc import Iterator
 from pathlib import Path
@@ -185,6 +186,7 @@ async def test_the_client_may_start_before_the_server(short_dir: Path) -> None:
             await runner.cleanup()
 
 
+@pytest.mark.skipif(sys.platform == "win32", reason="a Windows socket is a handle: os.dup does not apply")
 def test_an_inherited_descriptor_is_adopted_as_the_same_listener() -> None:
     sock = listen_socket(Endpoint(TCP, host="127.0.0.1", port=0))
     descriptor = os.dup(sock.fileno())

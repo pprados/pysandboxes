@@ -3,6 +3,7 @@
 """A real sandboxed child answering RPC over a Unix socket the host bound, py-sandbox armed."""
 
 import os
+import socket
 import stat
 from pathlib import Path
 from typing import Any
@@ -17,8 +18,10 @@ from tests.unit_tests._unix_sockets import requires_unix_sockets
 from .test_rpc import sync_function
 
 config_path = Path(__file__).parent / "py-sandbox-unix.profile"
+UNIX_PROVIDERS = ["subprocess", "landlock", "bwrap", "firejail", "unshare", "qemu", "sandbox-exec"]
 plain_profile = Path(__file__).parent / "py-sandbox-test.profile"
 tcp_profile = Path(__file__).parent / "py-sandbox-tcp.profile"
+nonet_profile = Path(__file__).parent / "py-sandbox-nonet.profile"
 
 
 @pytest.fixture
@@ -36,7 +39,7 @@ def bound_paths(monkeypatch: pytest.MonkeyPatch) -> list[str]:
 
 
 @requires_unix_sockets
-@pytest.mark.parametrize("os_sandbox", ["subprocess", "landlock", "bwrap", "firejail", "unshare", "qemu"])
+@pytest.mark.parametrize("os_sandbox", UNIX_PROVIDERS)
 def test_rpc_crosses_a_unix_socket(os_sandbox: str, bound_paths: list[str], monkeypatch: pytest.MonkeyPatch) -> None:
     if reason := provider_skip_reason(os_sandbox):
         pytest.skip(reason)
@@ -55,7 +58,7 @@ def test_rpc_crosses_a_unix_socket(os_sandbox: str, bound_paths: list[str], monk
 
 
 @requires_unix_sockets
-@pytest.mark.parametrize("os_sandbox", ["subprocess", "landlock", "bwrap", "firejail", "unshare", "qemu"])
+@pytest.mark.parametrize("os_sandbox", UNIX_PROVIDERS)
 def test_a_profile_without_the_key_uses_a_unix_socket(
     os_sandbox: str, bound_paths: list[str], monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -74,5 +77,30 @@ def test_tcp_can_be_forced(bound_paths: list[str], monkeypatch: pytest.MonkeyPat
 
     with sandboxes(sandboxes_config=tcp_profile):
         assert sync_function("a", b="3") == "a 3"
+
+    assert bound_paths == []
+
+
+@requires_unix_sockets
+@pytest.mark.parametrize("os_sandbox", ["subprocess", "landlock", "bwrap", "firejail", "unshare", "sandbox-exec"])
+def test_the_channel_needs_no_network_rule(
+    os_sandbox: str, bound_paths: list[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    if reason := provider_skip_reason(os_sandbox):
+        pytest.skip(reason)
+    monkeypatch.setenv("OS_SANDBOX", os_sandbox)
+
+    with sandboxes(sandboxes_config=nonet_profile):
+        assert sync_function("a", b="4") == "a 4"
+
+    assert len(set(bound_paths)) == 1
+
+
+@pytest.mark.skipif(hasattr(socket, "AF_UNIX"), reason="this Python has AF_UNIX: auto uses a Unix socket where it can")
+def test_without_af_unix_the_channel_stays_on_tcp(bound_paths: list[str], monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("OS_SANDBOX", "subprocess")
+
+    with sandboxes(sandboxes_config=plain_profile):
+        assert sync_function("a", b="5") == "a 5"
 
     assert bound_paths == []
