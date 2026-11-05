@@ -91,9 +91,9 @@ def _ensure_cached_artifacts(image: Path) -> tuple[Path, Path]:
                 if member:
                     partition.unlink()
                 continue
-            kernels = sorted(path for path in paths if path.startswith("boot/vmlinuz-"))
+            kernels = sorted(path for path in paths if path.startswith(("boot/vmlinuz-", "vmlinuz-")))
             for source_kernel in kernels:
-                source_initrd = "boot/initrd.img-" + source_kernel.removeprefix("boot/vmlinuz-")
+                source_initrd = source_kernel.replace("vmlinuz-", "initrd.img-", 1)
                 if source_initrd not in paths:
                     continue
                 ready = work / "ready"
