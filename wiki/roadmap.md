@@ -68,7 +68,7 @@ Planned work, in no committed order:
     - [X] TCP port (default)
     - [X] subprocess
     - [X] landlock
-    - [ ] bwrap
+    - [X] bwrap
     - [ ] firejail
     - [ ] qemu (`hostfwd=unix:`, the guest stays on TCP)
     - [ ] unshare

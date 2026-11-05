@@ -21,7 +21,6 @@ import select
 import shlex
 import signal
 import site
-import socket as socket_mod
 import subprocess
 import sys
 import tempfile
@@ -31,7 +30,6 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any, cast
 
-import aiohttp
 from aiohttp import ClientConnectorError, ClientOSError, ClientTimeout, ServerDisconnectedError
 
 from ..all_rules import AllRules
@@ -56,6 +54,8 @@ from .client_subprocess_sse_daemon import (
     use_rich_handler,
 )
 from .daemon_parameters import DaemonParameters
+from .endpoint import FD, TCP, Endpoint, format_endpoint
+from .endpoint_connector import ENDPOINT_URL, make_session
 from .parameters import (
     INTERVAL_FOR_PING_DAEMON,
     LOOP_FOR_PING,
@@ -263,6 +263,8 @@ class BWrapSSEDaemon(BaseSubProcessDaemon):
         "_slirp_shutdown_event",
         "_slirp_api_socket",
     )
+
+    supports_unix_endpoint = True
 
     @classmethod
     @override
@@ -634,6 +636,7 @@ class BWrapSSEDaemon(BaseSubProcessDaemon):
             netfilter_rules=(),
             # slirp4netns forwards to the tap address, not to the loopback of the namespace.
             bind_host="0.0.0.0" if use_net_filter else "127.0.0.1",
+            endpoint=format_endpoint(Endpoint(FD, port=self._listener.fileno())) if self._listener else None,
         )
 
         env: Environ = {**os.environ, **extra_envs}
@@ -643,12 +646,13 @@ class BWrapSSEDaemon(BaseSubProcessDaemon):
             pipe_path=pipe_path,
             envs=Envs(env),
             process_config=process_config,
+            pass_fds=(self._listener.fileno(),) if self._listener else (),
         )
 
         if use_net_filter:
             process_config, pass_fds, on_launched = self._filtered_network(all_rules, process_config, pipe_path)
             launch_kwargs["process_config"] = process_config
-            launch_kwargs["pass_fds"] = pass_fds
+            launch_kwargs["pass_fds"] = (*launch_kwargs["pass_fds"], *pass_fds)
             launch_kwargs["on_launched"] = on_launched
 
         logger.debug(
@@ -656,7 +660,7 @@ class BWrapSSEDaemon(BaseSubProcessDaemon):
             " ".join((repr(c) if " " in c else c for c in launch_kwargs["cmd"])),
         )
         self._process = await launch_sandbox(**launch_kwargs)
-        ping_url = f"http://127.0.0.1:{port}/ping"
+        ping_url = ENDPOINT_URL + "/ping" if self.endpoint else f"http://127.0.0.1:{port}/ping"
         logger.info(
             "Subprocess launched (pid=%s), pinging %s",
             self._process.pid,
@@ -668,8 +672,8 @@ class BWrapSSEDaemon(BaseSubProcessDaemon):
             raise
         logger.info("Pinging subprocess daemon at %s", ping_url)
         gc.collect()
-        connector = aiohttp.TCPConnector(family=socket_mod.AF_INET)
-        async with aiohttp.ClientSession(connector=connector, read_bufsize=SSE_READ_BUFSIZE) as session:
+        ping_endpoint = self.endpoint or Endpoint(TCP, "127.0.0.1", port)
+        async with make_session(ping_endpoint, read_bufsize=SSE_READ_BUFSIZE) as session:
             count_loop = 0
             while True:
                 try:

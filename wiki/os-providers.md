@@ -126,6 +126,7 @@ By default the sandbox serves SSE on a local TCP port, which the profile has to 
 |---|---|
 | subprocess | ✅ |
 | landlock | ✅ |
+| bwrap | ✅ |
 
 Not supported by this layer: Windows named pipes (uvicorn cannot serve on them) and anonymous pipes (no accept loop).
 
