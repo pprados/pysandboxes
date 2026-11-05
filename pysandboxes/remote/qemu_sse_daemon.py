@@ -1458,7 +1458,8 @@ class QemuMicrovmSSEDaemon(QemuSSEDaemon):
         image, seed, mounts = assets
         binary = _qemu_binary()
         required = 3 + len(mounts)
-        capacity = microvm_mmio_capacity(binary)
+        accel_args = qemu_accel_args(all_rules.os_sandbox_params)
+        capacity = microvm_mmio_capacity(binary, accel_args)
         if required > capacity:
             raise SandBoxError(f"QEMU microvm needs {required} MMIO devices but supports {capacity}")
         kernel, initrd = ensure_microvm_boot_artifacts(image, all_rules.os_sandbox_params)
@@ -1466,7 +1467,7 @@ class QemuMicrovmSSEDaemon(QemuSSEDaemon):
         image_format = "qcow2" if image.suffix == ".qcow2" or "cloudimg" in image.name else "raw"
         cmd: Args = [
             binary,
-            *qemu_accel_args(all_rules.os_sandbox_params),
+            *accel_args,
             "-machine",
             "microvm,acpi=off,pcie=off",
             "-nodefaults",
