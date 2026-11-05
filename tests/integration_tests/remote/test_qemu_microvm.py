@@ -10,10 +10,15 @@ from pathlib import Path
 
 import pytest
 
+from pysandboxes.remote.qemu_image import is_kvm_available
+
 QEMU = "qemu-system-x86_64"
 
 
-@pytest.mark.parametrize("accel_args", [[], ["-enable-kvm"]], ids=["tcg", "kvm"])
+@pytest.mark.parametrize(
+    "accel_args",
+    [pytest.param([], id="tcg")] + ([pytest.param(["-enable-kvm"], id="kvm")] if is_kvm_available() else []),
+)
 def test_real_mmio_capacity_boundaries(accel_args: list[str]) -> None:
     from pysandboxes.remote.qemu_setup import microvm_mmio_capacity
 
