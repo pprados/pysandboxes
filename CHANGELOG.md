@@ -20,22 +20,18 @@
 `unshare` provider, with `--privileged` for Docker.
 
 
-## [0.10.0] - 2026-11-05
+## [0.0.0] - 202X-XX-XX
 
 ### Added
-- Add the gVisor provider: the guest runs on a user-space kernel, with file, network and environment rules enforced by the OS, and a dedicated container image.
+- Add the gVisor provider (`os-sandbox=gvisor`): the guest runs on a user-space kernel, with file, network and environment rules enforced by the OS, and a dedicated `python-sb-gvisor` image.
 - The gVisor provider checks every prerequisite before starting and explains each platform value when one is missing or wrong.
 
 ### Changed
-- Remove the provider extras: they installed nothing, as a provider needs system tools, not Python packages.
+- Remove the provider extras (`pysandboxes[bwrap]`, `[firejail]`, `[landlock]`, `[sandbox-exec]`, `[subprocess]`, `[unshare]` and `[all]`): they installed nothing, as a provider needs system tools, not Python packages.
 
 ### Fixed
 - Restarting a bwrap or gVisor sandbox no longer leaves the previous network helper running.
 - Code that reads its standard input no longer fails under gVisor.
-- The gVisor guest no longer receives the host's devices and processes.
-
-### Security
-- Raise the dependencies of the samples to versions fixing known advisories.
 
 ## [0.9.0] - 2026-11-04
 
