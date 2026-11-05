@@ -23,7 +23,7 @@ import tempfile
 import time
 from ipaddress import IPv4Address
 from pathlib import Path
-from typing import Any, Callable, Mapping
+from typing import Any, Callable, Mapping, NamedTuple
 
 from ..all_rules import AllRules
 from ..config import DEBUG
@@ -987,6 +987,41 @@ def _qemu_binary() -> str:
     return name  # Let subprocess fail with a clear error if not in PATH
 
 
+class _QemuLaunchAssets(NamedTuple):
+    image_path: Path
+    nocloud_iso: Path
+    mount_specs: list[tuple[str, Path, str]]
+
+
+def _prepare_qemu_launch(
+    all_rules: AllRules,
+    temp: Path,
+    process_config: DaemonParameters,
+    pipe_path: Path,
+    config_dir: Path | None = None,
+    stage_root: Path | None = None,
+) -> _QemuLaunchAssets:
+    """Prepare the image, shared trees and guest bootstrap before building devices."""
+    image_path = get_default_image_path()
+    ensure_image(image_path)
+    mount_specs, mount_list = _file_rules_mounts(
+        all_rules, temp, pipe_path, config_dir=config_dir, stage_root=stage_root
+    )
+    python_version = f"{sys.version_info.major}.{sys.version_info.minor}"
+    config_guest_path = f"{GUEST_CONFIG_MOUNT}/config.pkl" if config_dir else None
+    nocloud_iso = prepare_guest_env(
+        temp,
+        process_config,
+        pipe_path=pipe_path,
+        mounts=mount_list,
+        pipe_run_guest_path=GUEST_RUN_MOUNT,
+        python_version=python_version,
+        python_exe=_guest_python_exe_path(),
+        config_guest_path=config_guest_path,
+    )
+    return _QemuLaunchAssets(image_path, nocloud_iso, mount_specs)
+
+
 class QemuSSEDaemon(VMSSEDaemon):
     """SSE daemon that runs the sandbox inside a QEMU VM.
 
@@ -1089,23 +1124,14 @@ class QemuSSEDaemon(VMSSEDaemon):
 
         Optional config dir; ISO with 9p_mounts + pipe_name.
         """
-        image_path = get_default_image_path()
-        ensure_image(image_path)
-        mount_specs, mount_list = _file_rules_mounts(
-            all_rules, temp, pipe_path, config_dir=config_dir, stage_root=stage_root
+        assets = _prepare_qemu_launch(
+            all_rules, temp, process_config, pipe_path, config_dir=config_dir, stage_root=stage_root
         )
-        python_version = f"{sys.version_info.major}.{sys.version_info.minor}"
-        config_guest_path = f"{GUEST_CONFIG_MOUNT}/config.pkl" if config_dir else None
-        nocloud_iso = prepare_guest_env(
-            temp,
-            process_config,
-            pipe_path=pipe_path,
-            mounts=mount_list,
-            pipe_run_guest_path=GUEST_RUN_MOUNT,
-            python_version=python_version,
-            python_exe=_guest_python_exe_path(),
-            config_guest_path=config_guest_path,
-        )
+        return self._machine_command(all_rules, assets, port), {}
+
+    def _machine_command(self, all_rules: AllRules, assets: _QemuLaunchAssets, port: int) -> Args:
+        """Build the existing PC-machine devices from prepared launch assets."""
+        image_path, nocloud_iso, mount_specs = assets
 
         # Keys match parse_rules: "qemu.foo=bar" → os_sandbox_params["foo"] (no "qemu." prefix)
         enable_kvm = qemu_accel_args(all_rules.os_sandbox_params)
@@ -1165,7 +1191,7 @@ class QemuSSEDaemon(VMSSEDaemon):
             *virtfs_args,
             *qga,
         ]
-        return cmd, {}
+        return cmd
 
     @override
     def subprocess_cmd(
