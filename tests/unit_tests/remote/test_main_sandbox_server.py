@@ -59,7 +59,15 @@ async def test_the_daemon_is_built_registered_started_then_joined(server: list[t
     assert await main_sandbox.run_server(config) == 0
 
     assert [name for name, _ in server] == ["factory", "register", "start", "join"]
-    assert server[0][1] == ("secret", {"port": 4321, "bind_host": "0.0.0.0", "shared_socket": None})
+    assert server[0][1] == (
+        "secret",
+        {
+            "port": 4321,
+            "bind_host": "0.0.0.0",
+            "shared_socket": None,
+            "endpoint": None,
+        },
+    )
     assert isinstance(server[1][1], SSEServerDaemon)
     rules, kwargs = server[2][1]
     assert rules is config.all_rules

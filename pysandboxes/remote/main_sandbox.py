@@ -295,6 +295,7 @@ async def run_server(process_config: DaemonParameters, shared_socket: Any | None
                 port=process_config.port,
                 bind_host=process_config.bind_host,
                 shared_socket=shared_socket,
+                endpoint=process_config.endpoint,
             ),
         )
     assert isinstance(server_daemon, SSEServerDaemon)
