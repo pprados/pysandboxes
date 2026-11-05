@@ -217,15 +217,21 @@ def _test_envs() -> int:
 
 
 def _retrying_name_resolution(call: Callable[[], T], attempts: int = 3) -> T:
-    """Run ``call``, trying again when the resolver answers "temporary failure" (EAI_AGAIN), as a cluster DNS does."""
+    """Run ``call``, trying again on a resolver "temporary failure" (EAI_AGAIN) or a gateway error (502, 503, 504).
+
+    Both come from the network in between, not from the sandbox: a refusal by a guard is a ``SandBoxError``.
+    """
     for attempt in range(1, attempts + 1):
         try:
             return call()
         except (gaierror, urllib.error.URLError) as e:
             cause = e.reason if isinstance(e, urllib.error.URLError) else e
-            if attempt == attempts or not (isinstance(cause, gaierror) and cause.errno == EAI_AGAIN):
+            transient = (isinstance(cause, gaierror) and cause.errno == EAI_AGAIN) or (
+                isinstance(e, urllib.error.HTTPError) and e.code in (502, 503, 504)
+            )
+            if attempt == attempts or not transient:
                 raise
-            logger.warning(f"name resolution failed ({cause}), attempt {attempt} of {attempts}")
+            logger.warning(f"network failed ({cause}), attempt {attempt} of {attempts}")
             time.sleep(attempt)
     raise AssertionError("unreachable")
 
