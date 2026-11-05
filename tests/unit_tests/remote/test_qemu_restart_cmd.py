@@ -12,10 +12,67 @@ from typing import Any
 import pytest
 
 from pysandboxes.all_rules import AllRules, EmptyRules
+from pysandboxes.guard_files import FSExposeRule
 from pysandboxes.remote import client_subprocess_sse_daemon as client
 from pysandboxes.remote import qemu_sse_daemon as q
+from pysandboxes.remote.daemon_parameters import DaemonParameters
 from pysandboxes.remote.qemu_sse_daemon import QemuSSEDaemon
-from pysandboxes.sb_types import Envs
+from pysandboxes.sb_types import ConfigLine, Envs
+
+
+@pytest.mark.parametrize("accel", [[], ["-enable-kvm"]])
+def test_pc_command_preserves_disks_devices_and_mount_order(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, accel: list[str]
+) -> None:
+    image = tmp_path / "cloudimg.img"
+    iso = tmp_path / "nocloud.iso"
+    readonly = tmp_path / "readonly"
+    writable = tmp_path / "writable"
+    config = ConfigLine("expose", Path("profile"), 1)
+    rules = EmptyRules._replace(
+        os_sandbox_params={"memory": "1024"},  # type: ignore[arg-type]
+        file_rules=(FSExposeRule(str(readonly), False, config), FSExposeRule(str(writable), True, config)),
+    )
+    monkeypatch.setattr(q, "get_default_image_path", lambda: image)
+    monkeypatch.setattr(q, "ensure_image", lambda path: None)
+    monkeypatch.setattr(q, "prepare_guest_env", lambda *args, **kwargs: iso)
+    monkeypatch.setattr(q, "qemu_accel_args", lambda params: accel)
+    monkeypatch.setattr(q, "_qemu_binary", lambda: "qemu-system-x86_64")
+    monkeypatch.setattr(q, "_virtfs_security_model", lambda path, model: model)
+    monkeypatch.setattr(
+        q,
+        "_file_rules_mounts",
+        lambda *args, **kwargs: ([("pysb_0", readonly, "/ro"), ("pysb_1", writable, "/rw")], []),
+    )
+
+    process_config = DaemonParameters(rules, 20, "", False, "token", 4242, "")
+    cmd, env = QemuSSEDaemon("token")._build_qemu_cmd(rules, tmp_path, process_config, 4242, tmp_path / "pipe")
+
+    assert (cmd, env) == (
+        [
+            "qemu-system-x86_64",
+            *accel,
+            "-m",
+            "1024",
+            "-snapshot",
+            "-drive",
+            f"file={image},format=qcow2,if=virtio",
+            "-drive",
+            f"file={iso},format=raw,if=virtio",
+            "-nographic",
+            "-nic",
+            "user,hostfwd=tcp:127.0.0.1:4242-:4242,model=virtio-net-pci",
+            "-virtfs",
+            f"local,path={readonly},id=pysb_0,security_model=mapped-xattr,mount_tag=pysb_0,readonly=on",
+            "-virtfs",
+            f"local,path={writable},id=pysb_1,security_model=mapped-xattr,mount_tag=pysb_1",
+            "-device",
+            "virtio-serial-pci",
+            "-device",
+            "virtserialport,name=org.qemu.guest_agent.0",
+        ],
+        {},
+    )
 
 
 class _Launched(Exception):
