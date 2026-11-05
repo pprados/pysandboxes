@@ -39,7 +39,7 @@ Planned work, in no committed order:
     - [X] ~~Flatpak~~ (rejected: user-facing desktop packaging solution, unsuitable for a low-level programmatic execution library)
   - [ ] VM
     - [X] Qemu
-    - [ ] lxc
+    - [X] ~~lxc~~ (rejected: system container manager, not a VM; requires full rootfs, host daemon, and subuid/bridge setup; redundant with bwrap and unshare using the same kernel namespaces with zero daemon overhead)
     - [ ] vagrant
   - [ ] micro-VM
     - [ ] [QEMU-microvm](https://www.qemu.org/docs/master/system/i386/microvm.html)
@@ -54,7 +54,7 @@ Planned work, in no committed order:
     - [ ] [Agent sandbox](https://agent-sandbox.sigs.k8s.io/docs/getting_started/)
   - [X] Apple
     - [X] ~~App Sandbox~~ (rejected: not compatible with the approach)
-    - [x] sandbox-exec
+    - [X] sandbox-exec
   - [X] Windows
     - [X] AppContainer
     - [X] ~~Windows Sandbox~~ (rejected: a single sandbox can run at a time on a host, incompatible with concurrent or nested `sandboxes()`)
