@@ -276,6 +276,7 @@ async def run_server(process_config: DaemonParameters, shared_socket: Any | None
         "bwrap",
         "gvisor",
         "qemu",
+        "qemu-microvm",
         "sandbox-exec",
     )
     if all_rules.use_py_sandbox:

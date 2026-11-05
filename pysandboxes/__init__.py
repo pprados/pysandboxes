@@ -5,8 +5,8 @@
 This package provides sandbox environments for executing untrusted Python code safely.
 It uses a multi-layered defense-in-depth security architecture combining Python API
 patching with an OS boundary: one provider among `none`, `subprocess`, `appcontainer`,
-`landlock`, `bwrap`, `firejail`, `unshare`, `qemu`, `gvisor` and the macOS `sandbox-exec`, selected by the
-`os-sandbox` directive. Docker and Podman are not providers of their own: a container
+`landlock`, `bwrap`, `firejail`, `unshare`, `qemu`, `qemu-microvm`, `gvisor` and the macOS `sandbox-exec`,
+selected by the `os-sandbox` directive. Docker and Podman are not providers of their own: a container
 runs the `unshare` provider.
 
 The main API consists of:

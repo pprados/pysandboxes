@@ -65,7 +65,7 @@ def _run_tst_usage(os_sandbox: str) -> subprocess.CompletedProcess:
         "tests.integration_tests.tst_usage",
     ]
     # qemu needs time for VM boot + cloud-init + bootstrap
-    timeout = 600 if backend == "qemu" else 120
+    timeout = 600 if backend in ("qemu", "qemu-microvm") else 120
 
     return subprocess.run(
         cmd,
@@ -136,7 +136,7 @@ def _run_partial_mode(os_sandbox: str) -> subprocess.CompletedProcess:
     env["My_ENV"] = "1"
     env["SECRET_TOKEN"] = PARTIAL_MODE_SECRET
 
-    timeout = 600 if backend == "qemu" else 120
+    timeout = 600 if backend in ("qemu", "qemu-microvm") else 120
 
     return subprocess.run(
         [sys.executable, "-m", "tests.integration_tests.tst_env_leak"],
