@@ -11,15 +11,23 @@ from typing import Iterator
 
 import pytest
 
-from ._env import provider_skip_reason
+from ._env import backend_of, provider_skip_reason, qemu_tcg_requested, row_profile_lines
 
 ROOT_DIR = Path(__file__).resolve().parents[2]
-_PROVIDERS = ("qemu", "unshare", "firejail", "landlock", "bwrap")
+_PROVIDERS = (
+    "qemu",
+    "qemu-microvm",
+    *(("qemu-microvm-tcg",) if qemu_tcg_requested() else ()),
+    "unshare",
+    "firejail",
+    "landlock",
+    "bwrap",
+)
 
 
 @pytest.fixture
 def exposed_dir(provider: str, tmp_path: Path) -> Iterator[Path]:
-    if provider == "qemu":
+    if provider.startswith("qemu"):
         yield tmp_path
         return
     with tempfile.TemporaryDirectory(prefix=".native-readonly-", dir=ROOT_DIR) as directory:
@@ -38,7 +46,8 @@ def test_native_code_cannot_write_a_read_only_share(provider: str, tmp_path: Pat
         "\n".join(
             [
                 "py-sandbox=false",
-                f"os-sandbox={provider}",
+                f"os-sandbox={backend_of(provider)}",
+                row_profile_lines(provider),
                 *(["qemu.use_kvm=false"] if provider == "qemu" else []),
                 f"expose-ro={exposed_dir}",
                 "",
@@ -59,6 +68,10 @@ else:
     libc.close(fd)
     print("WROTE", written)
 """
+    control = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True, check=True)
+    assert "WROTE" in control.stdout, control.stdout + control.stderr
+    assert sentinel.read_text() == "guest-write\n"
+    sentinel.write_text("host-before\n")
     result = subprocess.run(
         [
             sys.executable,
@@ -68,7 +81,7 @@ else:
             "-c",
             code,
         ],
-        cwd=ROOT_DIR if provider == "qemu" else tmp_path,
+        cwd=ROOT_DIR if provider.startswith("qemu") else tmp_path,
         capture_output=True,
         text=True,
         timeout=900,
@@ -76,4 +89,5 @@ else:
     )
 
     assert result.returncode == 0, result.stderr[-3000:]
+    assert "REFUSED" in result.stdout, result.stdout + result.stderr
     assert sentinel.read_text() == "host-before\n"

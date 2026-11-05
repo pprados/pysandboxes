@@ -25,6 +25,8 @@ from ._env import (
     default_route_available,
     profile_hosts_resolvable,
     provider_skip_reason,
+    backend_of,
+    qemu_tcg_requested,
 )
 
 ROOT_DIR = Path(__file__).resolve().parent.parent.parent
@@ -35,11 +37,21 @@ _RUN_TIMEOUT = 300
 def _temp_entries() -> set[str]:
     """Every ``tmp*`` entry in the system temporary directory, by name."""
     tmp_dir = Path(tempfile.gettempdir())
-    return {name for name in os.listdir(tmp_dir) if name.startswith("tmp")}
+    return {name for name in os.listdir(tmp_dir) if name.startswith(("tmp", "pysandboxes-qemu-"))}
 
 
 # A provider the platform does not have gets no row: with PYSANDBOXES_FAIL_ON_SKIP a skip fails the run.
-_PROVIDERS = [name for name in ("subprocess", "unshare", "appcontainer") if not unsupported_platform_reason(name)]
+_PROVIDERS = [
+    name
+    for name in (
+        "subprocess",
+        "unshare",
+        "appcontainer",
+        "qemu-microvm",
+        *(("qemu-microvm-tcg",) if qemu_tcg_requested() else ()),
+    )
+    if not unsupported_platform_reason(backend_of(name))
+]
 
 
 @pytest.mark.parametrize("os_sandbox", _PROVIDERS)
@@ -54,21 +66,40 @@ def test_a_sandbox_leaves_no_temporary_file_behind(os_sandbox: str) -> None:
         pytest.skip(NO_PROFILE_DNS_REASON)
 
     env = os.environ.copy()
-    env["OS_SANDBOX"] = os_sandbox
+    env["OS_SANDBOX"] = backend_of(os_sandbox)
+    env["QEMU_USE_KVM"] = "false" if os_sandbox.endswith("-tcg") else "true"
     env.setdefault("TERM", "dumb")
     env["My_ENV"] = "1"
 
     before = _temp_entries()
+    qemu_before = _qemu_pids() if os_sandbox.startswith("qemu") else set()
     result = subprocess.run(
         [sys.executable, "-m", "tests.integration_tests.tst_resolve_once"],
         cwd=ROOT_DIR,
         env=env,
         capture_output=True,
         text=True,
-        timeout=_RUN_TIMEOUT,
+        timeout=900 if os_sandbox.startswith("qemu") else _RUN_TIMEOUT,
         check=False,
     )
     assert "RESOLVED" in result.stdout, f"the sandbox could not resolve a hostname:\n{result.stderr}"
 
+    if os_sandbox.startswith("qemu"):
+        assert not _qemu_pids() - qemu_before, "QEMU survived sandbox shutdown"
+
     left = _temp_entries() - before
     assert not left, f"{os_sandbox} left {len(left)} temporary entries behind: {sorted(left)}"
+
+
+def _qemu_pids() -> set[int]:
+    """Find QEMU processes so exit cannot silently leak a guest."""
+    found = set()
+    for entry in Path("/proc").iterdir():
+        if entry.name.isdigit():
+            try:
+                executable = (entry / "exe").resolve().name
+                if executable.startswith("qemu-system-"):
+                    found.add(int(entry.name))
+            except OSError:
+                continue
+    return found

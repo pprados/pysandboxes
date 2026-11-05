@@ -22,7 +22,9 @@ def test_the_emulated_qemu_row_follows_the_accelerated_one_when_asked_for() -> N
 
 
 def test_asking_for_the_emulated_row_only_adds_that_row() -> None:
-    assert [r for r in _env.os_sandbox_rows(tcg=True) if r != "qemu-tcg"] == list(_env.os_sandbox_rows(tcg=False))
+    assert [r for r in _env.os_sandbox_rows(tcg=True) if not r.endswith("-tcg")] == list(
+        _env.os_sandbox_rows(tcg=False)
+    )
 
 
 @pytest.mark.parametrize("value", ["1", "true", "yes", "TRUE"])
@@ -41,3 +43,10 @@ def test_microvm_is_an_accelerated_integration_row() -> None:
     assert "qemu-microvm" in _env.os_sandbox_rows(tcg=False)
     assert _env.backend_of("qemu-microvm") == "qemu-microvm"
     assert _env.row_profile_lines("qemu-microvm") == "qemu.use_kvm=true\n"
+
+
+def test_microvm_tcg_row_refuses_acceleration() -> None:
+    rows = _env.os_sandbox_rows(tcg=True)
+    assert rows.index("qemu-microvm-tcg") == rows.index("qemu-microvm") + 1
+    assert _env.backend_of("qemu-microvm-tcg") == "qemu-microvm"
+    assert _env.row_profile_lines("qemu-microvm-tcg") == "qemu.use_kvm=false\n"

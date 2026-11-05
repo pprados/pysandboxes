@@ -73,13 +73,14 @@ def os_sandbox_rows(*, tcg: bool) -> tuple[str, ...]:
     ]
     if tcg:
         rows.insert(rows.index("qemu") + 1, "qemu-tcg")
+        rows.insert(rows.index("qemu-microvm") + 1, "qemu-microvm-tcg")
     return tuple(rows)
 
 
 ALL_OS_SANDBOX: tuple[str, ...] = os_sandbox_rows(tcg=qemu_tcg_requested())
 
 # Row name -> the value `os-sandbox=` accepts.
-_ROW_TO_BACKEND = {"qemu-tcg": "qemu"}
+_ROW_TO_BACKEND = {"qemu-tcg": "qemu", "qemu-microvm-tcg": "qemu-microvm"}
 
 
 def backend_of(row: str) -> str:
@@ -91,7 +92,7 @@ def row_profile_lines(row: str) -> str:
     """Return the profile lines that make a row differ from its plain backend."""
     if row == "qemu-microvm":
         return "qemu.use_kvm=true\n"
-    return "qemu.use_kvm=false\n" if row == "qemu-tcg" else ""
+    return "qemu.use_kvm=false\n" if row in ("qemu-tcg", "qemu-microvm-tcg") else ""
 
 
 def os_sandbox_params() -> list:
@@ -107,7 +108,7 @@ def os_sandbox_params() -> list:
     gap in the environment but a structural absence.
     """
     return [
-        pytest.param(row, marks=[pytest.mark.slow] if row == "qemu-tcg" else [])
+        pytest.param(row, marks=[pytest.mark.slow] if row.endswith("-tcg") else [])
         for row in ALL_OS_SANDBOX
         if not unsupported_platform_reason(backend_of(row))
     ]

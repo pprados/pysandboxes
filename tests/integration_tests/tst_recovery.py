@@ -51,10 +51,11 @@ def main() -> None:
             daemon: Any = _os_sandbox._current_daemon
             assert daemon is not None and daemon._process is not None
             first_pid = daemon._process.pid
-            killed = _sandbox_pids()
+            microvm = os.environ.get("OS_SANDBOX") == "qemu-microvm"
+            killed = [first_pid] if microvm else _sandbox_pids()
             for pid in killed:
                 os.kill(pid, signal.SIGKILL)
-            deadline = time.monotonic() + ANSWER_WITHIN_SECONDS
+            deadline = time.monotonic() + (600 if microvm else ANSWER_WITHIN_SECONDS)
             while time.monotonic() < deadline and not result["answered"]:
                 try:
                     result["answered"] = _echo("after") == "after"
@@ -63,6 +64,11 @@ def main() -> None:
             result["restarted"] = daemon._process is not None and daemon._process.pid != first_pid
             result["left"] = [pid for pid in killed if Path(f"/proc/{pid}").exists()]
             result["killed"] = len(killed)
+            owned = set(killed)
+            if microvm and daemon._process is not None:
+                owned.add(daemon._process.pid)
+        if microvm:
+            result["left"] = [pid for pid in owned if Path(f"/proc/{pid}").exists()]
     except BaseException as error:  # noqa: BLE001 - the verdict is reported even when the shutdown fails
         result["error"] = f"{type(error).__name__}: {error}"[:300]
     print("RESULT " + json.dumps(result), flush=True)

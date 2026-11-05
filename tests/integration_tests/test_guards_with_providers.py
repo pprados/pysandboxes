@@ -114,7 +114,7 @@ def _run(
         env=None if cwd == ROOT_DIR else {**os.environ, "PYTHONPATH": os.pathsep.join([str(ROOT_DIR), *_pythonpath()])},
         capture_output=True,
         text=True,
-        timeout=_QEMU_TIMEOUT_SECONDS if backend == "qemu" else _TIMEOUT_SECONDS,
+        timeout=_QEMU_TIMEOUT_SECONDS if backend in ("qemu", "qemu-microvm") else _TIMEOUT_SECONDS,
     )
 
 
