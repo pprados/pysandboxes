@@ -41,6 +41,8 @@ class DaemonParameters(NamedTuple):
             child shares the parent's network; ``0.0.0.0`` only inside a network
             namespace or a VM, where the forwarded connection arrives on another
             interface (slirp4netns tap, firejail bridge, QEMU NIC).
+        endpoint: Text form of a non-TCP address (``unix:///path``, ``vsock://cid:port``) the child's SSE server
+            listens on instead of ``bind_host:port``; None keeps the TCP behaviour.
     """
 
     all_rules: "AllRules"
@@ -57,3 +59,4 @@ class DaemonParameters(NamedTuple):
     # Host cwd at QEMU launch; guest bootstrap cds here so relative paths match expose-rw=./tmp etc.
     guest_working_dir: str | None = None
     bind_host: str = "127.0.0.1"
+    endpoint: str | None = None

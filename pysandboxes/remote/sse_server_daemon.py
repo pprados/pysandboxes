@@ -42,6 +42,7 @@ from ..tools import (
     set_is_in_sandbox,
 )
 from .base_sse_daemon import BaseSSESandbox
+from .endpoint import TCP, listen_socket, parse_endpoint, remove_endpoint
 from .parameters import (
     MAX_CONNECT_RETRY,
     POLLING_DELAY,
@@ -353,10 +354,16 @@ class SSEServerDaemon(BaseSSESandbox):
     streaming of output via Server-Sent Events.
     """
 
-    __slots__ = ("uvicorn", "task", "port", "bind_host", "stopped", "shared_socket")
+    __slots__ = ("uvicorn", "task", "port", "bind_host", "stopped", "shared_socket", "listen_endpoint")
 
     def __init__(
-        self, token: str, *, port: int, bind_host: str = "127.0.0.1", shared_socket: Any | None = None
+        self,
+        token: str,
+        *,
+        port: int,
+        bind_host: str = "127.0.0.1",
+        shared_socket: Any | None = None,
+        endpoint: str | None = None,
     ) -> None:
         """Initialize SSE server daemon.
 
@@ -372,6 +379,7 @@ class SSEServerDaemon(BaseSSESandbox):
         self.bind_host = bind_host
         self.stopped = True
         self.shared_socket = shared_socket
+        self.listen_endpoint = parse_endpoint(endpoint) if endpoint else None
 
     @property
     def active_request(self) -> int:
@@ -435,6 +443,8 @@ class SSEServerDaemon(BaseSSESandbox):
             init_fn: Optional initialization function.
         """
         set_is_in_sandbox(True)
+        if self.listen_endpoint and self.listen_endpoint.kind != TCP and self.shared_socket is None:
+            self.shared_socket = listen_socket(self.listen_endpoint)
         if init_fn:
             with user_code():
                 if asyncio.iscoroutinefunction(init_fn):
@@ -544,6 +554,8 @@ class SSEServerDaemon(BaseSSESandbox):
             await self.task
             self.task = None
         self.uvicorn = None
+        if self.listen_endpoint:
+            remove_endpoint(self.listen_endpoint)
         set_is_in_sandbox(False)
         logger.debug("Remote shutdowned")
 

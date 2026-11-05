@@ -20,7 +20,7 @@ from pysandboxes.base_daemon import BaseDaemon
 from pysandboxes.e import SandBoxError
 from pysandboxes.immutable_dict import ImmutableDict
 from pysandboxes.remote import client_subprocess_sse_daemon as csd
-from pysandboxes.remote import main_sandbox, main_shutdown, parameters
+from pysandboxes.remote import endpoint_connector, main_sandbox, main_shutdown, parameters
 from pysandboxes.remote.client_subprocess_sse_daemon import SubProcessDaemon
 from pysandboxes.sb_types import Envs
 
@@ -276,8 +276,8 @@ class _Restart:
             with (
                 patch.object(csd, "launch_sandbox", launch),
                 patch.object(csd.asyncio, "sleep", sleep),
-                patch.object(csd.aiohttp, "ClientSession", self.ping),
-                patch.object(csd.aiohttp, "TCPConnector", lambda **kw: ("connector", kw)),
+                patch.object(endpoint_connector.aiohttp, "ClientSession", self.ping),
+                patch.object(endpoint_connector.aiohttp, "TCPConnector", lambda **kw: ("connector", kw)),
                 patch.object(csd, "get_log_formatter", return_value="FMT"),
                 patch.object(csd, "use_rich_handler", return_value=True),
             ):

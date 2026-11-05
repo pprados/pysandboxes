@@ -30,7 +30,6 @@ from contextlib import closing
 from pathlib import Path
 from typing import Any, Callable
 
-import aiohttp
 from aiohttp import ClientConnectorError, ClientOSError, ClientTimeout, ServerDisconnectedError
 
 from ..all_rules import AllRules
@@ -44,6 +43,8 @@ from ..tools import Environ, SyncOrAsyncFunc, get_callable_info
 from . import main_shutdown
 from .base_sse_daemon import BaseSSESandbox
 from .daemon_parameters import DaemonParameters
+from .endpoint import TCP, UNIX, Endpoint, format_endpoint
+from .endpoint_connector import ENDPOINT_URL, make_session
 from .parameters import (
     INTERVAL_FOR_PING_DAEMON,
     LOOP_FOR_PING,
@@ -562,6 +563,12 @@ class BaseSubProcessDaemon(BaseSSESandbox):
             from pysandboxes.guard_socket import SocketRules
 
             all_rules = all_rules._replace(socket_rules=SocketRules(socket_rules))
+            if self.endpoint is not None and self.endpoint.kind == UNIX:
+                from ..guard_files import parse_rules as files_parse_rules
+
+                socket_dir = str(Path(self.endpoint.path).parent)
+                _new_file_rules, *_ = files_parse_rules([ConfigLine(f"expose-rw={socket_dir}", Path(), 0)], [])
+                all_rules = all_rules._replace(file_rules=(*all_rules.file_rules, *_new_file_rules))
 
             cmds, env = self.subprocess_cmd(
                 all_rules=all_rules,
@@ -625,6 +632,7 @@ class BaseSubProcessDaemon(BaseSSESandbox):
             port=port,
             init_fn=init_fn_ref,
             bind_host=self._sse_bind_host(args),
+            endpoint=format_endpoint(self.endpoint) if self.endpoint else None,
         )
 
         env: Environ
@@ -651,13 +659,13 @@ class BaseSubProcessDaemon(BaseSSESandbox):
             raise
         # Wait the server
         gc.collect()
-        connector = aiohttp.TCPConnector(family=socket.AF_INET)
-        async with aiohttp.ClientSession(connector=connector, read_bufsize=SSE_READ_BUFSIZE) as session:
+        ping_endpoint = self.endpoint or Endpoint(TCP, "127.0.0.1", port)
+        async with make_session(ping_endpoint, read_bufsize=SSE_READ_BUFSIZE) as session:
             count_loop = 0
             while True:
                 try:
                     count_loop += 1
-                    ping_url = self._ping_url(port)
+                    ping_url = ENDPOINT_URL + "/ping" if self.endpoint else self._ping_url(port)
                     if count_loop == 1:
                         logger.info("Pinging subprocess daemon at %s", ping_url)
                     if count_loop > LOOP_FOR_PING:

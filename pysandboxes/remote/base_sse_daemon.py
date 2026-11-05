@@ -20,6 +20,8 @@ from ..e import RestrictedUnpicklingError, SandBoxProtocolError
 from ..private_loop import get_sandbox_loop, sandbox_loop
 from ..sb_types import Envs
 from ..tools import get_callable_info, is_in_sandbox
+from .endpoint import Endpoint
+from .endpoint_connector import ENDPOINT_URL, make_session
 from .parameters import INTERVAL_FOR_RETRY_CONNECTION, TIMEOUT_FOR_RPC_CALL
 from .tools import (
     SSE_READ_BUFSIZE,
@@ -185,7 +187,7 @@ def _rebuild_remote_exception(payload: str, fallback_payload: str | None) -> Bas
 
 
 class BaseSSESandbox(BaseDaemon):
-    __slots__ = ("port", "host", "max_connect_retry", "_result_guard", "_result_data_only", "_failure")
+    __slots__ = ("port", "host", "endpoint", "max_connect_retry", "_result_guard", "_result_data_only", "_failure")
 
     def __init__(
         self,
@@ -205,6 +207,8 @@ class BaseSSESandbox(BaseDaemon):
         # carries an address (netns, --network none). QEMU hostfwd
         # also needs IPv4, being TCP on 0.0.0.0 only.
         self.host = "127.0.0.1"
+        # Non-TCP address (Unix socket, VSOCK) of the sandbox; None keeps host:port.
+        self.endpoint: Endpoint | None = None
         self.max_connect_retry = max_connect_retry
         # Set when the sandbox died for good: every call then raises it instead of waiting for an answer.
         self._failure: str | None = None
@@ -236,11 +240,16 @@ class BaseSSESandbox(BaseDaemon):
                 token = get_token()
                 params = _get_rpc_params(args, func, kwargs)
 
-                sandbox_server_url = self.base_url.replace("{PORT}", str(self.port)) + "/rpc"
+                if self.endpoint is not None:
+                    sandbox_server_url = ENDPOINT_URL + "/rpc"
+                else:
+                    sandbox_server_url = self.base_url.replace("{PORT}", str(self.port)) + "/rpc"
                 logger.info("Calling sandbox at %s", sandbox_server_url)
                 logger.debug("Try to call %s", sandbox_server_url)
+                if self.endpoint is not None:
+                    session = make_session(self.endpoint, read_bufsize=SSE_READ_BUFSIZE)
                 # Force IPv4 for localhost/127.0.0.1 so QEMU hostfwd is used.
-                if self.host in ("127.0.0.1", "localhost"):
+                elif self.host in ("127.0.0.1", "localhost"):
                     connector = aiohttp.TCPConnector(family=socket.AF_INET)
                     session = aiohttp.ClientSession(connector=connector, read_bufsize=SSE_READ_BUFSIZE)
                 event_source_kw: dict[str, Any] = {

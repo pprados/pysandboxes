@@ -20,6 +20,13 @@
 `unshare` provider, with `--privileged` for Docker.
 
 
+## [0.0.0] - 202X-XX-XX
+
+### Added
+
+- The channel between the host and the sandbox is no longer tied to a TCP port: it can run over a Unix socket or a
+  VSOCK address (`unix:///path`, `vsock://cid:port`); TCP stays the default.
+
 ## [0.10.0] - 2026-11-05
 
 ### Added
