@@ -39,7 +39,7 @@ Planned work, in no committed order:
     - [X] ~~Flatpak~~ (rejected: user-facing desktop packaging solution, unsuitable for a low-level programmatic execution library)
   - [ ] VM
     - [X] Qemu
-    - [X] ~~lxc~~ (rejected: system container manager, not a VM; requires full rootfs, host daemon, and subuid/bridge setup; redundant with bwrap and unshare using the same kernel namespaces with zero daemon overhead)
+    - [X] ~~lxc~~ (rejected: not a VM, and redundant with bwrap and unshare, which use the same kernel namespaces; measured on LXC 6.0.6, it enforces files and TCP/UDP rules and cgroup limits, but starts in about 0.25 s against 4 ms for bwrap and 1.5 ms for unshare, and needs newgidmap, slirp4netns and setpriv to match them)
     - [X] ~~vagrant~~ (rejected: developer environment orchestrator on top of third-party hypervisors, not a runtime sandbox; multi-second startup latency and heavy dependencies)
   - [ ] micro-VM
     - [ ] [QEMU-microvm](https://www.qemu.org/docs/master/system/i386/microvm.html) (fast QEMU machine type, boots in ~100ms without PCI/ACPI overhead)
