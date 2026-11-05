@@ -34,7 +34,7 @@ def bound_paths(monkeypatch: pytest.MonkeyPatch) -> list[str]:
 
 
 @requires_unix_sockets
-@pytest.mark.parametrize("os_sandbox", ["subprocess"])
+@pytest.mark.parametrize("os_sandbox", ["subprocess", "landlock"])
 def test_rpc_crosses_a_unix_socket(os_sandbox: str, bound_paths: list[str], monkeypatch: pytest.MonkeyPatch) -> None:
     if reason := provider_skip_reason(os_sandbox):
         pytest.skip(reason)

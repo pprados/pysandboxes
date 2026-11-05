@@ -67,7 +67,7 @@ Planned work, in no committed order:
   - [ ] Host/guest channel (`remote-endpoint=unix`: the host binds a 0600 Unix socket and hands the descriptor down, so the sandbox needs no file or network rule for it)
     - [X] TCP port (default)
     - [X] subprocess
-    - [ ] landlock
+    - [X] landlock
     - [ ] bwrap
     - [ ] firejail
     - [ ] qemu (`hostfwd=unix:`, the guest stays on TCP)
