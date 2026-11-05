@@ -166,6 +166,7 @@ class _FakeSlirp:
         return -9
 
 
+@pytest.mark.usefixtures("host")
 class TestLaunchCommand:
     def _launch(
         self, tmp_path: Path, envs: dict[str, str] | None = None, **rule_overrides: Any
