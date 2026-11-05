@@ -33,10 +33,6 @@
 - Restarting a bwrap or gVisor sandbox no longer leaves the previous network helper running.
 - Code that reads its standard input no longer fails under gVisor.
 
-### Security
-- The gVisor guest never sees the host devices or processes.
-- Raise the samples' dependencies to versions that fix known advisories.
-
 ## [0.9.0] - 2026-11-04
 
 ### Added
