@@ -175,11 +175,13 @@ def _bootstrap_script_content(
         "",
         "# Mount NoCloud cidata first so 9p_mounts, pipe_name and python_version are available",
         f"mkdir -p {GUEST_CIDATA_MOUNT}",
-        f"mount /dev/vdb {GUEST_CIDATA_MOUNT} 2>/dev/null || mount LABEL={CIDATA_LABEL} {GUEST_CIDATA_MOUNT} || true",
+        f"mount /dev/vdb {GUEST_CIDATA_MOUNT} 2>/dev/null || mount LABEL={CIDATA_LABEL} {GUEST_CIDATA_MOUNT}"
+        ' || _pysb_fatal "cannot mount required cidata"',
         "",
         "echo '[pysandbox-9p] loading 9p modules' >&2",
-        "modprobe 9pnet_virtio 2>/dev/null || true",
-        "modprobe 9p 2>/dev/null || true",
+        "# Optional: these modules may already be built into the guest kernel; mounts below are required.",
+        "modprobe 9pnet_virtio 2>/dev/null || echo '[pysandbox-9p] WARNING: optional 9pnet_virtio modprobe failed' >&2",
+        "modprobe 9p 2>/dev/null || echo '[pysandbox-9p] WARNING: optional 9p modprobe failed' >&2",
         "",
     ]
     if mounts:
@@ -190,7 +192,7 @@ def _bootstrap_script_content(
         lines.append('  echo "[pysandbox-9p] $tag -> $path" >&2')
         lines.append(
             "  mount -t 9p -o trans=virtio,version=9p2000.L "
-            '"$tag" "$path" 2>&1 | sed \'s/^/[pysandbox-9p] /\' >&2 || true'
+            '"$tag" "$path" >&2 || _pysb_fatal "cannot mount required 9p share $tag at $path"'
         )
         lines.append("done < " + f"{GUEST_CIDATA_MOUNT}/{NINEP_MOUNTS_FILE}")
         lines.append("")
@@ -206,8 +208,8 @@ def _bootstrap_script_content(
     lines.append("    else")
     lines.append("      ph=$(mktemp)")
     lines.append("    fi")
-    lines.append('    chmod 000 "$ph" 2>/dev/null || true')
-    lines.append('    mount --bind "$ph" "$ign_path" 2>&1 | sed \'s/^/[pysandbox-ignore] /\' >&2 || true')
+    lines.append('    chmod 000 "$ph" || _pysb_fatal "cannot protect ignore placeholder for $ign_path"')
+    lines.append('    mount --bind "$ph" "$ign_path" >&2 || _pysb_fatal "cannot mount ignore overlay at $ign_path"')
     lines.append(f"  done < {ign_file}")
     lines.append("fi")
     lines.append("")
