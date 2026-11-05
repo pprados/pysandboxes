@@ -37,8 +37,9 @@ def _reset_daemon_state():  # type: ignore[no-untyped-def]
     _os_sandbox._startup_counter = 0
 
 
-def test_linux_runs_every_public_provider() -> None:
-    with patch("sys.platform", "linux"):
+@pytest.mark.parametrize("machine", ["x86_64", "AMD64", " X86_64 "])
+def test_linux_runs_every_public_provider(machine: str) -> None:
+    with patch("sys.platform", "linux"), patch("platform.machine", return_value=machine):
         assert _os_sandbox.platform_providers() == [
             "none",
             "subprocess",
@@ -47,6 +48,7 @@ def test_linux_runs_every_public_provider() -> None:
             "unshare",
             "landlock",
             "qemu",
+            "qemu-microvm",
             "gvisor",
         ]
 
@@ -117,3 +119,15 @@ def test_suggested_providers_are_all_but_none_whatever_they_sort_like() -> None:
         reason = _os_sandbox.unsupported_platform_reason("landlock")
 
     assert reason == "os-sandbox 'landlock' does not run on darwin. Use one of: bwrap, subprocess"
+
+
+def test_microvm_architecture_refusal_is_lazy() -> None:
+    with (
+        patch("sys.platform", "linux"),
+        patch("platform.machine", return_value="aarch64"),
+        patch.object(_os_sandbox, "_load_provider_class", side_effect=AssertionError("imported")),
+    ):
+        assert "qemu-microvm" not in _os_sandbox.platform_providers()
+        reason = _os_sandbox.provider_unavailable_reason("qemu-microvm")
+    assert reason is not None
+    assert "aarch64" in reason

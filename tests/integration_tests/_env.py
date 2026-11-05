@@ -59,7 +59,18 @@ def os_sandbox_rows(*, tcg: bool) -> tuple[str, ...]:
 
     ``none`` is excluded: it is the no-op provider, so a guard test would assert nothing there.
     """
-    rows = ["subprocess", "qemu", "unshare", "firejail", "landlock", "bwrap", "gvisor", "sandbox-exec", "appcontainer"]
+    rows = [
+        "subprocess",
+        "qemu",
+        "qemu-microvm",
+        "unshare",
+        "firejail",
+        "landlock",
+        "bwrap",
+        "gvisor",
+        "sandbox-exec",
+        "appcontainer",
+    ]
     if tcg:
         rows.insert(rows.index("qemu") + 1, "qemu-tcg")
     return tuple(rows)
@@ -78,6 +89,8 @@ def backend_of(row: str) -> str:
 
 def row_profile_lines(row: str) -> str:
     """Return the profile lines that make a row differ from its plain backend."""
+    if row == "qemu-microvm":
+        return "qemu.use_kvm=true\n"
     return "qemu.use_kvm=false\n" if row == "qemu-tcg" else ""
 
 

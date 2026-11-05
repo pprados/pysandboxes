@@ -162,6 +162,10 @@ image/CI/documentation, then broad old-provider regressions last. No shipping or
 
 ### Task 4: Make guest setup fail closed for both QEMU providers
 
+Completed implementation: `a0afcdfa`; independent task review passed. 13 fault-injection unit tests and 4397 full
+unit tests passed (26 skipped, 5 xfailed); 13 new-provider microvm integration probes passed under KVM.
+Runtime mount-fault proof through both providers remains pending Task 10; no weakness claim was changed.
+
 **Files:**
 - Modify: `pysandboxes/remote/qemu_setup.py`
 - Modify: `wiki/weaknesses.md`

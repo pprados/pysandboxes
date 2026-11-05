@@ -35,3 +35,9 @@ def test_the_environment_variable_asks_for_the_emulated_row(value: str) -> None:
 )
 def test_the_emulated_row_is_not_asked_for_otherwise(environ: dict[str, str]) -> None:
     assert _env.qemu_tcg_requested(environ) is False
+
+
+def test_microvm_is_an_accelerated_integration_row() -> None:
+    assert "qemu-microvm" in _env.os_sandbox_rows(tcg=False)
+    assert _env.backend_of("qemu-microvm") == "qemu-microvm"
+    assert _env.row_profile_lines("qemu-microvm") == "qemu.use_kvm=true\n"
