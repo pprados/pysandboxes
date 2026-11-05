@@ -16,13 +16,15 @@ from pysandboxes.remote import qemu_microvm_boot as boot
 def image(tmp_path: Path, request: pytest.FixtureRequest) -> Path:
     if any(shutil.which(tool) is None for tool in ("7z", "qemu-img", "mkfs.ext4", "sfdisk")):
         pytest.skip("7z, qemu-img, mkfs.ext4 and sfdisk required")
-    tree = tmp_path / "tree" / "boot"
+    tree = tmp_path / "tree"
+    if getattr(request, "param", 0) != "separate-boot":
+        tree = tree / "boot"
     tree.mkdir(parents=True)
     (tree / "vmlinuz-6.8-test").write_bytes(b"kernel")
     version = "other" if getattr(request, "param", 0) == "mismatch" else "6.8-test"
     (tree / f"initrd.img-{version}").write_bytes(b"initrd")
     fs = tmp_path / "fs.img"
-    subprocess.run(["mkfs.ext4", "-q", "-F", "-d", str(tree.parent), str(fs), "16384"], check=True)
+    subprocess.run(["mkfs.ext4", "-q", "-F", "-d", str(tmp_path / "tree"), str(fs), "16384"], check=True)
     raw = tmp_path / "disk.raw"
     param = getattr(request, "param", 0)
     slot = param if isinstance(param, int) else 0
@@ -43,7 +45,7 @@ def image(tmp_path: Path, request: pytest.FixtureRequest) -> Path:
     return target
 
 
-@pytest.mark.parametrize("image", [0, 2], indirect=True)
+@pytest.mark.parametrize("image", [0, 2, "separate-boot"], indirect=True)
 def test_discovers_partition_and_reuses_complete_cache(image: Path) -> None:
     kernel, initrd = boot.ensure_microvm_boot_artifacts(image, {})
     assert (kernel.read_bytes(), initrd.read_bytes()) == (b"kernel", b"initrd")
