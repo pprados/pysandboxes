@@ -7,6 +7,7 @@ Run as ``python -m tests.integration_tests.tst_file_probe [--plain] <profile> <r
 confined; without it they run in a ``@sandbox`` function, so the daemon of the provider does the confining.
 """
 
+import ctypes
 import json
 import os
 import sys
@@ -31,14 +32,35 @@ def _make_temporary_file() -> None:
     os.unlink(name)
 
 
+def _native_read(path: str) -> None:
+    libc = ctypes.CDLL(None, use_errno=True)
+    fd = libc.open(path.encode(), os.O_RDONLY)
+    if fd < 0:
+        raise OSError(ctypes.get_errno(), path)
+    libc.close(fd)
+
+
+def _native_write(path: str) -> None:
+    libc = ctypes.CDLL(None, use_errno=True)
+    fd = libc.open(path.encode(), os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    if fd < 0:
+        raise OSError(ctypes.get_errno(), path)
+    try:
+        assert libc.write(fd, b"written", 7) == 7
+    finally:
+        libc.close(fd)
+
+
 def _check_files(ro_file: str, ro_dir: str, outside_file: str, rw_dir: str, host_tmp_file: str) -> str:
     return json.dumps(
         {
-            "ro_read": _outcome(lambda: Path(ro_file).read_text()),
-            "ro_write": _outcome(lambda: (Path(ro_dir) / "created.txt").write_text("written")),
-            "outside_read": _outcome(lambda: Path(outside_file).read_text()),
-            "rw_write": _outcome(lambda: (Path(rw_dir) / "created.txt").write_text("written")),
-            "host_tmp_read": _outcome(lambda: Path(host_tmp_file).read_text()),
+            "ignored_read": _outcome(lambda: _native_read(str(Path(ro_dir) / ".env"))),
+            "env_secret": "ALLOWED" if "MICROVM_HOST_SECRET" in os.environ else "DENIED",
+            "ro_read": _outcome(lambda: _native_read(ro_file)),
+            "ro_write": _outcome(lambda: _native_write(str(Path(ro_dir) / "created.txt"))),
+            "outside_read": _outcome(lambda: _native_read(outside_file)),
+            "rw_write": _outcome(lambda: _native_write(str(Path(rw_dir) / "created.txt"))),
+            "host_tmp_read": _outcome(lambda: _native_read(host_tmp_file)),
             "own_tmp_write": _outcome(_make_temporary_file),
         }
     )

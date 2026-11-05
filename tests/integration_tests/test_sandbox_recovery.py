@@ -3,7 +3,7 @@
 """A sandbox killed by SIGKILL is started again by the watchdog, and nothing of the first one is left.
 
 Each backend runs in its own process (``tst_recovery``): one that does not recover leaves its daemon half dead.
-QEMU is left out: killing a guest is another scenario.
+The microvm row kills only the QEMU process owned by its daemon.
 """
 
 import json
@@ -21,7 +21,7 @@ from .test_guards_with_providers import ROOT_DIR
 # The slowest backend (firejail) takes 35 s, and the script waits 30 s at most for the sandbox to come back.
 _TIMEOUT_SECONDS = 120
 
-_ROWS = [row for row in os_sandbox_params() if not str(row.values[0]).startswith("qemu")]
+_ROWS = [row for row in os_sandbox_params() if row.values[0] not in ("qemu", "qemu-tcg")]
 
 
 def _report_pipe_holders(child: "subprocess.Popen[str]", stdout_pipe: str) -> str:
@@ -55,14 +55,18 @@ def test_a_killed_sandbox_is_started_again_and_answers(os_sandbox: str) -> None:
     child = subprocess.Popen(
         [sys.executable, "-m", "tests.integration_tests.tst_recovery"],
         cwd=ROOT_DIR,
-        env={**os.environ, "OS_SANDBOX": backend_of(os_sandbox)},
+        env={
+            **os.environ,
+            "OS_SANDBOX": backend_of(os_sandbox),
+            "QEMU_USE_KVM": "false" if os_sandbox.endswith("-tcg") else "true",
+        },
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         text=True,
     )
     stdout_pipe = os.readlink(f"/proc/{child.pid}/fd/1")
     try:
-        out, err = child.communicate(timeout=_TIMEOUT_SECONDS)
+        out, err = child.communicate(timeout=1500 if os_sandbox.startswith("qemu-microvm") else _TIMEOUT_SECONDS)
     except subprocess.TimeoutExpired:
         pytest.fail(_report_pipe_holders(child, stdout_pipe))
     done = subprocess.CompletedProcess(child.args, child.returncode, out, err)

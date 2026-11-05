@@ -20,7 +20,9 @@ from pathlib import Path
 
 import pytest
 
-from ._env import backend_of, os_sandbox_params, provider_skip_reason
+from ._env import backend_of, os_sandbox_params, provider_skip_reason, row_profile_lines
+
+from .tst_file_probe import _native_read, _native_write
 
 ROOT_DIR = Path(__file__).resolve().parent.parent.parent
 
@@ -31,6 +33,8 @@ _EXPECTED = {
     "rw_write": "ALLOWED",
     "host_tmp_read": "DENIED",
     "own_tmp_write": "ALLOWED",
+    "ignored_read": "DENIED",
+    "env_secret": "DENIED",
 }
 
 
@@ -61,6 +65,7 @@ def _run(tmp_path: Path, host_tmp_file: Path, row: str, mode: str) -> tuple[dict
         directory.mkdir()
     ro_file, outside_file = ro_dir / "readable.txt", outside_dir / "secret.txt"
     ro_file.write_text("readable")
+    (ro_dir / ".env").write_text("host-secret")
     outside_file.write_text("secret")
     paths = [str(ro_file), str(ro_dir), str(outside_file), str(rw_dir), str(host_tmp_file)]
 
@@ -68,7 +73,11 @@ def _run(tmp_path: Path, host_tmp_file: Path, row: str, mode: str) -> tuple[dict
     assert ro_file.read_text() == "readable"
     assert outside_file.read_text() == "secret"
     assert host_tmp_file.read_text() == "host secret"
-    (ro_dir / "control.txt").write_text("written")
+    _native_read(str(ro_file))
+    _native_read(str(ro_dir / ".env"))
+    _native_read(str(outside_file))
+    _native_read(str(host_tmp_file))
+    _native_write(str(ro_dir / "control.txt"))
 
     profile = tmp_path / "files.profile"
     profile.write_text(
@@ -76,12 +85,13 @@ def _run(tmp_path: Path, host_tmp_file: Path, row: str, mode: str) -> tuple[dict
             [
                 "py-sandbox=false\n",
                 f"os-sandbox={backend_of(row)}\n",
-                "qemu.use_kvm=false\n" if row == "qemu-tcg" else "",
+                row_profile_lines(row),
                 "python-import=*\n",
                 "expose-ro=.\n",
                 "expose-ro=/etc\n",
                 f"expose-ro={sys.base_prefix}/lib\n",
                 f"expose-ro={ro_dir}\n",
+                "ignore=.env\n",
                 f"expose-rw={rw_dir}\n",
             ]
         )
@@ -93,7 +103,7 @@ def _run(tmp_path: Path, host_tmp_file: Path, row: str, mode: str) -> tuple[dict
         if mode == "python-sb"
         else [sys.executable, *probe]
     )
-    env = {**os.environ, "QEMU_USE_KVM": os.environ.get("QEMU_USE_KVM", "true")}
+    env = {**os.environ, "QEMU_USE_KVM": os.environ.get("QEMU_USE_KVM", "true"), "MICROVM_HOST_SECRET": "host-secret"}
     result = subprocess.run(cmd, cwd=ROOT_DIR, env=env, capture_output=True, text=True, timeout=600)
     assert result.returncode == 0, result.stderr[-3000:]
     return json.loads(result.stdout.strip().splitlines()[-1]), rw_dir
