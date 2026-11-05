@@ -40,21 +40,23 @@ Planned work, in no committed order:
   - [ ] VM
     - [X] Qemu
     - [X] ~~lxc~~ (rejected: system container manager, not a VM; requires full rootfs, host daemon, and subuid/bridge setup; redundant with bwrap and unshare using the same kernel namespaces with zero daemon overhead)
-    - [ ] vagrant
+    - [X] ~~vagrant~~ (rejected: developer environment orchestrator on top of third-party hypervisors, not a runtime sandbox; multi-second startup latency and heavy dependencies)
   - [ ] micro-VM
-    - [ ] [QEMU-microvm](https://www.qemu.org/docs/master/system/i386/microvm.html)
+    - [ ] [QEMU-microvm](https://www.qemu.org/docs/master/system/i386/microvm.html) (fast QEMU machine type, boots in ~100ms without PCI/ACPI overhead)
+    - [ ] [Cloud Hypervisor](https://github.com/cloud-hypervisor/cloud-hypervisor) (Rust-based VMM with native virtio-fs and vsock)
+    - [ ] [libkrun](https://github.com/containers/libkrun) (lightweight VMM library designed for process isolation with virtio-fs)
     - [ ] [Firecracker](https://firecracker-microvm.github.io/)
     - [ ] [Fargate](https://aws.amazon.com/fr/fargate/)
     - [ ] [Kata Containers](https://katacontainers.io/) (compatible classical containers management)
     - [ ] [Smolvm](https://korben.info/smolvm-microvm-portable-rust.html)
   - [ ] Others strategies
     - [ ] [container2wasm](https://github.com/container2wasm/container2wasm)
-    - [ ] [Cloud Hypervisor](https://github.com/cloud-hypervisor/cloud-hypervisor)
     - [ ] [Cloud morph](https://cloud.morph.so/)
     - [ ] [Agent sandbox](https://agent-sandbox.sigs.k8s.io/docs/getting_started/)
-  - [X] Apple
+  - [ ] Apple
     - [X] ~~App Sandbox~~ (rejected: not compatible with the approach)
     - [X] sandbox-exec
+    - [ ] [Virtualization.framework](https://developer.apple.com/documentation/virtualization) (native macOS VM via [vfkit](https://github.com/crc-org/vfkit) with virtio-fs)
   - [X] Windows
     - [X] AppContainer
     - [X] ~~Windows Sandbox~~ (rejected: a single sandbox can run at a time on a host, incompatible with concurrent or nested `sandboxes()`)
