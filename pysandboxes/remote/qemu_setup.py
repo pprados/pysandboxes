@@ -36,11 +36,12 @@ PYTHON_VERSION_FILE = "python_version"
 IGNORE_OVERLAYS_FILE = "ignore_overlays"
 
 
-def microvm_mmio_capacity(qemu_binary: str) -> int:
+def microvm_mmio_capacity(qemu_binary: str, accel_args: list[str]) -> int:
     """Inspect the installed strict microvm's transport count before launch."""
     result = subprocess.run(
         [
             qemu_binary,
+            *accel_args,
             "-machine",
             "microvm,acpi=off,pcie=off",
             "-nodefaults",

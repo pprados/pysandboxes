@@ -13,6 +13,23 @@ import pytest
 QEMU = "qemu-system-x86_64"
 
 
+@pytest.mark.parametrize("accel_args", [[], ["-enable-kvm"]], ids=["tcg", "kvm"])
+def test_real_mmio_capacity_boundaries(accel_args: list[str]) -> None:
+    from pysandboxes.remote.qemu_setup import microvm_mmio_capacity
+
+    capacity = microvm_mmio_capacity(QEMU, accel_args)
+    assert capacity > 3
+    for count in (capacity, capacity + 1):
+        result = _run_stopped_machine(
+            *accel_args, *(item for _ in range(count) for item in ("-device", "virtio-serial-device"))
+        )
+        if count == capacity:
+            assert result.returncode == 0, result.stderr
+        else:
+            assert result.returncode != 0
+            assert "full" in result.stderr
+
+
 def _boot_artifacts() -> tuple[Path, Path, Path]:
     from pysandboxes.remote.qemu_image import get_default_image_path
     from pysandboxes.remote.qemu_microvm_boot import ensure_microvm_boot_artifacts
