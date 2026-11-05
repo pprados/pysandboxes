@@ -14,6 +14,7 @@ from pathlib import Path
 import pytest  # type: ignore[import-untyped]
 
 from pysandboxes._os_sandbox import provider_unavailable_reason, unsupported_platform_reason
+from pysandboxes.remote.qemu_image import is_kvm_available
 from pysandboxes.remote.tools import get_default_interface
 
 # Hostnames from py-sandbox-test.profile that require resolution at config load time
@@ -162,6 +163,8 @@ def provider_skip_reason(os_sandbox: str) -> str | None:
     Returns:
         A human-readable reason to pass to ``pytest.skip``, or None.
     """
+    if os_sandbox == "qemu-microvm" and not is_kvm_available():
+        return "The accelerated qemu-microvm row requires usable KVM"
     if reason := provider_unavailable_reason(backend_of(os_sandbox)):
         return reason
     # firejail refuses to run inside a container, but not on a trivial command: the

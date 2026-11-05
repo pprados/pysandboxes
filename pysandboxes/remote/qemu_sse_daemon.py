@@ -58,6 +58,7 @@ from .qemu_image import (
 )
 from .qemu_setup import (
     GUEST_CONFIG_MOUNT,
+    GUEST_CIDATA_MOUNT,
     GUEST_RUN_MOUNT,
     QEMU_HOST_RUN_PREFIX,
     augment_all_rules_for_qemu_run_mount,
@@ -871,6 +872,7 @@ def _file_rules_mounts(
     pipe_path: Path,
     config_dir: Path | None = None,
     stage_root: Path | None = None,
+    microvm: bool = False,
 ) -> tuple[list[tuple[str, Path, str]], list[tuple[str, str]]]:
     """Build one 9p (tag, host_path, guest_path) per FSExposeRule, run dir, optional config dir, and execution dirs.
 
@@ -919,6 +921,10 @@ def _file_rules_mounts(
         mount_specs.append((tag, host_path, guest_path))
         mount_list.append((tag, guest_path))
 
+    if microvm:
+        readonly = _microvm_readonly_tags(all_rules, mount_specs)
+        configured = str(all_rules.os_sandbox_params.get("virtfs_security_model", "mapped-xattr"))
+        mount_specs = _compact_microvm_mounts(mount_specs, readonly, configured)
     if stage_exec:
         stage = stage_root or temp
         _stage_exec_virtfs_mounts(stage, mount_specs)
@@ -990,6 +996,53 @@ def _qemu_binary() -> str:
     return name  # Let subprocess fail with a clear error if not in PATH
 
 
+def _microvm_readonly_tags(all_rules: AllRules, mounts: list[tuple[str, Path, str]]) -> set[str]:
+    exposes = [rule for rule in all_rules.file_rules if isinstance(rule, FSExposeRule)]
+    readonly = {
+        f"pysb_{i}" for i, rule in enumerate(all_rules.file_rules) if isinstance(rule, FSExposeRule) and not rule.write
+    }
+    for tag, host, _ in mounts:
+        if not tag.startswith("pysb_exec_"):
+            continue
+        covering = [rule for rule in exposes if host.is_relative_to(Path(rule.path))]
+        covering.sort(key=lambda rule: len(Path(rule.path).parts))
+        effective = covering[-1] if covering else None
+        if effective is None or not effective.write:
+            readonly.add(tag)
+    return readonly
+
+
+def _microvm_security_model(host: Path, readonly: bool, configured: str) -> str:
+    if readonly and host == Path("/etc"):
+        return "none"
+    return _virtfs_security_model(host, configured)
+
+
+def _compact_microvm_mounts(
+    mounts: list[tuple[str, Path, str]], readonly_tags: set[str], configured: str
+) -> list[tuple[str, Path, str]]:
+    """Remove only shares identical to the view already supplied by a parent."""
+    kept: list[tuple[str, Path, str]] = []
+    for mount in sorted(mounts, key=lambda item: len(Path(item[2]).parts)):
+        tag, host, guest = mount
+        readonly = tag in readonly_tags
+        security = _microvm_security_model(host, readonly, configured)
+        for parent_tag, parent_host, parent_guest in kept:
+            try:
+                relative = Path(guest).relative_to(parent_guest)
+            except ValueError:
+                continue
+            if (
+                host == parent_host / relative
+                and readonly == (parent_tag in readonly_tags)
+                and security == _microvm_security_model(parent_host, readonly, configured)
+            ):
+                break
+        else:
+            kept.append(mount)
+    return [mount for mount in mounts if mount in kept]
+
+
 class _QemuLaunchAssets(NamedTuple):
     image_path: Path
     nocloud_iso: Path
@@ -1003,15 +1056,19 @@ def _prepare_qemu_launch(
     pipe_path: Path,
     config_dir: Path | None = None,
     stage_root: Path | None = None,
+    microvm: bool = False,
 ) -> _QemuLaunchAssets:
     """Prepare the image, shared trees and guest bootstrap before building devices."""
     image_path = get_default_image_path()
     ensure_image(image_path)
     mount_specs, mount_list = _file_rules_mounts(
-        all_rules, temp, pipe_path, config_dir=config_dir, stage_root=stage_root
+        all_rules, temp, pipe_path, config_dir=None if microvm else config_dir, stage_root=stage_root, microvm=microvm
     )
     python_version = f"{sys.version_info.major}.{sys.version_info.minor}"
     config_guest_path = f"{GUEST_CONFIG_MOUNT}/config.pkl" if config_dir else None
+    if microvm and config_dir:
+        (temp / "config.pkl").write_bytes((config_dir / "config.pkl").read_bytes())
+        config_guest_path = f"{GUEST_CIDATA_MOUNT}/config.pkl"
     nocloud_iso = prepare_guest_env(
         temp,
         process_config,
@@ -1021,6 +1078,7 @@ def _prepare_qemu_launch(
         python_version=python_version,
         python_exe=_guest_python_exe_path(),
         config_guest_path=config_guest_path,
+        **({"python_paths": [gp for _, _, gp in _execution_dirs_mounts()]} if microvm else {}),
     )
     return _QemuLaunchAssets(image_path, nocloud_iso, mount_specs)
 
@@ -1130,7 +1188,13 @@ class QemuSSEDaemon(VMSSEDaemon):
         Optional config dir; ISO with 9p_mounts + pipe_name.
         """
         assets = _prepare_qemu_launch(
-            all_rules, temp, process_config, pipe_path, config_dir=config_dir, stage_root=stage_root
+            all_rules,
+            temp,
+            process_config,
+            pipe_path,
+            config_dir=config_dir,
+            stage_root=stage_root,
+            microvm=isinstance(self, QemuMicrovmSSEDaemon),
         )
         return self._machine_command(all_rules, assets, port), {}
 
@@ -1457,7 +1521,7 @@ class QemuMicrovmSSEDaemon(QemuSSEDaemon):
     def _machine_command(self, all_rules: AllRules, assets: _QemuLaunchAssets, port: int) -> Args:
         image, seed, mounts = assets
         binary = _qemu_binary()
-        required = 3 + len(mounts)
+        required = 2 + len(mounts)
         accel_args = qemu_accel_args(all_rules.os_sandbox_params)
         capacity = microvm_mmio_capacity(binary, accel_args)
         if required > capacity:
@@ -1469,7 +1533,7 @@ class QemuMicrovmSSEDaemon(QemuSSEDaemon):
             binary,
             *accel_args,
             "-machine",
-            "microvm,acpi=off,pcie=off",
+            "microvm,acpi=off,pcie=off,rtc=off",
             "-nodefaults",
             "-no-user-config",
             "-display",
@@ -1486,29 +1550,27 @@ class QemuMicrovmSSEDaemon(QemuSSEDaemon):
             "-initrd",
             str(initrd),
             "-append",
-            "console=ttyS0 root=/dev/vda1 ro reboot=t",
+            "console=ttyS0 root=/dev/sda1 ro reboot=t",
             "-snapshot",
             "-drive",
             f"id=root,file={image},format={image_format},if=none",
             "-device",
-            "virtio-blk-device,drive=root",
+            "virtio-scsi-device,id=scsi0",
+            "-device",
+            "scsi-hd,drive=root,bus=scsi0.0,channel=0,scsi-id=0,lun=0",
             "-drive",
             f"id=cidata,file={seed},format=raw,if=none,readonly=on",
             "-device",
-            "virtio-blk-device,drive=cidata",
+            "scsi-cd,drive=cidata,bus=scsi0.0,channel=0,scsi-id=1,lun=0",
             "-netdev",
             f"user,id=net0,hostfwd=tcp:127.0.0.1:{port}-:{port}",
             "-device",
             "virtio-net-device,netdev=net0",
         ]
-        readonly_tags = {
-            f"pysb_{i}"
-            for i, rule in enumerate(all_rules.file_rules)
-            if isinstance(rule, FSExposeRule) and not rule.write
-        }
+        readonly_tags = _microvm_readonly_tags(all_rules, mounts)
         configured = str(all_rules.os_sandbox_params.get("virtfs_security_model", "mapped-xattr"))
         for tag, host, _ in mounts:
-            security = _virtfs_security_model(host, configured)
+            security = _microvm_security_model(host, tag in readonly_tags, configured)
             readonly = ",readonly=on" if tag in readonly_tags else ""
             cmd.extend(
                 [
