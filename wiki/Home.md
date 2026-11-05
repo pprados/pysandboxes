@@ -56,6 +56,7 @@ PySandboxes runs Python under a deny-by-default policy stored in `.py-sandboxes`
 - [Unshare](unshare.md)
 - [QEMU](qemu.md)
 - [gVisor](gvisor.md)
+- [libkrun](libkrun.md)
 - [macOS `sandbox-exec` (Seatbelt)](sandbox-exec.md)
 - [DNS and network filtering](dns.md): DNS resolution and `iptables` behavior.
 - [Docker Hub images](docker-hub.md): pull and run published provider images.

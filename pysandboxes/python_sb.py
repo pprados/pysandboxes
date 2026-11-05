@@ -9,7 +9,7 @@ import tempfile
 import uuid
 from contextlib import ExitStack
 from pathlib import Path
-from typing import Any, Mapping, Protocol, TextIO, cast
+from typing import Any, Callable, Mapping, Protocol, TextIO, cast
 
 from ._os_sandbox import check_provider_available, providers_factory
 from .all_rules import AllRules
@@ -219,6 +219,7 @@ def _main(stack: ExitStack) -> int:
         pipe_path = Path(tmpdir) / f"_{uuid.uuid4().hex}"
         pipe_path.unlink(missing_ok=True)
         launch_params: dict[str, Any] = {}
+        config_writer: Callable[[DaemonParameters], None] | None
         if isinstance(os_provider, VMSSEDaemon):
             vm = cast(VMSSEDaemon, os_provider)
             # VM-based providers: build process_config before subprocess_cmd so the guest
@@ -282,7 +283,7 @@ def _main(stack: ExitStack) -> int:
                 )(all_rules, log_level, token, "", pipe_path, Path(tmpdir))
             )
             process_config = launch_params.get("process_config", default_process_config)
-            config_writer = None
+            config_writer = launch_params.get("config_writer")
 
         env: Environ
         if all_rules.learn:

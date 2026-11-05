@@ -59,7 +59,8 @@ def os_sandbox_rows(*, tcg: bool) -> tuple[str, ...]:
 
     ``none`` is excluded: it is the no-op provider, so a guard test would assert nothing there.
     """
-    rows = ["subprocess", "qemu", "unshare", "firejail", "landlock", "bwrap", "gvisor", "sandbox-exec", "appcontainer"]
+    rows = ["subprocess", "qemu",
+    "libkrun", "unshare", "firejail", "landlock", "bwrap", "gvisor", "sandbox-exec", "appcontainer"]
     if tcg:
         rows.insert(rows.index("qemu") + 1, "qemu-tcg")
     return tuple(rows)

@@ -13,7 +13,7 @@
 |          | ✅ Docker¹       |            | ☐ DoS     |
 |          | ✅ Podman¹       |            |           |
 |          | ✅ gVisor        |            |           |
-|          | ☐ micro-VM      |            |           |
+|          | ✅ libkrun       |            |           |
 |          | ✅ appcontainer  |            |           |
 
 ¹ Docker and Podman are not providers of their own: a container runs the
@@ -24,6 +24,7 @@
 
 ### Added
 
+- Add the libkrun provider (`os-sandbox=libkrun`): the guest runs in a KVM micro-VM that starts in about a second. Writes, the environment and the network are confined by the OS, and the guest has no network unless a rule allows it; the host's files stay readable, see `wiki/libkrun.md`.
 - The channel between the host and the sandbox now runs over a Unix socket the host binds and hands down, instead of a
   local TCP port, with the `subprocess`, `landlock`, `bwrap`, `firejail`, `unshare`, `qemu` and `sandbox-exec`
   providers on Linux and macOS; it falls back to TCP when that is not possible. `remote-endpoint=tcp|unix` forces one
@@ -49,6 +50,7 @@
 ## [0.9.0] - 2026-11-04
 
 ### Added
+- Add libkrun OS sandbox provider
 - Add the Windows AppContainer provider, which confines files and network with an AppContainer token and runs without administrator rights.
 - The sandboxed program gets read-write access to its AppContainer private folder.
 - Configuration profiles can be included only on a matching platform, so OS-specific permissions can be kept in separate files.
@@ -69,6 +71,7 @@
 ## [0.8.0] - 2026-10-31
 
 ### Added
+- Add libkrun OS sandbox provider
 - Present Py-Sandboxes as an execution harness for Python in the README.
 - Add the macOS Seatbelt `sandbox-exec` provider, which receives its profile through a private pipe and resolves names through mDNSResponder, with documented host-filtering and DNS limitations.
 - Set `PYSANDBOXES_LOG_LEVEL` to choose the log level of `python-sb`, of `sandboxes()` and of their sandboxed process.
@@ -107,6 +110,7 @@
 First public release.
 
 ### Added
+- Add libkrun OS sandbox provider
 - Two coding-agent skills: one learns the rules a new feature needs from its tests and asks before granting them,
   the other lists the rights a change adds to the `.py-sandboxes` files, graded by risk, with the code that needs
   each; and a GitHub workflow to copy into a project, which comments that list on a pull request

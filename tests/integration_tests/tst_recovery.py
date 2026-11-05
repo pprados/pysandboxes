@@ -25,8 +25,9 @@ def _echo(value: str) -> str:
 
 
 # What runs the sandbox side. Under gVisor the interpreter lives inside the Sentry, which is not a host process
-# of its own: the host sees `runsc-sandbox ... boot`, and that is what a crash of the sandbox takes down.
-_SANDBOX_MARKERS = (b"main_sandbox", b"runsc-sandbox")
+# of its own: the host sees `runsc-sandbox ... boot`, and that is what a crash of the sandbox takes down. Likewise the
+# libkrun guest is a micro-VM run by the launcher.
+_SANDBOX_MARKERS = (b"main_sandbox", b"runsc-sandbox", b"libkrun_launcher")
 
 
 def _sandbox_pids() -> list[int]:
