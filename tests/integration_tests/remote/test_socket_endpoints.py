@@ -36,7 +36,7 @@ def bound_paths(monkeypatch: pytest.MonkeyPatch) -> list[str]:
 
 
 @requires_unix_sockets
-@pytest.mark.parametrize("os_sandbox", ["subprocess", "landlock", "bwrap", "firejail", "unshare"])
+@pytest.mark.parametrize("os_sandbox", ["subprocess", "landlock", "bwrap", "firejail", "unshare", "qemu"])
 def test_rpc_crosses_a_unix_socket(os_sandbox: str, bound_paths: list[str], monkeypatch: pytest.MonkeyPatch) -> None:
     if reason := provider_skip_reason(os_sandbox):
         pytest.skip(reason)
@@ -46,13 +46,16 @@ def test_rpc_crosses_a_unix_socket(os_sandbox: str, bound_paths: list[str], monk
         assert sync_function("a", b="1") == "a 1"
         assert len(set(bound_paths)) == 1
         assert stat.S_ISSOCK(os.stat(bound_paths[0]).st_mode)
-        assert stat.S_IMODE(os.stat(bound_paths[0]).st_mode) == 0o600
+        # QEMU creates its own socket file with its own mode: the private directory is what keeps others out.
+        assert stat.S_IMODE(os.stat(os.path.dirname(bound_paths[0])).st_mode) == 0o700
+        if os_sandbox != "qemu":
+            assert stat.S_IMODE(os.stat(bound_paths[0]).st_mode) == 0o600
 
     assert not os.path.exists(os.path.dirname(bound_paths[0]))
 
 
 @requires_unix_sockets
-@pytest.mark.parametrize("os_sandbox", ["subprocess", "landlock", "bwrap", "firejail", "unshare"])
+@pytest.mark.parametrize("os_sandbox", ["subprocess", "landlock", "bwrap", "firejail", "unshare", "qemu"])
 def test_a_profile_without_the_key_uses_a_unix_socket(
     os_sandbox: str, bound_paths: list[str], monkeypatch: pytest.MonkeyPatch
 ) -> None:

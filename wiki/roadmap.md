@@ -70,7 +70,7 @@ Planned work, in no committed order:
     - [X] landlock
     - [X] bwrap
     - [X] firejail
-    - [ ] qemu (`hostfwd=unix:`, the guest stays on TCP)
+    - [X] qemu (`hostfwd=unix:`, the guest stays on TCP)
     - [X] unshare
     - [ ] sandbox-exec (needs a macOS proof)
     - [ ] appcontainer (needs a Windows proof)

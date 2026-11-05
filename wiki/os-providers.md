@@ -129,6 +129,7 @@ To pin a provider so the environment cannot downgrade it, write it literally, e.
 | bwrap | ✅ |
 | firejail | ✅ |
 | unshare | ✅ |
+| qemu | ✅ QEMU creates the socket (`hostfwd=unix:`); the guest keeps serving TCP behind the forward |
 | gvisor | ❌ the guest cannot accept on a handed-down socket, and `--host-uds=open` would let it reach host sockets |
 
 Not supported by this layer: Windows named pipes (uvicorn cannot serve on them) and anonymous pipes (no accept loop).

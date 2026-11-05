@@ -44,7 +44,7 @@ from ..tools import Environ, SyncOrAsyncFunc, get_callable_info
 from . import main_shutdown
 from .base_sse_daemon import BaseSSESandbox
 from .daemon_parameters import DaemonParameters
-from .endpoint import FD, TCP, UNIX, Endpoint, format_endpoint, listen_socket
+from .endpoint import FD, TCP, UNIX, Endpoint, format_endpoint, listen_socket, remove_endpoint
 from .endpoint_connector import ENDPOINT_URL, make_session
 from .parameters import (
     INTERVAL_FOR_PING_DAEMON,
@@ -350,6 +350,8 @@ class BaseSubProcessDaemon(BaseSSESandbox):
     _job_handle: int | None
     # True once the provider's launch hands an inherited descriptor down to the sandbox (see ``remote-endpoint=unix``).
     supports_unix_endpoint: bool = False
+    # False when the provider's own process creates the socket (QEMU ``hostfwd=unix:``) and the guest stays on TCP.
+    endpoint_handed_down: bool = True
 
     async def _on_process_started(self) -> None:
         """Hook called after the subprocess is started but before the ping loop."""
@@ -565,7 +567,7 @@ class BaseSubProcessDaemon(BaseSSESandbox):
 
             # Add rules for the communication with the sandbox
             socket_rules: list[SocketRule] = list(all_rules.socket_rules)
-            if self.endpoint is None:
+            if self.endpoint is None or not self.endpoint_handed_down:
                 _new_socket_rules, *_ = socket_parse_rules(
                     [ConfigLine(f"net=ALLOW|TCP|*|{self.port}|IN", Path(), 0)], []
                 )
@@ -574,7 +576,7 @@ class BaseSubProcessDaemon(BaseSSESandbox):
             from pysandboxes.guard_socket import SocketRules
 
             all_rules = all_rules._replace(socket_rules=SocketRules(socket_rules))
-            if self.endpoint is not None and self.endpoint.kind == UNIX:
+            if self.endpoint is not None and self.endpoint.kind == UNIX and self.endpoint_handed_down:
                 self._listener = listen_socket(self.endpoint)
 
             cmds, env = self.subprocess_cmd(
@@ -858,10 +860,11 @@ class BaseSubProcessDaemon(BaseSSESandbox):
         elif mode == "auto" and (all_rules.port != -1 or not sys.platform.startswith("linux")):
             reason = "a fixed port or a platform without proof asks for TCP"
         else:
-            directory = tempfile.mkdtemp(prefix="pysb-", dir="/tmp" if os.path.isdir("/tmp") else None)
+            directory = tempfile.mkdtemp(prefix="pysb_", dir="/tmp" if os.path.isdir("/tmp") else None)
             endpoint = Endpoint(UNIX, path=os.path.join(directory, "s"))
             try:
                 listen_socket(endpoint).close()
+                remove_endpoint(endpoint)
             except (OSError, ValueError) as error:
                 shutil.rmtree(directory, ignore_errors=True)
                 reason = f"no Unix socket can be bound here ({error})"

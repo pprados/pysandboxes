@@ -41,6 +41,7 @@ from .client_subprocess_sse_daemon import (
     use_rich_handler,
 )
 from .daemon_parameters import DaemonParameters
+from .endpoint_connector import ENDPOINT_URL, make_session
 from .parameters import (
     INTERVAL_FOR_PING_DAEMON,
     TIMEOUT_FOR_PING,
@@ -997,6 +998,8 @@ class QemuSSEDaemon(VMSSEDaemon):
     host_run_temp_prefix = QEMU_HOST_RUN_PREFIX
 
     __slots__ = ("_iso_config", "_qemu_console_tasks", "_stage_root")
+    supports_unix_endpoint = True
+    endpoint_handed_down = False
 
     @classmethod
     @override
@@ -1114,9 +1117,12 @@ class QemuSSEDaemon(VMSSEDaemon):
         raw_memory = all_rules.os_sandbox_params.get("memory", "2048").strip()
         memory = normalize_qemu_m_memory_arg(raw_memory)
 
+        # QEMU creates the socket itself; the guest keeps serving TCP behind the forward. The directory name has no
+        # "-" or ",", which QEMU's forward syntax would read as separators.
+        forward = f"unix:{self.endpoint.path}-:{port}" if self.endpoint is not None else f"tcp:127.0.0.1:{port}-:{port}"
         net = [
             "-nic",
-            f"user,hostfwd=tcp:127.0.0.1:{port}-:{port},model=virtio-net-pci",
+            f"user,hostfwd={forward},model=virtio-net-pci",
         ]
 
         virtfs_args: Args = []
@@ -1329,7 +1335,8 @@ class QemuSSEDaemon(VMSSEDaemon):
         # doomed VM from outliving the error that reported it.
         start_timeout = qemu_start_timeout(all_rules.os_sandbox_params)
         deadline = time.monotonic() + start_timeout
-        ping_url = self.base_url.replace("{PORT}", str(port)) + "/ping"
+        base_url = ENDPOINT_URL if self.endpoint else self.base_url.replace("{PORT}", str(port))
+        ping_url = base_url + "/ping"
         logger.debug(
             "Waiting %.0fs for QEMU guest to boot, then pinging %s for up to %.0fs",
             QEMU_BOOT_DELAY,
@@ -1343,8 +1350,12 @@ class QemuSSEDaemon(VMSSEDaemon):
         from aiohttp import ClientConnectorError, ClientOSError, ClientTimeout, ServerDisconnectedError
 
         # Force IPv4: QEMU hostfwd listens on 127.0.0.1, not on IPv6.
-        connector = aiohttp.TCPConnector(family=socket.AF_INET)
-        async with aiohttp.ClientSession(connector=connector, read_bufsize=SSE_READ_BUFSIZE) as session:
+        if self.endpoint:
+            session_cm = make_session(self.endpoint, read_bufsize=SSE_READ_BUFSIZE)
+        else:
+            connector = aiohttp.TCPConnector(family=socket.AF_INET)
+            session_cm = aiohttp.ClientSession(connector=connector, read_bufsize=SSE_READ_BUFSIZE)
+        async with session_cm as session:
             count_loop = 0
             while True:
                 try:

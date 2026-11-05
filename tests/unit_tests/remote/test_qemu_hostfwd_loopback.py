@@ -12,6 +12,7 @@ from unittest.mock import MagicMock, patch
 
 from pysandboxes.all_rules import AllRules
 from pysandboxes.immutable_dict import ImmutableDict
+from pysandboxes.remote.endpoint import UNIX, Endpoint
 from pysandboxes.remote.qemu_sse_daemon import QemuSSEDaemon
 from pysandboxes.sb_types import Envs
 
@@ -35,7 +36,7 @@ def _rules() -> AllRules:
     )
 
 
-def test_hostfwd_binds_the_host_loopback(tmp_path: Path) -> None:
+def _nic(tmp_path: Path, daemon: QemuSSEDaemon) -> str:
     module = "pysandboxes.remote.qemu_sse_daemon"
     with (
         patch(f"{module}.get_default_image_path", return_value=tmp_path / "image.qcow2"),
@@ -45,7 +46,23 @@ def test_hostfwd_binds_the_host_loopback(tmp_path: Path) -> None:
         patch(f"{module}.qemu_accel_args", return_value=[]),
         patch(f"{module}._qemu_binary", return_value="qemu-system-x86_64"),
     ):
-        cmd, _ = QemuSSEDaemon("token")._build_qemu_cmd(_rules(), tmp_path, MagicMock(), 4242, tmp_path / "pipe")
+        cmd, _ = daemon._build_qemu_cmd(_rules(), tmp_path, MagicMock(), 4242, tmp_path / "pipe")
+    return cmd[cmd.index("-nic") + 1]
 
-    nic = cmd[cmd.index("-nic") + 1]
-    assert "hostfwd=tcp:127.0.0.1:4242-:4242" in nic
+
+def test_hostfwd_binds_the_host_loopback(tmp_path: Path) -> None:
+    assert "hostfwd=tcp:127.0.0.1:4242-:4242" in _nic(tmp_path, QemuSSEDaemon("token"))
+
+
+def test_hostfwd_can_listen_on_a_unix_socket_instead(tmp_path: Path) -> None:
+    daemon = QemuSSEDaemon("token")
+    daemon.endpoint = Endpoint(UNIX, path="/tmp/pysb_x/s")
+
+    nic = _nic(tmp_path, daemon)
+
+    assert "hostfwd=unix:/tmp/pysb_x/s-:4242," in nic
+    assert "tcp:" not in nic
+
+
+def test_the_guest_still_needs_its_tcp_rule_behind_a_unix_forward() -> None:
+    assert QemuSSEDaemon.endpoint_handed_down is False
