@@ -24,9 +24,18 @@
 
 ### Added
 - Add the gVisor provider (`os-sandbox=gvisor`): the guest runs on a user-space kernel, with file, network and environment rules enforced by the OS, and a dedicated `python-sb-gvisor` image.
+- The gVisor provider checks every prerequisite before starting and explains each platform value when one is missing or wrong.
 
 ### Changed
 - Remove the provider extras (`pysandboxes[bwrap]`, `[firejail]`, `[landlock]`, `[sandbox-exec]`, `[subprocess]`, `[unshare]` and `[all]`): they installed nothing, as a provider needs system tools, not Python packages.
+
+### Fixed
+- Restarting a bwrap or gVisor sandbox no longer leaves the previous network helper running.
+- Code that reads its standard input no longer fails under gVisor.
+
+### Security
+- The gVisor guest never sees the host devices or processes.
+- Raise the samples' dependencies to versions that fix known advisories.
 
 ## [0.9.0] - 2026-11-04
 
