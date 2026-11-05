@@ -48,6 +48,8 @@ from .parameters import (
     qemu_start_timeout,
 )
 from .qemu_guest_console_io import start_qemu_serial_drain_tasks
+from .qemu_microvm_boot import ensure_microvm_boot_artifacts
+from .qemu_setup import microvm_mmio_capacity
 from .qemu_image import (
     ensure_image,
     get_default_image_path,
@@ -1447,3 +1449,72 @@ class QemuSSEDaemon(VMSSEDaemon):
         )
         self._is_started = True
         self._accept_incoming = True
+
+
+class QemuMicrovmSSEDaemon(QemuSSEDaemon):
+    """Run the shared guest lifecycle on the strict PCI-free microvm machine."""
+
+    def _machine_command(self, all_rules: AllRules, assets: _QemuLaunchAssets, port: int) -> Args:
+        image, seed, mounts = assets
+        binary = _qemu_binary()
+        required = 3 + len(mounts)
+        capacity = microvm_mmio_capacity(binary)
+        if required > capacity:
+            raise SandBoxError(f"QEMU microvm needs {required} MMIO devices but supports {capacity}")
+        kernel, initrd = ensure_microvm_boot_artifacts(image, all_rules.os_sandbox_params)
+        memory = normalize_qemu_m_memory_arg(all_rules.os_sandbox_params.get("memory", "2048").strip())
+        image_format = "qcow2" if image.suffix == ".qcow2" or "cloudimg" in image.name else "raw"
+        cmd: Args = [
+            binary,
+            *qemu_accel_args(all_rules.os_sandbox_params),
+            "-machine",
+            "microvm,acpi=off,pcie=off",
+            "-nodefaults",
+            "-no-user-config",
+            "-display",
+            "none",
+            "-monitor",
+            "none",
+            "-serial",
+            "stdio",
+            "-no-reboot",
+            "-m",
+            memory,
+            "-kernel",
+            str(kernel),
+            "-initrd",
+            str(initrd),
+            "-append",
+            "console=ttyS0 root=/dev/vda1 ro reboot=t",
+            "-snapshot",
+            "-drive",
+            f"id=root,file={image},format={image_format},if=none",
+            "-device",
+            "virtio-blk-device,drive=root",
+            "-drive",
+            f"id=cidata,file={seed},format=raw,if=none,readonly=on",
+            "-device",
+            "virtio-blk-device,drive=cidata",
+            "-netdev",
+            f"user,id=net0,hostfwd=tcp:127.0.0.1:{port}-:{port}",
+            "-device",
+            "virtio-net-device,netdev=net0",
+        ]
+        readonly_tags = {
+            f"pysb_{i}"
+            for i, rule in enumerate(all_rules.file_rules)
+            if isinstance(rule, FSExposeRule) and not rule.write
+        }
+        configured = str(all_rules.os_sandbox_params.get("virtfs_security_model", "mapped-xattr"))
+        for tag, host, _ in mounts:
+            security = _virtfs_security_model(host, configured)
+            readonly = ",readonly=on" if tag in readonly_tags else ""
+            cmd.extend(
+                [
+                    "-fsdev",
+                    f"local,id={tag},path={host},security_model={security}{readonly}",
+                    "-device",
+                    f"virtio-9p-device,fsdev={tag},mount_tag={tag}",
+                ]
+            )
+        return cmd
