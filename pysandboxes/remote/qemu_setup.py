@@ -36,6 +36,35 @@ PYTHON_VERSION_FILE = "python_version"
 IGNORE_OVERLAYS_FILE = "ignore_overlays"
 
 
+def microvm_mmio_capacity(qemu_binary: str) -> int:
+    """Inspect the installed strict microvm's transport count before launch."""
+    result = subprocess.run(
+        [
+            qemu_binary,
+            "-machine",
+            "microvm,acpi=off,pcie=off",
+            "-nodefaults",
+            "-no-user-config",
+            "-display",
+            "none",
+            "-serial",
+            "none",
+            "-monitor",
+            "stdio",
+            "-S",
+        ],
+        input="info qtree\nquit\n",
+        text=True,
+        capture_output=True,
+        timeout=10,
+        check=True,
+    )
+    capacity = result.stdout.count("type virtio-mmio-bus")
+    if not capacity:
+        raise ValueError("QEMU microvm exposes no virtio MMIO transports")
+    return capacity
+
+
 def _qemu_show_boot_console_truthy(all_rules: Any | None) -> bool:
     """Backward-compatible name; logic lives on :class:`VMSSEDaemon`."""
     return VMSSEDaemon.show_boot_console_truthy(all_rules)
@@ -374,7 +403,7 @@ network:
   ethernets:
     id0:
       match:
-        name: en*
+        driver: virtio_net
       optional: true
       dhcp4: true
 
