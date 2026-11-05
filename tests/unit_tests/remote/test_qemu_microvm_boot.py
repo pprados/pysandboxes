@@ -2,6 +2,7 @@
 # License: Apache V2
 """Boot extraction tests using small real partitioned cloud-image layouts."""
 
+import multiprocessing
 import shutil
 import subprocess
 from pathlib import Path
@@ -93,3 +94,55 @@ def test_interrupted_extraction_does_not_publish_pair(image: Path, monkeypatch: 
     with pytest.raises(InterruptedError):
         boot.ensure_microvm_boot_artifacts(image, {})
     assert not list(image.parent.glob("*.microvm-*"))
+
+
+def test_concurrent_processes_keep_published_pair(image: Path) -> None:
+    context = multiprocessing.get_context("fork")
+    first_extracting = context.Event()
+    second_extracting = context.Event()
+    release_first = context.Event()
+    first_returned = context.Event()
+    results = context.Queue()
+
+    def resolve(first: bool) -> None:
+        extract = boot._extract
+
+        def controlled_extract(archive: Path, member: str, target: Path) -> None:
+            if member.startswith("boot/vmlinuz-"):
+                if first:
+                    first_extracting.set()
+                    assert release_first.wait(10)
+                else:
+                    second_extracting.set()
+                    assert first_returned.wait(10)
+            extract(archive, member, target)
+
+        boot._extract = controlled_extract
+        pair = boot.ensure_microvm_boot_artifacts(image, {})
+        results.put(tuple(path.stat().st_ino for path in pair))
+        if first:
+            first_returned.set()
+
+    processes = [context.Process(target=resolve, args=(first,)) for first in (True, False)]
+    try:
+        processes[0].start()
+        assert first_extracting.wait(10)
+        processes[1].start()
+        # Without serialization the second extractor reaches the same publication boundary.
+        # With serialization it remains blocked until the first publishes its complete pair.
+        second_extracting.wait(1)
+        release_first.set()
+        identities = [results.get(timeout=15), results.get(timeout=15)]
+        for process in processes:
+            process.join(10)
+            assert process.exitcode == 0
+        pair = boot.ensure_microvm_boot_artifacts(image, {})
+        assert identities == [tuple(path.stat().st_ino for path in pair)] * 2
+        assert tuple(path.read_bytes() for path in pair) == (b"kernel", b"initrd")
+    finally:
+        for process in processes:
+            if process.is_alive():
+                process.terminate()
+            if process.pid is not None:
+                process.join(10)
+        results.close()

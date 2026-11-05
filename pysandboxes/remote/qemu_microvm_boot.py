@@ -54,6 +54,15 @@ def ensure_microvm_boot_artifacts(image: Path, params: Mapping[str, Any]) -> tup
             _readable(path)
         return pair
     image = image.resolve()
+    # Only automatic microvm extraction needs the Linux process lock; overrides remain portable.
+    import fcntl
+
+    with image.with_name(image.name + ".microvm.lock").open("a+b") as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        return _ensure_cached_artifacts(image)
+
+
+def _ensure_cached_artifacts(image: Path) -> tuple[Path, Path]:
     identity = _identity(image)
     cache = image.with_name(image.name + ".microvm-" + hashlib.sha256(identity.encode()).hexdigest())
     pair = cache / "kernel", cache / "initrd"
