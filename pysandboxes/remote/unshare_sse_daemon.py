@@ -60,6 +60,8 @@ from .client_subprocess_sse_daemon import (
     use_rich_handler,
 )
 from .daemon_parameters import DaemonParameters
+from .endpoint import FD, Endpoint, format_endpoint, listen_socket
+from .endpoint_connector import ENDPOINT_URL, make_session
 from .parameters import (
     INTERVAL_FOR_PING_DAEMON,
     LOOP_FOR_PING,
@@ -144,6 +146,8 @@ class UnshareSSEDaemon(BaseSubProcessDaemon):
 
     Process chain: daemon -> unshare -> unshare_setup -> main_sandbox
     """
+
+    supports_unix_endpoint = True
 
     __slots__ = (
         "_process",
@@ -613,6 +617,7 @@ class UnshareSSEDaemon(BaseSubProcessDaemon):
     ) -> None:
         self.restart = 0
         self.port = find_free_port() if all_rules.port == -1 else all_rules.port
+        self._choose_endpoint(all_rules)
         await self._launch(
             all_rules,
             envs=envs,
@@ -695,8 +700,13 @@ class UnshareSSEDaemon(BaseSubProcessDaemon):
             from ..guard_socket import parse_rules as socket_parse_rules
 
             socket_rules: list[SocketRule] = list(all_rules.socket_rules)
-            _new_socket_rules, *_ = socket_parse_rules([ConfigLine(f"net=ALLOW|TCP|*|{self.port}|IN", Path(), 0)], [])
-            socket_rules.extend(_new_socket_rules)
+            if self.endpoint is None:
+                _new_socket_rules, *_ = socket_parse_rules(
+                    [ConfigLine(f"net=ALLOW|TCP|*|{self.port}|IN", Path(), 0)], []
+                )
+                socket_rules.extend(_new_socket_rules)
+            else:
+                self._listener = listen_socket(self.endpoint)
 
             from pysandboxes.guard_socket import SocketRules
 
@@ -782,6 +792,7 @@ class UnshareSSEDaemon(BaseSubProcessDaemon):
                 init_fn=init_fn_ref,
                 # Always in its own network namespace: slirp4netns forwards to the tap address.
                 bind_host="0.0.0.0",
+                endpoint=format_endpoint(Endpoint(FD, port=self._listener.fileno())) if self._listener else None,
             )
 
             # Build environment (PYTHONPATH so unshare child finds pysandboxes in Docker)
@@ -828,7 +839,7 @@ class UnshareSSEDaemon(BaseSubProcessDaemon):
                     *cmd,
                     env=env,
                     preexec_fn=preexec_fn,
-                    pass_fds=(slirp_pipe_r,),
+                    pass_fds=(slirp_pipe_r, *((self._listener.fileno(),) if self._listener else ())),
                 )
 
             self._process = await _do_launch()
@@ -838,6 +849,9 @@ class UnshareSSEDaemon(BaseSubProcessDaemon):
 
             # Close read end in parent (child has its own copy via pass_fds)
             os.close(slirp_pipe_r)
+            if self._listener is not None:
+                self._listener.close()
+                self._listener = None
 
             # Write unshare PID for slirp4netns to attach to the namespace
             assert process.pid is not None
@@ -885,9 +899,14 @@ class UnshareSSEDaemon(BaseSubProcessDaemon):
 
             # Wait for daemon to be ready (ping loop)
             gc.collect()
-            ping_url = self.base_url.replace("{PORT}", str(self.port)) + "/ping"
+            base_url = ENDPOINT_URL if self.endpoint else self.base_url.replace("{PORT}", str(self.port))
+            ping_url = base_url + "/ping"
             logger.debug("Try to call %s", ping_url)
-            async with aiohttp.ClientSession(read_bufsize=SSE_READ_BUFSIZE) as session:
+            if self.endpoint:
+                session_cm = make_session(self.endpoint, read_bufsize=SSE_READ_BUFSIZE)
+            else:
+                session_cm = aiohttp.ClientSession(read_bufsize=SSE_READ_BUFSIZE)
+            async with session_cm as session:
                 count_loop = 0
                 while True:
                     try:

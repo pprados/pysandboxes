@@ -36,7 +36,7 @@ def bound_paths(monkeypatch: pytest.MonkeyPatch) -> list[str]:
 
 
 @requires_unix_sockets
-@pytest.mark.parametrize("os_sandbox", ["subprocess", "landlock", "bwrap", "firejail"])
+@pytest.mark.parametrize("os_sandbox", ["subprocess", "landlock", "bwrap", "firejail", "unshare"])
 def test_rpc_crosses_a_unix_socket(os_sandbox: str, bound_paths: list[str], monkeypatch: pytest.MonkeyPatch) -> None:
     if reason := provider_skip_reason(os_sandbox):
         pytest.skip(reason)
@@ -52,7 +52,7 @@ def test_rpc_crosses_a_unix_socket(os_sandbox: str, bound_paths: list[str], monk
 
 
 @requires_unix_sockets
-@pytest.mark.parametrize("os_sandbox", ["subprocess", "landlock", "bwrap", "firejail"])
+@pytest.mark.parametrize("os_sandbox", ["subprocess", "landlock", "bwrap", "firejail", "unshare"])
 def test_a_profile_without_the_key_uses_a_unix_socket(
     os_sandbox: str, bound_paths: list[str], monkeypatch: pytest.MonkeyPatch
 ) -> None:

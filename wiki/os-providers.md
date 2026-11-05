@@ -128,6 +128,7 @@ To pin a provider so the environment cannot downgrade it, write it literally, e.
 | landlock | ✅ |
 | bwrap | ✅ |
 | firejail | ✅ |
+| unshare | ✅ |
 | gvisor | ❌ the guest cannot accept on a handed-down socket, and `--host-uds=open` would let it reach host sockets |
 
 Not supported by this layer: Windows named pipes (uvicorn cannot serve on them) and anonymous pipes (no accept loop).

@@ -71,7 +71,7 @@ Planned work, in no committed order:
     - [X] bwrap
     - [X] firejail
     - [ ] qemu (`hostfwd=unix:`, the guest stays on TCP)
-    - [ ] unshare
+    - [X] unshare
     - [ ] sandbox-exec (needs a macOS proof)
     - [ ] appcontainer (needs a Windows proof)
     - [X] ~~gVisor~~ (rejected, measured on runsc release-20261102.0: `--host-uds=open` lets the guest connect to host sockets, and a listening socket handed down with `-pass-fd` cannot accept; pinned by `test_gvisor_host_uds.py`)

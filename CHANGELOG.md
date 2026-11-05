@@ -25,7 +25,7 @@
 ### Added
 
 - The channel between the host and the sandbox now runs over a Unix socket the host binds and hands down, instead of a
-  local TCP port, with the `subprocess`, `landlock`, `bwrap` and `firejail` providers on Linux; it falls back to TCP
+  local TCP port, with the `subprocess`, `landlock`, `bwrap`, `firejail` and `unshare` providers on Linux; it falls back to TCP
   when that is not possible. `remote-endpoint=tcp|unix` forces one or the other.
 
 ## [0.10.0] - 2026-11-05
