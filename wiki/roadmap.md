@@ -69,7 +69,7 @@ Planned work, in no committed order:
     - [X] subprocess
     - [X] landlock
     - [X] bwrap
-    - [ ] firejail
+    - [X] firejail
     - [ ] qemu (`hostfwd=unix:`, the guest stays on TCP)
     - [ ] unshare
     - [ ] sandbox-exec (needs a macOS proof)
