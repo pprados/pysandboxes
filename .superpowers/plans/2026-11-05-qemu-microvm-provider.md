@@ -26,6 +26,46 @@ construction. Extend provider metadata with supported CPU architectures so unsup
 
 ## Review Focus
 
+## Execution decisions (2026-11-05)
+
+- User override: implement on `feature/qemu-microvm`; no merge, push, publication, or PR during implementation.
+- User override: run new-provider unit/integration/sample checks during development; defer other-provider integration and broad regressions to Task 10. Task 1 retains focused QEMU unit preservation proof.
+- No separate persistent progress/todo ledger: use this approved plan and task reports for recovery, per repository instructions.
+- Container image publication in Task 7 means build/CI wiring only; external publication is deferred.
+
+### Preflight interface review
+
+| Tasks | Shared interface | Finding |
+|---|---|---|
+| 1, 3 | Launch assets and machine command in QEMU daemon | Preserve PC arguments before subclass override. |
+| 2, 3 | Matched kernel/initrd resolver | Resolver raises before launch; cache follows image identity. |
+| 2, 7 | Image extraction prerequisites | Container and host setup both require 7zip. |
+| 3, 4 | Shared guest bootstrap | Mount failures must terminate both providers; old-provider runtime proof deferred to 10. |
+| 3, 5 | Class registry | Same-module subclass avoids provider-import layering violation. |
+| 5, 6 | Provider rows and platform metadata | Architecture filter must precede parametrization. |
+| 5, 7, 8 | Provider matrix | New row remains x86-only in CI, images, samples. |
+| 6, 9 | Security claims | Documentation may claim only controls proven by native tests. |
+| 7, 8 | Image/cache and samples | Keep KVM and TCG results distinct. |
+| 8, 9 | Canonical profile and copies | Update copies from template, never root profile. |
+| 1, 10 | PC behavior preservation | Focused units now; broad runtime proof last. |
+| 2, 10 | Supported Python image mapping | Each mapped upstream image needs artifact proof. |
+| 4, 10 | Shared security fix | Both providers need mount failure proof before completion. |
+| 7, 10 | Deployment validation | Missing engines/capabilities are explicit blockers, not passing gates. |
+| 9, 10 | Ship claims | Roadmap completion depends on all gates. |
+
+| Task | Internal consistency |
+|---|---|
+| 1 | Characterization before extraction; compatible. |
+| 2 | Discovery, atomic cache and explicit overrides; compatible. |
+| 3 | Strict MMIO command requires runtime slot probe; compatible. |
+| 4 | Immediate old-provider integration conflicts with user order; deferred to 10. |
+| 5 | Architecture metadata must keep existing public platform lists compatible. |
+| 6 | Native tests and shared suites required; no silent skip. |
+| 7 | Publication conflicts with implementation-only scope; wiring only. |
+| 8 | Existing fast sample target cannot substitute for VM lane. |
+| 9 | Roadmap stays pending if deployment gates incomplete. |
+| 10 | PR creation conflicts with deferred integration; prepare evidence locally only. |
+
 - A changed cloud image must invalidate cached kernel/initrd artifacts; Task 2 tests digest/version mismatch.
 - More MMIO consumers than the machine exposes must fail before guest execution; Task 3 tests the boundary.
 - A failed 9p or ignore mount must stop the guest; Task 4 injects both failures.
@@ -35,6 +75,8 @@ construction. Extend provider metadata with supported CPU architectures so unsup
 ---
 
 ### Task 1: Preserve current QEMU behavior while creating a shared command seam
+
+Completed: `a2c1d904`; independent task review passed; 444 focused QEMU unit tests before/after.
 
 **Files:**
 - Modify: `pysandboxes/remote/qemu_sse_daemon.py`
@@ -53,6 +95,10 @@ construction. Extend provider metadata with supported CPU architectures so unsup
 - [ ] Commit: `refactor(provider): isolate qemu machine command construction`.
 
 ### Task 2: Resolve and verify matched microvm boot artifacts
+
+Completed implementation: `bfeb42c2`, `95f5e3f7`, `eaeff8e6`; independent review passed after concurrency fix.
+54 focused tests and 4388 full units passed (26 skipped, 5 xfailed). Actual upstream extraction passed all
+Python 3.11–3.14 mappings, including separate boot filesystem on Ubuntu 24.04. CI matrix automation remains Task 7.
 
 **Files:**
 - Create: `pysandboxes/remote/qemu_microvm_boot.py`
@@ -78,6 +124,22 @@ construction. Extend provider metadata with supported CPU architectures so unsup
 - [ ] Commit: `feat(provider): prepare qemu microvm boot artifacts`.
 
 ### Task 3: Build the strict microvm command and preflight MMIO capacity
+
+Completed implementation: `95fde173`, `0246878c`, `bc0bbd28`; independent task review passed after two fix rounds.
+455 focused QEMU units passed. Eleven standalone KVM transport/boot probes passed; real TCG and KVM capacity
+boundaries passed separately. Actual strict configuration exposes 8 MMIO transports in both modes on this host;
+the runtime probe, not the earlier spike's 24-device observation, defines the launch budget. Unit tests do not
+require QEMU; integration collection runs TCG and adds KVM only when available, without skips.
+This is not full daemon/provider validation: registration and native shared contracts remain pending.
+
+### Session checkpoint
+
+Session reached the repository's 30,000-token budget after Task 3 and its scoped review fixes. Tasks 4–10 remain
+unimplemented. Resume at Task 4 in `/tmp/pysandboxes-qemu-microvm`, branch `feature/qemu-microvm`.
+Task reports and review packages are under `.superpowers/sdd/2026-11-05-qemu-microvm-provider/`.
+Do not repeat completed Tasks 1–3. No merge, push, image publication, or PR has occurred.
+Next: fail-closed shared guest mounts, architecture-aware registration, new-provider full integration and samples,
+image/CI/documentation, then broad old-provider regressions last. No shipping or security-completeness claim yet.
 
 **Files:**
 - Modify: `pysandboxes/remote/qemu_sse_daemon.py`
