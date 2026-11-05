@@ -48,6 +48,7 @@ def test_native_code_cannot_write_a_read_only_share(provider: str, tmp_path: Pat
                 "py-sandbox=false",
                 f"os-sandbox={backend_of(provider)}",
                 row_profile_lines(provider),
+                *(["expose-ro=/etc"] if backend_of(provider) == "qemu-microvm" else []),
                 *(["qemu.use_kvm=false"] if provider == "qemu" else []),
                 f"expose-ro={exposed_dir}",
                 "",
@@ -91,3 +92,37 @@ else:
     assert result.returncode == 0, result.stderr[-3000:]
     assert "REFUSED" in result.stdout, result.stdout + result.stderr
     assert sentinel.read_text() == "host-before\n"
+
+
+@pytest.mark.parametrize("provider", [row for row in _PROVIDERS if row.startswith("qemu-microvm")])
+def test_microvm_rejects_distinct_exposes_beyond_its_transport_capacity(provider: str, tmp_path: Path) -> None:
+    """A distinct readonly export cannot be dropped to make a profile boot."""
+    if reason := provider_skip_reason(provider):
+        pytest.skip(reason)
+    readonly, writable = tmp_path / "readonly", tmp_path / "writable"
+    readonly.mkdir()
+    writable.mkdir()
+    profile = tmp_path / "capacity.profile"
+    profile.write_text(
+        f"py-sandbox=false\nos-sandbox=qemu-microvm\n{row_profile_lines(provider)}"
+        f"expose-ro=.\nexpose-ro=/etc\nexpose-ro={sys.base_prefix}/lib\n"
+        f"expose-ro={readonly}\nexpose-rw={writable}\n"
+    )
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "pysandboxes.python_sb",
+            f"--pysandboxes-config={profile}",
+            "-c",
+            "print('MUST_NOT_RUN')",
+        ],
+        cwd=ROOT_DIR,
+        capture_output=True,
+        text=True,
+        timeout=60,
+        check=False,
+    )
+    assert result.returncode != 0, result.stdout + result.stderr
+    assert "needs 9 MMIO devices but supports 8" in result.stderr, result.stderr
+    assert "MUST_NOT_RUN" not in result.stdout

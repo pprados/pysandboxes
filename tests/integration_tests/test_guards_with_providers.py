@@ -95,12 +95,18 @@ def _run(
     # to the child unless its directory is exposed, and so is the interpreter it runs on.
     exposed = "".join(f"expose-ro={path}\n" for path in (str(tmp_path), *_INTERPRETER_PATHS))
     backend = backend_of(os_sandbox)
+    if backend == "qemu-microvm":
+        # Match the shared readonly system fixture so its nested CA shares can compact.
+        exposed += "expose-ro=/etc\n"
     profile.write_text(
         f"py-sandbox=true\nos-sandbox={backend}\n{row_profile_lines(os_sandbox)}{exposed}{coverage_profile_lines()}{profile_lines}"
     )
+    # Keep the hidden guest cwd out of implicit runtime imports; the checkout stays on explicit PYTHONPATH.
+    safe_path = ["-P"] if backend == "qemu-microvm" and cwd != ROOT_DIR else []
     return subprocess.run(
         [
             sys.executable,
+            *safe_path,
             "-m",
             "pysandboxes.python_sb",
             f"--pysandboxes-config={profile}",

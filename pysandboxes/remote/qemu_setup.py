@@ -10,6 +10,7 @@ main_sandbox --_named-pipe (same flow as bwrap/unshare).
 import fnmatch
 import logging
 import os
+import shlex
 import subprocess
 from pathlib import Path
 from typing import Any
@@ -43,7 +44,7 @@ def microvm_mmio_capacity(qemu_binary: str, accel_args: list[str]) -> int:
             qemu_binary,
             *accel_args,
             "-machine",
-            "microvm,acpi=off,pcie=off",
+            "microvm,acpi=off,pcie=off,rtc=off",
             "-nodefaults",
             "-no-user-config",
             "-display",
@@ -138,11 +139,13 @@ def _bootstrap_script_content(
     guest_cwd: str | None = None,
     *,
     bootstrap_verbose: bool = False,
+    python_paths: list[str] | None = None,
 ) -> str:
     """Build the guest bootstrap script: mount cidata,
     verify Python version (no install), then run main_sandbox
     --_named-pipe (config from 9p or pipe)."""
     set_shell = "set -ex" if bootstrap_verbose else "set -e"
+    halt_sysrq = "b" if config_guest_path == f"{GUEST_CIDATA_MOUNT}/config.pkl" else "o"
     lines = [
         "#!/bin/bash",
         set_shell,
@@ -150,7 +153,7 @@ def _bootstrap_script_content(
         "# in nested QEMU): sysrq-o powers off from the kernel; utilities are fallbacks only.",
         "_pysb_halt_guest() {",
         "  sync 2>/dev/null || true",
-        "  { echo o > /proc/sysrq-trigger; } 2>/dev/null || true",
+        f"  {{ echo {halt_sysrq} > /proc/sysrq-trigger; }} 2>/dev/null || true",
         "  poweroff -f 2>/dev/null || true",
         "  halt -fp 2>/dev/null || true",
         "}",
@@ -266,7 +269,7 @@ def _bootstrap_script_content(
             "",
         ]
     )
-    pypath = ":".join(m[1] for m in mounts) if mounts else ""
+    pypath = ":".join(python_paths if python_paths is not None else [m[1] for m in mounts])
     guest_cwd = guest_cwd or (mounts[0][1] if mounts else "/")
     env_py = "env PYTHONPATH=" + pypath + " " if pypath else "env "
     if config_guest_path:
@@ -292,9 +295,14 @@ def _bootstrap_script_content(
     # block-buffers it. Both sentinels and the program's own output travel on that
     # stdout, so buffering holds the whole window back until the interpreter exits and
     # the caller sees nothing of a long run until it is over. Unbuffered streams it.
+    cwd_command = f'cd "{guest_cwd}" || true'
+    if config_guest_path == f"{GUEST_CIDATA_MOUNT}/config.pkl":
+        quoted_cwd = shlex.quote(guest_cwd)
+        lines.append(f"mkdir -p -- {quoted_cwd} || _pysb_fatal 'cannot prepare guest working directory'")
+        cwd_command = f"cd -- {quoted_cwd} || _pysb_fatal 'cannot enter guest working directory'"
     lines.extend(
         [
-            f'cd "{guest_cwd}" || true',
+            cwd_command,
             "set +e",
             env_py + '"$PYTHON_EXE" -u -m pysandboxes.remote.main_sandbox --_named-pipe "$CONFIG_PATH"',
             "GUEST_RC=$?",
@@ -316,6 +324,7 @@ def _create_nocloud_iso(
     python_version: str,
     python_exe: str | None = None,
     config_guest_path: str | None = None,
+    python_paths: list[str] | None = None,
 ) -> Path:
     """Create NoCloud ISO with user-data, meta-data, bootstrap script, 9p_mounts.
 
@@ -347,6 +356,7 @@ def _create_nocloud_iso(
         config_guest_path,
         guest_cwd=guest_cwd,
         bootstrap_verbose=bootstrap_verbose,
+        python_paths=python_paths,
     )
     script_yaml = "\n".join("      " + line for line in script_content.splitlines())
     (temp / PIPE_NAME_FILE).write_text(pipe_basename.strip(), encoding="utf-8")
@@ -431,6 +441,8 @@ runcmd:
     ]
     if python_exe:
         graft_args.append(f"{PYTHON_EXE_FILE}={PYTHON_EXE_FILE}")
+    if config_guest_path == f"{GUEST_CIDATA_MOUNT}/config.pkl":
+        graft_args.append("config.pkl=config.pkl")
     for cmd in ("genisoimage", "mkisofs"):
         try:
             subprocess.run(
@@ -464,6 +476,7 @@ def prepare_guest_env(
     python_version: str = "3.11",
     python_exe: str | None = None,
     config_guest_path: str | None = None,
+    python_paths: list[str] | None = None,
 ) -> Path:
     """Prepare NoCloud ISO: bootstrap script, 9p_mounts, pipe_name, python_version, optional python_exe.
 
@@ -493,4 +506,5 @@ def prepare_guest_env(
         python_version,
         python_exe,
         config_guest_path,
+        python_paths=python_paths,
     )

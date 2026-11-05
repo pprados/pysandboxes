@@ -11,7 +11,7 @@ from pysandboxes.remote import qemu_setup
 
 
 def test_microvm_command_and_capacity(monkeypatch: pytest.MonkeyPatch) -> None:
-    probe = Mock(return_value=4)
+    probe = Mock(return_value=3)
     accel = Mock(return_value=["-enable-kvm"])
     monkeypatch.setattr(daemon, "microvm_mmio_capacity", probe)
     monkeypatch.setattr(daemon, "qemu_accel_args", accel)
@@ -23,14 +23,17 @@ def test_microvm_command_and_capacity(monkeypatch: pytest.MonkeyPatch) -> None:
     probe.assert_called_once_with(cmd[0], ["-enable-kvm"])
     accel.assert_called_once()
     assert "-enable-kvm" in cmd
-    assert "microvm,acpi=off,pcie=off" in cmd
-    assert "console=ttyS0 root=/dev/vda1 ro reboot=t" in cmd
+    assert "microvm,acpi=off,pcie=off,rtc=off" in cmd
+    assert "console=ttyS0 root=/dev/sda1 ro reboot=t" in cmd
+    assert "virtio-scsi-device,id=scsi0" in cmd
+    assert "scsi-hd,drive=root,bus=scsi0.0,channel=0,scsi-id=0,lun=0" in cmd
+    assert "scsi-cd,drive=cidata,bus=scsi0.0,channel=0,scsi-id=1,lun=0" in cmd
     assert "-no-reboot" in cmd
     assert "stdio" in cmd
     assert not any("pci" in arg and "pcie=off" not in arg for arg in cmd)
-    assert sum(arg.startswith("virtio-") for arg in cmd) == 4
-    monkeypatch.setattr(daemon, "microvm_mmio_capacity", lambda *_: 3)
-    with pytest.raises(Exception, match="4.*3"):
+    assert sum(arg.startswith("virtio-") for arg in cmd) == 3
+    monkeypatch.setattr(daemon, "microvm_mmio_capacity", lambda *_: 2)
+    with pytest.raises(Exception, match="3.*2"):
         instance._machine_command(rules, assets, 1234)
 
 
@@ -40,5 +43,5 @@ def test_capacity_probe_uses_launch_acceleration(monkeypatch: pytest.MonkeyPatch
     assert qemu_setup.microvm_mmio_capacity("fake-qemu", ["-enable-kvm"]) == 2
     command = run.call_args.args[0]
     assert command[:2] == ["fake-qemu", "-enable-kvm"]
-    assert command[command.index("-machine") + 1] == "microvm,acpi=off,pcie=off"
+    assert command[command.index("-machine") + 1] == "microvm,acpi=off,pcie=off,rtc=off"
     assert run.call_args.kwargs["input"] == "info qtree\nquit\n"
