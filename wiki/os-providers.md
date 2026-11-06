@@ -17,15 +17,18 @@ Start here; the matrix below gives the detail behind each line.
 
 | Situation | Provider |
 |---|---|
-| Default on Linux: nothing to install, no privilege, files and TCP ports | `landlock` |
-| Untrusted native code, or host and UDP filtering | `bwrap` or `unshare` |
-| Strongest separation, in a VM (more than 20 s to start) | `qemu` |
+| Default on Linux: nothing to install, no privilege, files and TCP ports | [`landlock`](landlock.md) |
+| Untrusted native code, or host and UDP filtering, with the lightest namespaces | [`bwrap`](bwrap.md) |
+| Untrusted native code, or host and UDP filtering, with only user namespaces, `slirp4netns` and `iptables` | [`unshare`](unshare.md) |
+| Strongest separation, in a VM (more than 20 s to start) | [`qemu`](qemu.md) |
 | Smaller QEMU machine, x86_64 Linux, with at most eight virtio-mmio transports | [`qemu-microvm`](qemu-microvm.md) |
-| Compiled code or kernel exploits, user-space kernel, starts in about a second | `gvisor` |
-| Resource limits and seccomp | `firejail` |
-| Inside Docker or Podman | `landlock`, `qemu` or `qemu-microvm` unprivileged; `unshare`, `bwrap` or `gvisor` with `--privileged` |
+| Compiled code or kernel exploits, user-space kernel, starts in about a second | [`gvisor`](gvisor.md) |
+| Resource limits and seccomp | [`firejail`](firejail.md) |
+| Inside Docker or Podman | [`landlock`](landlock.md), [`qemu`](qemu.md) or [`qemu-microvm`](qemu-microvm.md) unprivileged; [`unshare`](unshare.md), [`bwrap`](bwrap.md) or [`gvisor`](gvisor.md) with `--privileged` |
 | Files and ports on macOS (Seatbelt, no host filtering) | [`sandbox-exec`](sandbox-exec.md) |
+| Files and network on Windows, without administrator rights (AppContainer token, no host or port filtering) | [`appcontainer`](appcontainer.md) |
 | Process separation only, no OS boundary (also on macOS, and the fallback on Windows) | [`subprocess`](subprocess.md) |
+| No sandbox at all: plain Python, for comparison or trusted code | `none` |
 
 Two limits to know before choosing `landlock`: it denies a path but cannot hide it, and it does not protect the host's named Unix sockets (see [Host sockets under `/run`](#host-sockets-under-run)). Against untrusted native code, prefer `bwrap` or `unshare`.
 
@@ -186,7 +189,7 @@ keep `py-sandbox` on, and put one OS provider around it (see [Recommendations](#
 | Hostile native code | Dependencies with C extensions, `ctypes`, database drivers | on | `bwrap` or `unshare` | Mount and network namespaces: a path that is not exposed does not exist, the network is filtered |
 | Hostile native code, kernel exploits | Code that may attack the kernel itself | on | `gvisor` | The guest talks to a user-space kernel (Sentry), which makes a small set of host system calls |
 | Worst case, or another CPU | Code you cannot reason about | on | `qemu` | A VM with its own Linux kernel: the host kernel is out of the guest's reach |
-| Smaller x86_64 guest with strict device budget | Code needing a separate guest kernel | on | `qemu-microvm` | A Linux VM booted directly from a matched kernel and initrd |
+| Same as `qemu`, with a smaller virtual machine | Code you cannot reason about, on Linux x86_64, with at most eight host shares | on | `qemu-microvm` | A VM with its own Linux kernel, booted directly, with virtio-mmio devices only and no PCI or ACPI. Same isolation class as `qemu`, not a stronger one, and not faster to start |
 
 `firejail` is a variant of the namespace row for hosts that already have it: it adds resource limits and a seccomp
 filter. `sandbox-exec` (macOS) and `appcontainer` (Windows) are the choices on those systems.
@@ -214,7 +217,9 @@ Three consequences:
   others, while a loop of `stat`, `open` or socket calls is 6 to 8 times slower. Its `ptrace` and `kvm` platforms are
   slower still on this host (see [gVisor](gvisor.md)).
 - `qemu` and `qemu-microvm` pay once, at start-up. Keep the sandbox alive across calls (`with sandboxes():`) instead of starting one per
-  call.
+  call. Measured here, `qemu-microvm` starts slower than `qemu` (20.4 s with KVM and 110.3 s without, against 12.8 s for `qemu` in the table above):
+  choose it for its smaller device model, not for speed, and prefer `qemu` when the program needs more than eight
+  host shares. A TCG run carries no KVM isolation claim (see [QEMU microvm](qemu-microvm.md#limits)).
 - `landlock`, `bwrap` and `firejail` cost almost nothing, which is why the default is not the strongest provider: go
   up only when the threat in the first table calls for it.
 
