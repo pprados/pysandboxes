@@ -15,15 +15,13 @@ with sandboxes(os_sandbox="libkrun"):
 
 - Linux (or WSL) with read/write access to `/dev/kvm`.
 - `libkrun.so` and `libkrunfw.so` installed on the host.
-- `/usr/bin/python3` with `AF_VSOCK`: the guest uses it, through the read-only root, to listen for the host.
 - For a profile with an outgoing `net=` rule: `unshare`, `slirp4netns`, `iptables-restore`, `ip` and `passt`.
 
-`unavailable_reason()` checks the first three and the provider says which one is missing.
+`unavailable_reason()` checks the first two and the provider says which one is missing. The interpreter needs no `AF_VSOCK` support: the guest creates its vsock socket through libc (`ctypes`).
 
 ## How it works
 
-- **Channel.** libkrun relays a Unix socket the host binds to a vsock port of the guest. A shim started by the guest's
-  system Python listens on that vsock port and relays to the Unix socket of the sandbox daemon. The host waits for the
+- **Channel.** libkrun relays a Unix socket the host binds to a vsock port of the guest. A shim started by the guest, under the host's interpreter, listens on that vsock port and relays to the Unix socket of the sandbox daemon. The host waits for the
   shim's ready file before it connects: libkrun aborts when a host connection reaches a port nobody listens on.
   `remote-endpoint=tcp` or a fixed `port=` cannot work with this provider.
 - **Files.** The root is shared read-only. A directory named by `expose-ro=` or `expose-rw=` gets its own virtio-fs

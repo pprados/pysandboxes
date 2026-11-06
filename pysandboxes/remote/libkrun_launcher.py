@@ -31,7 +31,6 @@ from .tools import set_pdeathsig
 
 logger = logging.getLogger(__name__)
 
-GUEST_SYSTEM_PYTHON = "/usr/bin/python3"
 GUEST_RUN_DIR = "/tmp/pysb_run"
 LISTENER_SHIM_NAME = "vsock_listen.py"
 READY_FILE_NAME = "ready"
@@ -42,11 +41,13 @@ MICROVM_FAILED = 70
 STDERR_FILE_NAME = "guest.err"
 GUEST_SOCKET = "/tmp/pysb_guest.sock"
 
-# Runs under the guest's system Python: the interpreter of a venv may be built without AF_VSOCK, so this one
-# accepts the vsock connections and relays them to the Unix socket the guest command listens on, and reports the
-# command's exit status. ``READY_FILE_NAME`` tells the host the listener exists, because libkrun aborts when a
-# host connection reaches a vsock port nobody listens on.
+# Runs under the host's interpreter, which the guest sees through the shared root. Many builds of Python lack
+# ``socket.AF_VSOCK``, so the listener is created through libc and only wrapped in a ``socket.socket``. It accepts the
+# vsock connections, relays them to the Unix socket the guest command listens on, and reports the command's exit
+# status. ``READY_FILE_NAME`` tells the host the listener exists, because libkrun aborts when a host connection
+# reaches a vsock port nobody listens on.
 LISTENER_SHIM = f"""\
+import ctypes
 import os
 import socket
 import sys
@@ -54,12 +55,34 @@ import threading
 
 port = int(sys.argv[1])
 command = sys.argv[sys.argv.index("--") + 1:]
-listener = socket.socket(socket.AF_VSOCK, socket.SOCK_STREAM)
-listener.bind((socket.VMADDR_CID_ANY, port))
-listener.listen(socket.SOMAXCONN)
+AF_VSOCK = 40
+VMADDR_CID_ANY = 0xFFFFFFFF
+libc = ctypes.CDLL(None, use_errno=True)
+
+
+def check(result):
+    if result < 0:
+        raise OSError(ctypes.get_errno(), os.strerror(ctypes.get_errno()))
+    return result
+
+
+class SockaddrVm(ctypes.Structure):
+    _fields_ = [
+        ("family", ctypes.c_ushort),
+        ("reserved", ctypes.c_ushort),
+        ("port", ctypes.c_uint),
+        ("cid", ctypes.c_uint),
+        ("zero", ctypes.c_ubyte * 4),
+    ]
+
+
+listen_fd = check(libc.socket(AF_VSOCK, socket.SOCK_STREAM, 0))
+address = SockaddrVm(AF_VSOCK, 0, port, VMADDR_CID_ANY)
+check(libc.bind(listen_fd, ctypes.byref(address), ctypes.sizeof(address)))
+check(libc.listen(listen_fd, socket.SOMAXCONN))
 pid = os.fork()
 if pid == 0:
-    listener.close()
+    os.close(listen_fd)
     os.execv(command[0], command)
 with open("{GUEST_RUN_DIR}/{READY_FILE_NAME}", "w") as ready:
     ready.write("1")
@@ -94,7 +117,7 @@ def relay(connection):
 
 def accept_loop():
     while True:
-        connection, _ = listener.accept()
+        connection = socket.socket(fileno=check(libc.accept(listen_fd, None, None)))
         threading.Thread(target=relay, args=(connection,), daemon=True).start()
 
 
@@ -156,7 +179,7 @@ def generate_guest_init_script(
 
     # Quote and execute the guest command
     if vsock_port:
-        guest_cmd = [GUEST_SYSTEM_PYTHON, f"{GUEST_RUN_DIR}/{LISTENER_SHIM_NAME}", str(vsock_port), "--", *guest_cmd]
+        guest_cmd = [sys.executable, f"{GUEST_RUN_DIR}/{LISTENER_SHIM_NAME}", str(vsock_port), "--", *guest_cmd]
     # The kernel hands its own variables (HOME, TERM) to init: the command gets only the ones the rules allow.
     clean_env = [f"{key}={shlex.quote(str(val))}" for key, val in envs.items()]
     cmd_str = " ".join(["env", "-i", *clean_env, *(shlex.quote(c) for c in guest_cmd)])

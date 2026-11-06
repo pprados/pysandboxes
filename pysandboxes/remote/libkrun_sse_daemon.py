@@ -3,7 +3,6 @@
 """libkrun-based daemon for OS-level sandboxing with PySandboxes."""
 
 import asyncio
-import functools
 import gc
 import json
 import logging
@@ -38,7 +37,7 @@ from .daemon_parameters import DaemonParameters
 from .endpoint import UNIX, Endpoint, format_endpoint
 from .endpoint_connector import ENDPOINT_URL, make_session
 from .libkrun_ffi import find_libkrun, find_libkrunfw
-from .libkrun_launcher import ERROR_FILE_NAME, GUEST_SOCKET, GUEST_SYSTEM_PYTHON, READY_FILE_NAME
+from .libkrun_launcher import ERROR_FILE_NAME, GUEST_SOCKET, READY_FILE_NAME
 from .parameters import INTERVAL_FOR_PING_DAEMON, LOOP_FOR_PING, TIMEOUT_FOR_PING
 from .slirp4netns_common import (
     SLIRP_DNS,
@@ -49,18 +48,6 @@ from .slirp4netns_common import (
 from .tools import SSE_READ_BUFSIZE, is_transient_connection_error, which_command
 
 logger = logging.getLogger(__name__)
-
-
-@functools.cache
-def _system_python_has_vsock() -> bool:
-    """True when the guest's system Python (the host's, through the read-only root) can bind a vsock listener."""
-    try:
-        probe = subprocess.run(
-            [GUEST_SYSTEM_PYTHON, "-c", "import socket; socket.AF_VSOCK"], capture_output=True, timeout=10, check=False
-        )
-    except (OSError, subprocess.SubprocessError):
-        return False
-    return probe.returncode == 0
 
 
 # The guest has addresses of its own: ``SLIRP_GW`` stays the slirp4netns gateway, which reaches the host loopback, and
@@ -127,8 +114,6 @@ class LibkrunSSEDaemon(BaseSubProcessDaemon):
             return "libkrun shared library not found"
         if not find_libkrunfw():
             return "libkrunfw shared library not found"
-        if not _system_python_has_vsock():
-            return f"{GUEST_SYSTEM_PYTHON} is missing or has no AF_VSOCK, which the guest needs to listen"
         return None
 
     def _choose_endpoint(self, all_rules: AllRules) -> None:

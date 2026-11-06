@@ -36,25 +36,16 @@ def _config(tmp_path: Path) -> dict:
     return json.loads((tmp_path / "libkrun_config.json").read_text(encoding="utf-8"))
 
 
-@patch(f"{_MODULE}._system_python_has_vsock", return_value=True)
 @patch(f"{_MODULE}.os.access", return_value=True)
 @patch(f"{_MODULE}.find_libkrun", return_value="/usr/lib/libkrun.so")
 @patch(f"{_MODULE}.find_libkrunfw", return_value="/usr/lib/libkrunfw.so")
-def test_unavailable_reason_none(mock_fw, mock_lib, mock_access, mock_vsock) -> None:
+def test_unavailable_reason_none(mock_fw, mock_lib, mock_access) -> None:
     assert LibkrunSSEDaemon.unavailable_reason() is None
 
 
 @patch(f"{_MODULE}.os.access", return_value=False)
 def test_unavailable_reason_no_kvm(mock_access) -> None:
     assert LibkrunSSEDaemon.unavailable_reason() == "host lacks read/write access to /dev/kvm"
-
-
-@patch(f"{_MODULE}._system_python_has_vsock", return_value=False)
-@patch(f"{_MODULE}.os.access", return_value=True)
-@patch(f"{_MODULE}.find_libkrun", return_value="/usr/lib/libkrun.so")
-@patch(f"{_MODULE}.find_libkrunfw", return_value="/usr/lib/libkrunfw.so")
-def test_unavailable_when_the_guest_python_cannot_listen_on_vsock(mock_fw, mock_lib, mock_access, mock_vsock) -> None:
-    assert "AF_VSOCK" in (LibkrunSSEDaemon.unavailable_reason() or "")
 
 
 def test_subprocess_cmd_runs_the_launcher_on_its_config(tmp_path: Path) -> None:
