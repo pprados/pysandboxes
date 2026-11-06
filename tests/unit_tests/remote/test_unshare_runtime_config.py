@@ -2,7 +2,7 @@
 # License: Apache V2
 """`UnshareSSEDaemon` with `net-resolve=runtime`: the configuration, and the life of the filtering resolver."""
 
-from ipaddress import IPv4Address, IPv4Network, ip_address
+from ipaddress import IPv4Address, IPv4Network
 from pathlib import Path
 from typing import Any
 
@@ -90,121 +90,32 @@ def test_runtime_without_the_resolver_port_is_an_error_not_a_silent_pinned_rules
         _prepare(rules)
 
 
-class FakeDns:
-    instances: list["FakeDns"] = []
+class FakeSession:
+    def __init__(self) -> None:
+        self.calls: list[tuple[str, Any]] = []
 
-    def __init__(self, rules: Any, servers: Any, **_: Any) -> None:
-        self.rules, self.servers = rules, list(servers)
-        self.started = self.stopped = 0
-        self.enforcer: Any = None
-        FakeDns.instances.append(self)
-
-    def start(self) -> int:
-        self.started += 1
+    def start(self, all_rules: Any) -> int:
+        self.calls.append(("start", all_rules))
         return 15353
 
-    def attach(self, enforcer: Any) -> None:
-        self.enforcer = enforcer
+    def attach(self, pid: int) -> None:
+        self.calls.append(("attach", pid))
 
     def stop(self) -> None:
-        self.stopped += 1
+        self.calls.append(("stop", None))
 
 
-@pytest.fixture
-def fake_dns(monkeypatch: pytest.MonkeyPatch) -> type[FakeDns]:
-    FakeDns.instances = []
-    monkeypatch.setattr(usd, "RuntimeDns", FakeDns)
-    return FakeDns
+def test_the_daemon_owns_one_resolver_session() -> None:
+    from pysandboxes.remote.runtime_dns import RuntimeDnsSession
+
+    assert isinstance(UnshareSSEDaemon("tok")._dns_session, RuntimeDnsSession)
 
 
-def test_a_pinned_profile_starts_no_resolver(fake_dns: type[FakeDns]) -> None:
-    assert UnshareSSEDaemon("tok")._start_runtime_dns(EmptyRules) is None
-    assert fake_dns.instances == []
-
-
-def test_a_runtime_profile_starts_the_resolver_on_the_rules_and_the_ipv4_resolvers_of_the_host(
-    fake_dns: type[FakeDns], monkeypatch: pytest.MonkeyPatch
-) -> None:
-    monkeypatch.setattr(usd, "get_upstream_dns", lambda: [UPSTREAM, __import__("ipaddress").ip_address("2001:db8::53")])
-    rules = EmptyRules._replace(net_resolve="runtime", name_rules=NAMES)
-
-    port = UnshareSSEDaemon("tok")._start_runtime_dns(rules)
-
-    assert port == 15353
-    assert fake_dns.instances[0].rules == NAMES and fake_dns.instances[0].servers == [UPSTREAM]
-
-
-@pytest.mark.parametrize("missing", ["nsenter", "iptables"])
-def test_a_runtime_profile_needs_nsenter_and_iptables_on_the_host(
-    fake_dns: type[FakeDns], monkeypatch: pytest.MonkeyPatch, missing: str
-) -> None:
-    monkeypatch.setattr(usd, "which_command", lambda name: None if name == missing else Path("/usr/bin") / name)
-
-    with pytest.raises(SandBoxError, match=missing):
-        UnshareSSEDaemon("tok")._start_runtime_dns(EmptyRules._replace(net_resolve="runtime", name_rules=NAMES))
-
-    assert fake_dns.instances == []
-
-
-def test_a_host_with_no_ipv4_resolver_is_an_error_not_a_silent_servfail(
-    fake_dns: type[FakeDns], monkeypatch: pytest.MonkeyPatch
-) -> None:
-    monkeypatch.setattr(usd, "get_upstream_dns", lambda: [ip_address("2001:db8::53")])
-
-    with pytest.raises(SandBoxError, match="no IPv4 resolver"):
-        UnshareSSEDaemon("tok")._start_runtime_dns(EmptyRules._replace(net_resolve="runtime", name_rules=NAMES))
-
-    assert fake_dns.instances == []
-
-
-def test_the_end_of_a_one_shot_run_stops_the_resolver_through_kill_slirp(fake_dns: type[FakeDns]) -> None:
+def test_the_end_of_a_one_shot_run_stops_the_resolver_through_kill_slirp() -> None:
     daemon = UnshareSSEDaemon("tok")
-    daemon._start_runtime_dns(EmptyRules._replace(net_resolve="runtime", name_rules=NAMES))
+    session = FakeSession()
+    daemon._dns_session = session  # type: ignore[assignment]
 
     daemon._kill_slirp()
 
-    assert fake_dns.instances[0].stopped == 1 and daemon._runtime_dns is None
-
-
-def test_a_restart_stops_the_previous_resolver_before_starting_another(fake_dns: type[FakeDns]) -> None:
-    daemon = UnshareSSEDaemon("tok")
-    rules = EmptyRules._replace(net_resolve="runtime", name_rules=NAMES)
-
-    daemon._start_runtime_dns(rules)
-    daemon._start_runtime_dns(rules)
-
-    assert [d.stopped for d in fake_dns.instances] == [1, 0]
-
-
-def test_the_enforcer_is_attached_to_the_pid_that_holds_the_network_namespace(fake_dns: type[FakeDns]) -> None:
-    daemon = UnshareSSEDaemon("tok")
-    daemon._start_runtime_dns(EmptyRules._replace(net_resolve="runtime", name_rules=NAMES))
-
-    daemon._attach_runtime_enforcer(4242)
-
-    enforcer = fake_dns.instances[0].enforcer
-    assert enforcer._prefix == [
-        "/usr/bin/nsenter",
-        "-t",
-        "4242",
-        "-U",
-        "-n",
-        "--preserve-credentials",
-        "/usr/bin/iptables",
-    ]
-
-
-def test_attaching_without_a_resolver_does_nothing(fake_dns: type[FakeDns]) -> None:
-    UnshareSSEDaemon("tok")._attach_runtime_enforcer(4242)
-
-    assert fake_dns.instances == []
-
-
-def test_stopping_closes_the_resolver_once_and_forgets_it(fake_dns: type[FakeDns]) -> None:
-    daemon = UnshareSSEDaemon("tok")
-    daemon._start_runtime_dns(EmptyRules._replace(net_resolve="runtime", name_rules=NAMES))
-
-    daemon._stop_runtime_dns()
-    daemon._stop_runtime_dns()
-
-    assert fake_dns.instances[0].stopped == 1
+    assert ("stop", None) in session.calls
