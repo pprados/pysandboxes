@@ -28,6 +28,7 @@ _LINUX_ONLY_TESTS = [
     "integration_tests/test_slirp_cleanup.py",
     "integration_tests/remote/test_bwrap.py",
     "integration_tests/remote/test_providers.py",
+    "integration_tests/remote/test_qemu_microvm.py",
     "unit_tests/test_qemu_*.py",
     "unit_tests/remote/test_bwrap_*.py",
     "unit_tests/remote/test_*landlock*.py",

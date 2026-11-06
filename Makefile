@@ -413,12 +413,21 @@ sample-tests-matrix:
 
 # VM providers cost a full guest boot per sandbox. Keep this release/nightly lane separate from the fast matrix.
 SAMPLE_VM_PROVIDERS = qemu qemu-microvm
+# CrewAI needs more shares than the microvm's six 9p slots permit without dropping a guest-missing path.
+SAMPLE_QEMU_MICROVM_SAMPLES = $(filter-out crewai,$(SAMPLES))
+SAMPLE_QEMU_MICROVM_OPTIONAL_PATHS = /etc/ssl,/etc/ca-certificates,/usr/share/ca-certificates
+SAMPLE_QEMU_OPTIONAL_PATHS = /etc/ssl,/etc/pki,/etc/ca-certificates,/usr/share/ca-certificates
 sample-tests-vm:
 	@status=0; \
 	for provider in $(SAMPLE_VM_PROVIDERS); do \
 		echo "=== samples on Python $${UV_PYTHON:-$$(uv run python -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")')} under $$provider"; \
-		QEMU_MICROVM_OPTIONAL_PATHS=/etc/ssl,/etc/pki,/etc/ca-certificates,/usr/share/ca-certificates \
-			OS_SANDBOX=$$provider $(MAKE) sample-tests || status=1; \
+		if [ "$$provider" = qemu-microvm ]; then \
+			QEMU_MICROVM_OPTIONAL_PATHS=$(SAMPLE_QEMU_MICROVM_OPTIONAL_PATHS) OS_SANDBOX=$$provider \
+				$(MAKE) sample-tests SAMPLES="$(SAMPLE_QEMU_MICROVM_SAMPLES)" || status=1; \
+		else \
+			QEMU_MICROVM_OPTIONAL_PATHS=$(SAMPLE_QEMU_OPTIONAL_PATHS) OS_SANDBOX=$$provider \
+				$(MAKE) sample-tests || status=1; \
+		fi; \
 	done; \
 	exit $$status
 
@@ -426,8 +435,13 @@ sample-tests-vm-matrix:
 	@status=0; \
 	for py in $(SAMPLE_PYTHONS); do for provider in $(SAMPLE_VM_PROVIDERS); do \
 		echo "=== samples on Python $$py under $$provider"; \
-		UV_PYTHON=$$py QEMU_MICROVM_OPTIONAL_PATHS=/etc/ssl,/etc/pki,/etc/ca-certificates,/usr/share/ca-certificates \
-			OS_SANDBOX=$$provider $(MAKE) sample-tests || status=1; \
+		if [ "$$provider" = qemu-microvm ]; then \
+			UV_PYTHON=$$py QEMU_MICROVM_OPTIONAL_PATHS=$(SAMPLE_QEMU_MICROVM_OPTIONAL_PATHS) OS_SANDBOX=$$provider \
+				$(MAKE) sample-tests SAMPLES="$(SAMPLE_QEMU_MICROVM_SAMPLES)" || status=1; \
+		else \
+			UV_PYTHON=$$py QEMU_MICROVM_OPTIONAL_PATHS=$(SAMPLE_QEMU_OPTIONAL_PATHS) OS_SANDBOX=$$provider \
+				$(MAKE) sample-tests || status=1; \
+		fi; \
 	done; done; \
 	exit $$status
 
@@ -690,7 +704,7 @@ dist: .make-dist
 # Make encodes this: provider image stamps depend on their base image. The microvm image depends on qemu.
 # PYTHON_VERSION from uv. VARIANT = base | landlock | unshare | bwrap | qemu | qemu-microvm | gvisor.
 # No firejail: inside a container it runs unconfined, even with --privileged and --force.
-PYTHON_VERSION := $(shell uv run python -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')" 2>/dev/null || echo "3.11")
+PYTHON_VERSION = $(shell uv run python -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')" 2>/dev/null || echo "3.11")
 VARIANT ?= qemu
 # Container engines the images are built with, when installed; CI builds one per runner.
 CONTAINER_CMDS ?= podman docker

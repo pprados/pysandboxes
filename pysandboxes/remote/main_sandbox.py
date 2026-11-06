@@ -505,6 +505,9 @@ def main() -> int:
         import pysandboxes.remote.python_in_sb as python_in_sb_module
         import pysandboxes.remote.qemu_guest_console_io  # noqa: F401
 
+        if python_main_args:
+            pysandboxes.remote.qemu_guest_console_io.prepare_qemu_guest_stdin()
+
         module_args = sandboxes_args if sandboxes_parsed._python_sb else list(python_main_args)
         module_specs = None
         if len(module_args) > 1 and module_args[0] == "-m":

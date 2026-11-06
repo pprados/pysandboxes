@@ -7,6 +7,7 @@ Shared by ``python_sb`` (one-shot wait) and ``QemuSSEDaemon`` (background drain)
 
 import asyncio
 import logging
+import os
 import re
 import sys
 import threading
@@ -112,6 +113,7 @@ async def _qemu_read_and_forward(
     tee_file: TextIO | None = None,
     tee_lock: asyncio.Lock | None = None,
     mirror_logger: logging.Logger | None = None,
+    guest_ready: asyncio.Event | None = None,
 ) -> None:
     """Read QEMU console stream and forward lines (all if forward_all, else between sentinels)."""
     if stream is None:
@@ -153,6 +155,8 @@ async def _qemu_read_and_forward(
                 break
             raw_line = bytes(buf[:end_exclusive])
             del buf[:end_exclusive]
+            if guest_ready is not None and PYTHON_OUTPUT_START.encode() in raw_line:
+                guest_ready.set()
             await _qemu_emit_qemu_console_line(
                 raw_line,
                 out,
@@ -288,6 +292,70 @@ def read_qemu_guest_exitcode(
     return None
 
 
+def prepare_qemu_guest_stdin() -> None:
+    """Decode framed serial input into a pipe with ordinary byte and EOF semantics."""
+    serial_fd = os.dup(0)
+    read_fd, write_fd = os.pipe()
+    os.dup2(read_fd, 0)
+    os.close(read_fd)
+    read, write, close = os.read, os.write, os.close
+
+    def read_exact(size: int) -> bytes:
+        data = bytearray()
+        while len(data) < size:
+            chunk = read(serial_fd, size - len(data))
+            if not chunk:
+                raise EOFError
+            data.extend(chunk)
+        return bytes(data)
+
+    def relay() -> None:
+        try:
+            while size := int.from_bytes(read_exact(4), "big"):
+                while size:
+                    chunk = read_exact(min(size, _QEMU_CONSOLE_READ_CHUNK))
+                    size -= len(chunk)
+                    pending = memoryview(chunk)
+                    while pending:
+                        pending = pending[write(write_fd, pending) :]
+        except (EOFError, OSError):
+            pass
+        finally:
+            close(serial_fd)
+            close(write_fd)
+
+    threading.Thread(target=relay, name="qemu-guest-stdin", daemon=True).start()
+
+
+async def _qemu_forward_stdin(writer: asyncio.StreamWriter, ready: asyncio.Event) -> None:
+    """Hold host input until the guest is ready, then send length-prefixed data and EOF."""
+    await ready.wait()
+    loop = asyncio.get_running_loop()
+    fd = sys.stdin.fileno()
+    while True:
+        readable: asyncio.Future[None] = loop.create_future()
+
+        def wake(pending: asyncio.Future[None] = readable) -> None:
+            if not pending.done():
+                pending.set_result(None)
+
+        try:
+            loop.add_reader(fd, wake)
+        except PermissionError:
+            # Regular files and /dev/null are readable but cannot be registered with epoll.
+            pass
+        else:
+            try:
+                await readable
+            finally:
+                loop.remove_reader(fd)
+        chunk = os.read(fd, _QEMU_CONSOLE_READ_CHUNK)
+        writer.write(len(chunk).to_bytes(4, "big") + chunk)
+        await writer.drain()
+        if not chunk:
+            return
+
+
 async def qemu_wait_and_filter_console(
     process: asyncio.subprocess.Process,
     *,
@@ -295,11 +363,13 @@ async def qemu_wait_and_filter_console(
     tee_file: TextIO | None = None,
     tee_lock: asyncio.Lock | None = None,
     mirror_logger: logging.Logger | None = None,
+    forward_stdin: bool = False,
 ) -> int:
     """Wait for QEMU process and forward console output (all if forward_all, else between sentinels)."""
     if tee_file is not None and tee_lock is None:
         tee_lock = asyncio.Lock()
     state: list[int] = [_FORWARD_STATE_WAITING]
+    guest_ready = asyncio.Event()
     t_stdout = asyncio.create_task(
         _qemu_read_and_forward(
             process.stdout,
@@ -309,6 +379,7 @@ async def qemu_wait_and_filter_console(
             tee_file=tee_file,
             tee_lock=tee_lock,
             mirror_logger=mirror_logger,
+            guest_ready=guest_ready,
         )
     )
     t_stderr = asyncio.create_task(
@@ -322,9 +393,28 @@ async def qemu_wait_and_filter_console(
             mirror_logger=mirror_logger,
         )
     )
-    _, _, exit_code = await asyncio.gather(
-        t_stdout,
-        t_stderr,
-        process.wait(),
-    )
+    stdin_task = None
+    if forward_stdin:
+        assert process.stdin is not None
+
+        async def forward_input() -> None:
+            assert process.stdin is not None
+            try:
+                await _qemu_forward_stdin(process.stdin, guest_ready)
+            except Exception:
+                try:
+                    process.terminate()
+                except ProcessLookupError:
+                    pass
+                raise
+
+        stdin_task = asyncio.create_task(forward_input())
+    try:
+        _, _, exit_code = await asyncio.gather(t_stdout, t_stderr, process.wait())
+    finally:
+        if stdin_task is not None:
+            stdin_task.cancel()
+            result = (await asyncio.gather(stdin_task, return_exceptions=True))[0]
+            if isinstance(result, Exception):
+                raise result
     return exit_code if exit_code is not None else -1

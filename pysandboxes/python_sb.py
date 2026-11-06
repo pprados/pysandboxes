@@ -326,6 +326,7 @@ def _main(stack: ExitStack) -> int:
                 # Always use pipes so we can filter (sentinels) or tee to terminal + log file.
                 launch_kwargs["stdout"] = subprocess.PIPE
                 launch_kwargs["stderr"] = subprocess.PIPE
+                launch_kwargs["stdin"] = subprocess.PIPE
                 if show_boot:
                     qemu_console_file, qemu_console_path = _open_qemu_console_log()
                     if qemu_console_path is not None:
@@ -351,6 +352,7 @@ def _main(stack: ExitStack) -> int:
                                 process,
                                 forward_all=forward_all,
                                 tee_file=qemu_console_file,
+                                forward_stdin=True,
                             )
                         finally:
                             kill_slirp = getattr(vm, "_kill_slirp", None)

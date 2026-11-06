@@ -13,8 +13,12 @@ import os
 import socket
 import time
 from pathlib import Path
+from typing import TYPE_CHECKING, cast
 
 from pysandboxes import _os_sandbox, sandbox, sandboxes
+
+if TYPE_CHECKING:
+    from pysandboxes.remote.client_subprocess_sse_daemon import BaseSubProcessDaemon
 
 
 @sandbox
@@ -26,7 +30,7 @@ def main() -> None:
     started = time.monotonic()
     with sandboxes(sandboxes_config="tests/integration_tests/py-sandbox-test.profile"):
         if os.environ.get("OS_SANDBOX") == "qemu-microvm":
-            daemon = _os_sandbox._current_daemon
+            daemon = cast("BaseSubProcessDaemon | None", _os_sandbox._current_daemon)
             assert daemon is not None and daemon._process is not None
             pid = daemon._process.pid
             print(f"FIRST_SSE_SECONDS {time.monotonic() - started:.3f}", flush=True)

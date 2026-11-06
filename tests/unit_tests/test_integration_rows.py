@@ -73,6 +73,7 @@ def test_owned_qemu_identity_includes_zombies_and_rejects_pid_reuse() -> None:
         os._exit(0)
     try:
         path = Path(f"/proc/{pid}/stat")
+        stat = path.read_text().rsplit(")", 1)[1].split()
         deadline = time.monotonic() + 5
         while time.monotonic() < deadline:
             stat = path.read_text().rsplit(")", 1)[1].split()

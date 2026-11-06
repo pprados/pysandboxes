@@ -6,6 +6,8 @@ from unittest.mock import Mock
 
 import pytest
 
+from pysandboxes.all_rules import EmptyRules
+from pysandboxes.immutable_dict import ImmutableDict
 from pysandboxes.remote import qemu_sse_daemon as daemon
 from pysandboxes.remote import qemu_setup
 
@@ -16,7 +18,7 @@ def test_microvm_command_and_capacity(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(daemon, "microvm_mmio_capacity", probe)
     monkeypatch.setattr(daemon, "qemu_accel_args", accel)
     monkeypatch.setattr(daemon, "ensure_microvm_boot_artifacts", lambda *_: (Path("kernel"), Path("initrd")))
-    rules = SimpleNamespace(os_sandbox_params={"accel": "tcg"}, file_rules=[])
+    rules = EmptyRules._replace(os_sandbox_params=ImmutableDict({"accel": "tcg"}))
     assets = daemon._QemuLaunchAssets(Path("root.raw"), Path("seed.iso"), [("share", Path("/tmp"), "/share")])
     instance = object.__new__(daemon.QemuMicrovmSSEDaemon)
     cmd = instance._machine_command(rules, assets, 1234)
@@ -36,6 +38,31 @@ def test_microvm_command_and_capacity(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(daemon, "microvm_mmio_capacity", lambda *_: 2)
     with pytest.raises(Exception, match="3.*2"):
         instance._machine_command(rules, assets, 1234)
+
+
+@pytest.mark.parametrize(("write", "security"), [(False, "none"), (True, "mapped-xattr")])
+def test_microvm_preserves_interpreter_symlinks_without_changing_writable_shares(
+    write: bool, security: str, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    from pysandboxes.guard_files import FSExposeRule
+    from pysandboxes.sb_types import ConfigLine
+
+    interpreter = tmp_path / "python"
+    interpreter.mkdir()
+    (interpreter / "python3.11-config").write_text("configuration")
+    (interpreter / "python3-config").symlink_to("python3.11-config")
+    rule = FSExposeRule(str(interpreter), write, ConfigLine("expose-rw" if write else "expose-ro", Path(), 1))
+    rules = EmptyRules._replace(file_rules=(rule,))
+    assets = daemon._QemuLaunchAssets(Path("root.raw"), Path("seed.iso"), [("pysb_0", interpreter, "/python")])
+    monkeypatch.setattr(daemon, "microvm_mmio_capacity", lambda *_: 16)
+    monkeypatch.setattr(daemon, "qemu_accel_args", lambda *_: [])
+    monkeypatch.setattr(daemon, "ensure_microvm_boot_artifacts", lambda *_: (Path("kernel"), Path("initrd")))
+
+    cmd = object.__new__(daemon.QemuMicrovmSSEDaemon)._machine_command(rules, assets, 1234)
+
+    share = cmd[cmd.index("-fsdev") + 1]
+    assert f"security_model={security}" in share
+    assert ("readonly=on" in share) is not write
 
 
 def test_capacity_probe_uses_launch_acceleration(monkeypatch: pytest.MonkeyPatch) -> None:

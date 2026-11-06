@@ -10,7 +10,6 @@ from pathlib import Path
 
 import pytest
 
-
 QEMU = "qemu-system-x86_64"
 
 
