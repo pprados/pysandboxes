@@ -4,7 +4,8 @@
 
 The guest is an OCI image holding Python and pysandboxes. The package of the host is shared read-only and wins over
 the image's, unless it sits where smolvm refuses to share (``/usr``, an installed package): the guest then runs the
-copy in its image, which ``make build/smolvm-guest.tar`` installs from the same wheel.
+copy in its image, which ``make build/smolvm-guest-<python>.tar`` installs from the same wheel. The image runs the
+Python of the host: the init script refuses another version.
 
 The guest receives a few shares of the host and an init script that binds exactly what the rules expose (see
 ``smolvm_root``). The channel is a Unix socket the guest listens on and ``--expose-socket`` makes reachable on the
@@ -167,6 +168,7 @@ class SmolvmSSEDaemon(BaseSubProcessDaemon):
             gid=os.getgid(),
             env=guest_env,
             command=[guest_python, *inner_cmd[1:]],
+            python_version=(sys.version_info.major, sys.version_info.minor),
         )
         socket = ["--expose-socket", f"{_GUEST_SOCKET}:{self.endpoint.path}"] if self.endpoint else []
         cmd = [

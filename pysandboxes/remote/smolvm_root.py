@@ -24,6 +24,7 @@ STAGE = "/.pysb"
 # The image brings its own system: a host directory bound over one would replace the guest's libraries.
 _IMAGE_OWNED = ("/usr", "/etc", "/bin", "/sbin", "/lib", "/lib64", "/proc", "/dev", "/sys")
 _LEFT_MOUNTED = 70
+_WRONG_PYTHON = 72
 # What smolvm refuses to share, after resolving links: it answers "protected system path" before the guest starts.
 _REFUSED = ("/usr", "/etc", "/lib", "/lib64", "/bin", "/sbin", "/boot", "/sys", "/proc", "/dev", "/run", "/var/log")
 
@@ -141,18 +142,30 @@ def init_script(
     gid: int,
     env: Mapping[str, str],
     command: list[str],
+    python_version: tuple[int, int],
 ) -> str:
-    """Return the ``sh`` script the guest runs: bind the exposed paths, mask, detach every share, drop, run.
+    """Return the ``sh`` script the guest runs: check Python, bind the exposed paths, mask, detach the shares, run.
 
-    The binds come shallow first, and a path inside one already bound is skipped. A share the guest still holds after
-    the detach stops it with ``_LEFT_MOUNTED`` before the command runs: the command never sees more than the rules
-    expose. ``"$@"`` carries the arguments the caller appends to ``command``. The standard input, which carries the
-    config, is handed to the user first: the guest opens it as ``/dev/stdin`` once it has no privilege left.
+    The guest must run the Python of the host, as the guard code runs on the interpreter that wrote the config: a
+    guest of another version stops with ``_WRONG_PYTHON`` before anything is bound. The binds come shallow first, and a
+    path inside one already bound is skipped. A share the guest still holds after the detach stops it with
+    ``_LEFT_MOUNTED`` before the command runs: the command never sees more than the rules expose. ``"$@"`` carries the
+    arguments the caller appends to ``command``. The standard input, which carries the config, is handed to the user
+    first: the guest opens it as ``/dev/stdin`` once it has no privilege left.
     """
     q = shlex.quote
     stage_of = {path: stage for host, stage in shares(ro) for path in ro if _is_inside(path, [host])}
     host_of = {stage: host for host, stage in shares(ro)}
-    lines = ["set -e", "mount --make-rprivate / 2>/dev/null || true"]
+    major, minor = python_version
+    wanted = f"{major}.{minor}"
+    probe = f"import sys; sys.exit(0 if sys.version_info[:2] == ({major}, {minor}) else 1)"
+    lines = [
+        "set -e",
+        f"{q(command[0])} -c {q(probe)} || "
+        f'{{ echo "smolvm: the guest does not run Python {wanted} as the host does: '
+        f'build the image with PYTHON_VERSION={wanted}" >&2; exit {_WRONG_PYTHON}; }}',
+        "mount --make-rprivate / 2>/dev/null || true",
+    ]
     bound: list[str] = []
     for path in sorted(dict.fromkeys(ro), key=lambda p: len(p.split("/"))):
         if _is_inside(path, bound):

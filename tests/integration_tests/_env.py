@@ -7,6 +7,7 @@ import json
 import os
 import socket
 import subprocess
+import sys
 from collections.abc import Mapping
 from functools import cache
 from pathlib import Path
@@ -187,7 +188,8 @@ def provider_skip_reason(os_sandbox: str) -> str | None:
     if os_sandbox == "bwrap" and not _runs("bwrap", "--ro-bind", "/", "/", "--unshare-net", "true"):
         return "bwrap cannot create its namespaces here (inside a container, or user namespaces restricted)"
     if os_sandbox == "smolvm":
-        image = Path(__file__).resolve().parent.parent.parent / "build" / "smolvm-guest.tar"
+        version = f"{sys.version_info.major}.{sys.version_info.minor}"
+        image = Path(__file__).resolve().parent.parent.parent / "build" / f"smolvm-guest-{version}.tar"
         if "PYSANDBOXES_SMOLVM_IMAGE" not in os.environ and image.exists():
             os.environ["PYSANDBOXES_SMOLVM_IMAGE"] = str(image)
         if "PYSANDBOXES_SMOLVM_IMAGE" not in os.environ:

@@ -159,12 +159,33 @@ def _script(**overrides: object) -> str:
         gid=100,
         env={"A": "1", "B": "two words"},
         command=["/usr/local/bin/python", "-u", "-m", "pysandboxes.remote.main_sandbox"],
+        python_version=(3, 14),
     )
     args.update(overrides)
     return init_script(**args)  # type: ignore[arg-type]
 
 
 class TestInitScript:
+    def test_the_guest_python_must_be_the_one_of_the_host_before_anything_is_bound(self) -> None:
+        script = _script()
+
+        check = next(line for line in script.splitlines() if "version_info[:2] == (3, 14)" in line)
+        assert check.startswith("/usr/local/bin/python -c")
+        assert "exit 72" in check
+        assert "3.14" in check, "the message names the version to build the image for"
+        assert script.index("version_info") < script.index("mount --bind")
+
+    def test_a_guest_of_another_python_stops_before_the_command_runs(self, tmp_path: Path) -> None:
+        file = tmp_path / "init.sh"
+        file.write_text(
+            _script(python_version=(2, 0), ro=[], rw=[], masks=[], command=[sys.executable, "-c", "print(1)"])
+        )
+
+        result = subprocess.run(["sh", str(file)], capture_output=True, text=True)
+
+        assert result.returncode == 72
+        assert "build the image with PYTHON_VERSION=2.0" in result.stderr
+
     def test_it_is_valid_shell(self, tmp_path: Path) -> None:
         file = tmp_path / "init.sh"
         file.write_text(_script())
