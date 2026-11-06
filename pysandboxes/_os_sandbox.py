@@ -57,6 +57,7 @@ _PROVIDER_SPECS: dict[str, tuple[str, str, frozenset[str]] | tuple[str, str, fro
     "qemu": ("remote.qemu_sse_daemon", "QemuSSEDaemon", _LINUX),
     "qemu-microvm": ("remote.qemu_sse_daemon", "QemuMicrovmSSEDaemon", _LINUX, frozenset({"x86_64", "amd64"})),
     "gvisor": ("remote.gvisor_sse_daemon", "GVisorSSEDaemon", _LINUX),
+    "smolvm": ("remote.smolvm_sse_daemon", "SmolvmSSEDaemon", _LINUX),
     "sandbox-exec": ("remote.sandbox_exec_daemon", "SandboxExecSSEDaemon", _DARWIN),
 }
 

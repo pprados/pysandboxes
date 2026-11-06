@@ -378,6 +378,10 @@ class BaseSubProcessDaemon(BaseSSESandbox):
         """Address the child's SSE server listens on: the loopback, as the child shares the host network."""
         return "127.0.0.1"
 
+    def _guest_endpoint(self) -> str | None:
+        """Text form of the address the child listens on when it binds a Unix socket itself, else None."""
+        return None
+
     def __init__(
         self,
         token: str,
@@ -652,7 +656,11 @@ class BaseSubProcessDaemon(BaseSSESandbox):
             port=port,
             init_fn=init_fn_ref,
             bind_host=self._sse_bind_host(args),
-            endpoint=format_endpoint(Endpoint(FD, port=self._listener.fileno())) if self._listener else None,
+            endpoint=(
+                format_endpoint(Endpoint(FD, port=self._listener.fileno()))
+                if self._listener
+                else self._guest_endpoint()
+            ),
         )
 
         env: Environ
