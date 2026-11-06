@@ -2,6 +2,7 @@
 # License: Apache V2
 
 import json
+import os
 import sys
 from pathlib import Path
 from unittest.mock import patch
@@ -18,6 +19,7 @@ from pysandboxes.remote.libkrun_sse_daemon import LibkrunSSEDaemon, _wants_netwo
 from pysandboxes.sb_types import ConfigLine
 
 _MODULE = "pysandboxes.remote.libkrun_sse_daemon"
+_LINE = ConfigLine("", Path(), 0)
 
 
 def _socket_rules(*lines: str) -> SocketRules:
@@ -96,18 +98,22 @@ def test_wants_network_only_for_an_allowed_outgoing_rule() -> None:
     assert _wants_network(EmptyRules._replace(socket_rules=_socket_rules("net=ALLOW|TCP|*|443|OUT")))
 
 
-def test_a_directory_is_shared_with_the_mode_of_its_rule(tmp_path: Path) -> None:
+def test_a_read_only_directory_is_a_bind_of_the_root_and_a_writable_one_is_a_share(tmp_path: Path) -> None:
     read_only, read_write = tmp_path / "ro", tmp_path / "rw"
     read_only.mkdir()
     read_write.mkdir()
     rules: AllRules = EmptyRules._replace(
-        file_rules=(FSExposeRule(str(read_only), False, None), FSExposeRule(str(read_write), True, None))  # type: ignore[arg-type]
+        file_rules=(
+            FSExposeRule(str(read_only), False, _LINE),
+            FSExposeRule(str(read_write), True, _LINE),
+        )
     )
 
     _daemon(tmp_path).subprocess_cmd(rules, envs={}, pipe_path=tmp_path / "pipe", temp=tmp_path)
 
-    shares = {m["host_path"]: m["readonly"] for m in _config(tmp_path)["mounts"]}
-    assert shares == {str(read_only.resolve()): True, str(read_write.resolve()): False}
+    config = _config(tmp_path)
+    assert str(read_only) in config["ro_paths"] and str(read_write) not in config["ro_paths"]
+    assert [(m["host_path"], m["readonly"]) for m in config["mounts"]] == [(str(read_write), False)]
 
 
 def test_the_guest_receives_the_environment_of_the_rules_only(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -116,4 +122,13 @@ def test_the_guest_receives_the_environment_of_the_rules_only(tmp_path: Path, mo
 
     _daemon(tmp_path).subprocess_cmd(rules, envs={}, pipe_path=tmp_path / "pipe", temp=tmp_path)
 
-    assert _config(tmp_path)["envs"] == {"ALLOWED": "1"}
+    envs = _config(tmp_path)["envs"]
+    assert envs["ALLOWED"] == "1" and "LIBKRUN_SECRET" not in envs
+    # The guest root holds no variable of the host's: only what the interpreter needs to find itself is added.
+    assert set(envs) == {"ALLOWED", "PYTHONHOME", "PYTHONPATH"}
+
+
+def test_the_guest_runs_as_the_user_of_the_host(tmp_path: Path) -> None:
+    _daemon(tmp_path).subprocess_cmd(EmptyRules, envs={}, pipe_path=tmp_path / "pipe", temp=tmp_path)
+
+    assert (_config(tmp_path)["uid"], _config(tmp_path)["gid"]) == (os.getuid(), os.getgid())

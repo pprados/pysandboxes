@@ -73,3 +73,58 @@ def test_the_launcher_refuses_a_missing_config(monkeypatch: pytest.MonkeyPatch) 
     monkeypatch.setattr(sys, "argv", ["libkrun_launcher"])
     with pytest.raises(SystemExit, match="usage"):
         libkrun_launcher.main()
+
+
+def _script(**kwargs) -> str:
+    return generate_guest_init_script("/run", ["/usr/bin/python3", "-m", "x"], [], {}, **kwargs)
+
+
+def test_the_new_root_is_built_and_entered_before_the_command_runs() -> None:
+    script = _script(ro_paths=["/usr"])
+
+    assert script.index("mount --bind /usr /proc/usr") < script.index("pivot_root") < script.index("setpriv")
+
+
+def test_a_failure_to_build_the_root_stops_the_micro_vm() -> None:
+    script = _script(ro_paths=["/usr"])
+
+    assert "pivot_root . oldroot || fail" in script
+    assert "|| fail 'cannot expose /usr'" in script
+    assert "fail() {" in script and "reboot -f" in script
+
+
+def test_the_command_runs_without_privilege() -> None:
+    script = _script(uid=1234, gid=5678)
+
+    for option in ("--reuid=1234", "--regid=5678", "--clear-groups", "--bounding-set=-all", "--no-new-privs"):
+        assert option in script
+
+
+def test_the_old_root_is_detached_and_the_new_one_is_read_only() -> None:
+    script = _script()
+
+    assert script.index("umount -l /oldroot") < script.index("mount -o remount,ro /")
+
+
+def test_a_read_only_bind_is_remounted_read_only() -> None:
+    assert "mount -o remount,bind,ro /proc/usr" in _script(ro_paths=["/usr"])
+
+
+def test_a_writable_share_is_mounted_in_the_new_root_before_the_switch() -> None:
+    script = generate_guest_init_script(
+        "/run", ["/bin/true"], [{"tag": "fs_0", "guest_path": "/work", "readonly": False}], {}
+    )
+
+    assert script.index("mount -t virtiofs fs_0 /proc/work") < script.index("pivot_root")
+
+
+def test_a_masked_directory_and_file_are_hidden_before_the_switch() -> None:
+    script = _script(masks=[("/work/dir", True), ("/work/file", False)])
+
+    assert "mount -t tmpfs -o ro tmpfs /proc/work/dir" in script
+    assert "mount --bind /proc/dev/null /proc/work/file" in script
+    assert script.index("/proc/work/file") < script.index("pivot_root")
+
+
+def test_the_host_directories_no_rule_names_are_never_mounted() -> None:
+    assert "/home" not in _script(ro_paths=["/usr", "/etc"])

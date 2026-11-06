@@ -154,7 +154,7 @@ The OS layer is selected with `os-sandbox=<provider>` in `.py-sandboxes`, or for
 | Untrusted native code, or host and UDP filtering | `bwrap` or `unshare` |
 | Strongest separation, a VM (slower: more than 20 s to start) | `qemu` |
 | Compiled code or kernel exploits, with a user-space kernel (starts in about a second) | `gvisor` |
-| Strongest separation in a KVM micro-VM, starting in about a second (see its [file-read limit](wiki/libkrun.md#limitations)) | `libkrun` |
+| Strongest separation in a KVM micro-VM, starting in about a second | `libkrun` |
 | Resource limits and seccomp | `firejail` |
 | Inside Docker or Podman | `landlock` or `qemu` unprivileged; `unshare`, `bwrap` or `gvisor` with `--privileged` |
 | Files and ports on macOS (no host filtering) | `sandbox-exec` |

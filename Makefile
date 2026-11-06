@@ -322,7 +322,7 @@ mutation-status:
 CROSSHAIR_MODULES ?= pysandboxes/tools.py pysandboxes/netfilter.py pysandboxes/eval_rules.py pysandboxes/main_logger.py \
 	pysandboxes/guard_import.py pysandboxes/guard_files.py pysandboxes/guard_socket.py pysandboxes/guard_api.py \
 	pysandboxes/guard_envs.py pysandboxes/eval_transform.py pysandboxes/guard_eval.py pysandboxes/immutable_dict.py \
-	pysandboxes/remote/gvisor_bundle.py pysandboxes/remote/gvisor_launch.py
+	pysandboxes/remote/gvisor_bundle.py pysandboxes/remote/gvisor_launch.py pysandboxes/remote/libkrun_root.py
 CROSSHAIR_TIMEOUT ?= 10
 ## Look for counterexamples to the PEP 316 contracts of the docstrings (crosshair): make crosshair [CROSSHAIR_MODULES="pysandboxes/tools.py"] [CROSSHAIR_TIMEOUT=10]
 crosshair:

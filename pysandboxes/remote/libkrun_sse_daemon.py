@@ -37,6 +37,7 @@ from .daemon_parameters import DaemonParameters
 from .endpoint import UNIX, Endpoint, format_endpoint
 from .endpoint_connector import ENDPOINT_URL, make_session
 from .libkrun_ffi import find_libkrun, find_libkrunfw
+from .libkrun_root import exposures, mask_targets, runtime_paths
 from .libkrun_launcher import ERROR_FILE_NAME, GUEST_SOCKET, READY_FILE_NAME
 from .parameters import INTERVAL_FOR_PING_DAEMON, LOOP_FOR_PING, TIMEOUT_FOR_PING
 from .slirp4netns_common import (
@@ -150,23 +151,18 @@ class LibkrunSSEDaemon(BaseSubProcessDaemon):
     def subprocess_cmd(self, all_rules: AllRules, envs: Environ, pipe_path: Path, temp: Path) -> tuple[Args, Environ]:
         guest_cmd, extra_env = super().subprocess_cmd(all_rules, envs, pipe_path, temp=temp)
 
-        mounts: list[dict[str, Any]] = []
-        # The root is already shared read-only, but the guest mounts a private tmpfs on /tmp, so a directory under
-        # it needs its own share, whatever its mode.
-        write_access: dict[Path, bool] = {}
-        for rule in all_rules.file_rules:
-            if isinstance(rule, FSExposeRule):
-                resolved = Path(rule.path).resolve(strict=False)
-                write_access[resolved] = write_access.get(resolved, False) or rule.write
-        for resolved in sorted((p for p in write_access if p.is_dir()), key=lambda p: len(p.parts)):
-            mounts.append(
-                {
-                    "tag": f"fs_{len(mounts)}",
-                    "host_path": str(resolved),
-                    "guest_path": str(resolved),
-                    "readonly": not write_access[resolved],
-                }
-            )
+        runtime = runtime_paths()
+        ro_paths, rw_dirs = exposures(all_rules, runtime=runtime, run_dir=str(temp))
+        mounts: list[dict[str, Any]] = [
+            {"tag": f"fs_{index}", "host_path": path, "guest_path": path, "readonly": False}
+            for index, path in enumerate(sorted(rw_dirs, key=lambda p: len(Path(p).parts)))
+        ]
+        masks = mask_targets(all_rules, os.getcwd(), ro_paths + rw_dirs)
+        # The guest root holds no variable of the host's: the interpreter is told where to find itself instead.
+        python_env = {
+            "PYTHONHOME": sys.base_prefix,
+            "PYTHONPATH": os.pathsep.join(p for p in runtime if os.path.isdir(p)),
+        }
 
         if self.endpoint is not None:
             # A launcher killed by a signal leaves its socket behind, and libkrun does not bind over a stale one.
@@ -217,8 +213,16 @@ class LibkrunSSEDaemon(BaseSubProcessDaemon):
             "root_dir": "/",
             "run_dir": str(temp),
             "mounts": mounts,
+            "ro_paths": ro_paths,
+            "masks": masks,
+            "uid": os.getuid(),
+            "gid": os.getgid(),
             "guest_cmd": guest_cmd,
-            "envs": {**({**os.environ, **all_rules.envs} if all_rules.learn else dict(all_rules.envs)), **extra_env},
+            "envs": {
+                **({**os.environ, **all_rules.envs} if all_rules.learn else dict(all_rules.envs)),
+                **python_env,
+                **extra_env,
+            },
             "port": self.port if self.endpoint else 0,
             "unix_socket": self.endpoint.path if self.endpoint else None,
         }

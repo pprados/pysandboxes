@@ -59,8 +59,8 @@ A ❌ means the provider does not enforce that control. The Python layer may sti
 | Compiled code            |  ❌   |     ❌      |     ✅     |     ✅     |     ✅     |     ✅  |        ✅         | ✅ | ✅ | ✅ | ✅ |
 | env                      |  ❌   |     ✅      |     ✅     |     ✅     |     ✅     |     ✅  |        ✅         | ✅ | ✅ | ✅ | ✅ |
 | import                   |  ❌   |     ✅      |     ❌     |     ❌     |     ❌     |     ❌  |        ❌         | ❌ | ❌ | ❌ | ❌ |
-| expose-ro/rw=path        |  ❌   |     ✅      |     ✅     |     ✅     |     ✅     |     ✅  |        ✅         | Partial⁴ | ✅ | ✅ | ✅ |
-| ignore=*                 |  ❌   |     ✅      |     ❌     |     ✅     |     ✅     |     ✅  |        ✅         | ❌ | ✅ | ✅ | Partial² |
+| expose-ro/rw=path        |  ❌   |     ✅      |     ✅     |     ✅     |     ✅     |     ✅  |        ✅         | ✅ | ✅ | ✅ | ✅ |
+| ignore=*                 |  ❌   |     ✅      |     ❌     |     ✅     |     ✅     |     ✅  |        ✅         | ✅ | ✅ | ✅ | Partial² |
 | python-api=*             |  ❌   | ✅ |  ❌  |  ❌  |  ❌  |  ❌  |  ❌  | ❌ |  ❌  |  ❌  |  ❌  |
 | eval-*                   |  ❌   |     ✅      |     ❌     |     ❌     |     ❌     |     ❌  |        ❌         | ❌ | ❌ | ❌ | ❌ |
 | **Network**              |      |            |           |           |           |        |                  |  |  |  |  |
@@ -81,8 +81,6 @@ A ❌ means the provider does not enforce that control. The Python layer may sti
 | • Resource limits        |  ❌   |     ❌      |     ❌     |     ❌     |     ❌     |     ✅  |        ✅         | ❌ | ❌ | ❌ | ❌ |
 | • Seccomp                |  ❌   |     ❌      |     ❌     |     ❌     |     ❌     |   ✅    |        ✅         | ❌ | ❌ | ❌ | n/a |
 | • Latency                | <1s  |    <1s     |    <1s    |    <1s    |    <1s    |    <1s |      >20s        | ~1s | ~1s | <1s | Pending |
-
-⁴ `libkrun` shares the host root read-only, so every file the user can read is readable in the guest; a rule confines writes and adds writable shares, it does not hide a path. See [libkrun](libkrun.md#limitations).
 
 ¹ `appcontainer` is Windows-only: the Docker and Kubernetes rows do not apply. ² `ignore=` covers only paths present at launch, and their names may remain listable. ³ AppContainer denies outbound network access by default. An `ALLOW` `net=` rule grants a broad public-Internet or private-network capability; AppContainer itself does not filter host, port, protocol, or loopback. The Python guard checks the first three only while enabled, so native code can bypass those checks. Loopback is blocked by AppContainer even when a rule allows it.
 
