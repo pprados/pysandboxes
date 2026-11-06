@@ -50,8 +50,8 @@ The exception channel also deserves a separate trust decision: the parent recons
 - Prefer `remote-result-mode=data-only`; enable object reconstruction only when required by the application.
 - Treat any claim as configuration-specific. Re-run probes when changing providers, kernel, guest image, or exposed paths.
 
-- **`smolvm`: DNS stays open to the domains a rule allows, and `ignore=` is not enforced by the guest.** The host side of
-  smolvm answers every DNS query itself and filters it by name, so a destination outside the rules does not resolve, but a
-  subdomain of an allowed host does: a program can carry data in the names it looks up, to the authoritative server of that
-  domain. And a directory is mounted whole (virtiofs), so a path hidden by `ignore=` inside an exposed directory stays
-  readable to native code when `py-sandbox=false`. Measured on smolvm 1.33.0, see [smolvm](smolvm.md).
+- **`smolvm`: DNS stays open to the domains a rule allows, and a TCP port is not filtered.** The host side of smolvm
+  answers every DNS query itself and filters it by name, so a destination outside the rules does not resolve, but a
+  subdomain of an allowed host does: a program can carry data in the names it looks up, to the authoritative server of
+  that domain. And smolvm filters TCP by address only: a rule with a port opens every port of its address. Measured on
+  smolvm 1.33.0, see [smolvm](smolvm.md).
