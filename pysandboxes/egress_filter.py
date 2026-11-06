@@ -230,7 +230,9 @@ class FilteringResolver:
         upstream: Callable[[bytes], bytes],
         table: LearnedTable | None = None,
         reap_interval: float = 1.0,
+        host: str = "127.0.0.1",
     ) -> None:
+        self._host = host
         self._rules = rules
         self._enforcer = enforcer
         self._upstream = upstream
@@ -247,15 +249,15 @@ class FilteringResolver:
         task.add_done_callback(self._tasks.discard)
 
     async def start(self) -> int:
-        """Bind UDP and TCP on the same ephemeral loopback port and return it."""
+        """Bind UDP and TCP on the same ephemeral port of ``host`` (the loopback by default) and return it."""
         loop = asyncio.get_running_loop()
         for _ in range(20):
             transport, _protocol = await loop.create_datagram_endpoint(
-                lambda: _UdpServer(self), local_addr=("127.0.0.1", 0)
+                lambda: _UdpServer(self), local_addr=(self._host, 0)
             )
             port: int = transport.get_extra_info("sockname")[1]
             try:
-                self._tcp = await asyncio.start_server(self._serve_tcp, "127.0.0.1", port)
+                self._tcp = await asyncio.start_server(self._serve_tcp, self._host, port)
             except OSError:
                 transport.close()
                 continue

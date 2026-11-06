@@ -32,6 +32,15 @@ class NetnsIptablesEnforcer:
         self._prefix = [nsenter, "-t", str(pid), "-U", "-n", "--preserve-credentials", iptables]
         self._run = run
 
+    @classmethod
+    def via_firejail(
+        cls, pid: int, firejail: str, iptables: str, run: Callable[[list[str]], int] = _run
+    ) -> "NetnsIptablesEnforcer":
+        """Enforcer of a ``firejail`` jail, entered with ``--join-network``, which only root may do."""
+        enforcer = cls(pid, "", iptables, run)
+        enforcer._prefix = [firejail, f"--join-network={pid}", iptables]
+        return enforcer
+
     def _specs(self, ip: IPAddress, rule: NameRule) -> list[list[str]]:
         ports: list[list[str]] = [
             ["--dport", str(low) if low == high else f"{low}:{high}"] for low, high in rule.ports

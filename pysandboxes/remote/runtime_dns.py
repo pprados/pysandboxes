@@ -10,6 +10,7 @@ that a long answer arrives whole.
 
 import asyncio
 import logging
+import os
 import socket
 import struct
 import threading
@@ -81,12 +82,14 @@ class RuntimeDns:
         *,
         upstream_port: int = UPSTREAM_PORT,
         upstream_timeout: float = UPSTREAM_TIMEOUT,
+        host: str = "127.0.0.1",
     ) -> None:
         self._deferred = _DeferredEnforcer()
         self._resolver = FilteringResolver(
             rules,
             self._deferred,
             lambda packet: _forward_tcp(upstream_servers, upstream_port, upstream_timeout, packet),
+            host=host,
         )
         self._loop: asyncio.AbstractEventLoop | None = None
         self._thread: threading.Thread | None = None
@@ -141,35 +144,48 @@ class RuntimeDnsSession:
     the sandbox. A profile that is not ``net-resolve=runtime`` makes every call a no-op.
     """
 
-    def __init__(self) -> None:
+    def __init__(self, join: str = "nsenter") -> None:
+        """``join`` is how the host enters the namespace: ``nsenter`` (a user namespace it owns) or ``firejail``
+        (``--join-network``, which firejail reserves to root)."""
+        self._join = join
         self._dns: RuntimeDns | None = None
 
     @property
     def running(self) -> bool:
         return self._dns is not None
 
-    def start(self, all_rules: AllRules) -> int | None:
-        """Start the resolver and return its port; ``None`` for ``pinned``. A restart stops the previous one first."""
+    def start(self, all_rules: AllRules, bind_host: str = "127.0.0.1") -> int | None:
+        """Start the resolver on ``bind_host`` and return its port; ``None`` for ``pinned``.
+
+        A restart stops the previous one first.
+        """
         self.stop()
         if all_rules.net_resolve != "runtime":
             return None
-        for tool in ("nsenter", "iptables"):
+        if self._join == "firejail" and os.geteuid() != 0:
+            raise SandBoxError(
+                "net-resolve=runtime under firejail needs root: only root may join the network namespace of a jail."
+            )
+        for tool in (self._join, "iptables"):
             if not which_command(tool):
                 raise SandBoxError(f"net-resolve=runtime needs {tool} on the host.")
         servers = [ip for ip in get_upstream_dns() if isinstance(ip, IPv4Address)]
         if not servers:
             raise SandBoxError("net-resolve=runtime found no IPv4 resolver on the host to forward the names to.")
-        self._dns = RuntimeDns(all_rules.name_rules, servers)
+        self._dns = RuntimeDns(all_rules.name_rules, servers, host=bind_host)
         return self._dns.start()
 
     def attach(self, pid: int) -> None:
         """Let the resolver open addresses in the network namespace held by ``pid``, once that namespace exists."""
         if self._dns is None:
             return
-        nsenter, iptables = which_command("nsenter"), which_command("iptables")
-        if nsenter is None or iptables is None:
-            raise SandBoxError("net-resolve=runtime needs nsenter and iptables on the host.")
-        self._dns.attach(NetnsIptablesEnforcer(pid, str(nsenter), str(iptables)))
+        joiner, iptables = which_command(self._join), which_command("iptables")
+        if joiner is None or iptables is None:
+            raise SandBoxError(f"net-resolve=runtime needs {self._join} and iptables on the host.")
+        if self._join == "firejail":
+            self._dns.attach(NetnsIptablesEnforcer.via_firejail(pid, str(joiner), str(iptables)))
+        else:
+            self._dns.attach(NetnsIptablesEnforcer(pid, str(joiner), str(iptables)))
 
     def stop(self) -> None:
         dns, self._dns = self._dns, None
