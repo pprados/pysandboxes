@@ -159,6 +159,15 @@ To pin a provider so the environment cannot downgrade it, write it literally, e.
 
 Not supported by this layer: Windows named pipes (uvicorn cannot serve on them) and anonymous pipes (no accept loop).
 
+### How host names of `net=` rules are resolved: `net-resolve`
+
+`net-resolve=pinned|runtime` picks when the host name of a `net=` rule (`net=ALLOW|TCP|api.example.com|443|OUT`) becomes addresses. The default is not decided yet; without the key the value is `pinned`.
+
+- `pinned` resolves the name once, at start, and freezes the addresses in the ruleset and in `/etc/hosts`. A name whose addresses rotate is refused once they change.
+- `runtime` resolves the name when the sandboxed program asks. The sandbox DNS (`10.0.2.3`) is redirected to a filtering resolver on the host, which answers only the names a rule allows (`NXDOMAIN` otherwise), opens the addresses of an allowed answer in the sandbox firewall before it replies, and closes them when their TTL (clamped to 60 s to 1 h) is over. The firewall keeps the protocols and ports of the rule, a static `DENY` keeps precedence, and a resolver the program names itself (`8.8.8.8`, DoT, DoH to an unlearned address) meets the default `DROP`.
+
+`runtime` is available for `unshare` only, and needs `nsenter` and `iptables` on the host. Any other provider rejects it with a configuration error rather than falling back to `pinned`. A rule names a host as `name` (the name and its subdomains), `=name` (the name only) or `*.name` (subdomains only). Limits: two names behind one address share it for the TTL (the CDN case), and an opened address is open to every process of the sandbox, not only to the one that resolved the name.
+
 ### Host sockets under `/run`
 
 `/run` holds sockets that reach the host: `/run/docker.sock`, and under `/run/user/<uid>` the session D-Bus bus

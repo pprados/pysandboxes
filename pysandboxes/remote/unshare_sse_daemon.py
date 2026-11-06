@@ -40,7 +40,7 @@ from ..guard_files import FSExposeRule, IgnoreRule
 from ..guard_socket import Action, Direction, SocketRule
 from ..immutable_dict import ImmutableDict
 from ..main_logger import ErrorMsg, pysandboxes_logger
-from ..netfilter import rule_to_netfilter
+from ..netfilter import rule_to_netfilter, runtime_netfilter
 from ..override_compat import override
 from ..private_loop import sandbox_loop
 from ..sb_types import Args, ConfigLine, ConfigLines
@@ -62,6 +62,7 @@ from .client_subprocess_sse_daemon import (
 from .daemon_parameters import DaemonParameters
 from .endpoint import FD, Endpoint, format_endpoint, listen_socket
 from .endpoint_connector import ENDPOINT_URL, make_session
+from .netns_enforcer import NetnsIptablesEnforcer
 from .parameters import (
     INTERVAL_FOR_PING_DAEMON,
     LOOP_FOR_PING,
@@ -73,8 +74,10 @@ from .parameters import (
     RETRY_RESET_DELAY,
     TIMEOUT_FOR_PING,
 )
+from .runtime_dns import RuntimeDns
 from .slirp4netns_common import (
     SLIRP_DNS,
+    SLIRP_GW,
     SLIRP_WATCHER_TIMEOUT,
 )
 from .slirp4netns_common import (
@@ -171,6 +174,7 @@ class UnshareSSEDaemon(BaseSubProcessDaemon):
         "_ports_spec",
         "_slirp_process_holder",
         "_slirp_shutdown_event",
+        "_runtime_dns",
     )
 
     @classmethod
@@ -211,6 +215,7 @@ class UnshareSSEDaemon(BaseSubProcessDaemon):
         self._slirp_api_socket: str | None = None
         self._slirp_process_holder: list[subprocess.Popen[bytes] | None] = [None]
         self._slirp_shutdown_event: threading.Event = threading.Event()
+        self._runtime_dns: RuntimeDns | None = None
 
     @override
     def parse_rules(
@@ -263,13 +268,48 @@ class UnshareSSEDaemon(BaseSubProcessDaemon):
                 logger.debug("cannot remove chroot root %s: %s", chroot_dir, e)
         self._chroot_dirs.clear()
 
+    def _start_runtime_dns(self, all_rules: AllRules) -> int | None:
+        """Start the filtering resolver of ``net-resolve=runtime`` and return its port; ``None`` for ``pinned``.
+
+        It listens before the firewall is built, because the redirection of the sandbox DNS names its port. A restart
+        stops the resolver of the sandbox that died first.
+        """
+        self._stop_runtime_dns()
+        if all_rules.net_resolve != "runtime":
+            return None
+        for tool in ("nsenter", "iptables"):
+            if not which_command(tool):
+                raise SandBoxError(f"net-resolve=runtime needs {tool} on the host.")
+        servers = [ip for ip in get_upstream_dns() if isinstance(ip, IPv4Address)]
+        self._runtime_dns = RuntimeDns(all_rules.name_rules, servers)
+        return self._runtime_dns.start()
+
+    def _attach_runtime_enforcer(self, pid: int) -> None:
+        """Let the resolver open addresses in the network namespace held by ``pid``, once that namespace exists."""
+        if self._runtime_dns is None:
+            return
+        nsenter, iptables = which_command("nsenter"), which_command("iptables")
+        if nsenter is None or iptables is None:
+            raise SandBoxError("net-resolve=runtime needs nsenter and iptables on the host.")
+        self._runtime_dns.attach(NetnsIptablesEnforcer(pid, str(nsenter), str(iptables)))
+
+    def _stop_runtime_dns(self) -> None:
+        dns, self._runtime_dns = self._runtime_dns, None
+        if dns is not None:
+            dns.stop()
+
     def _prepare_unshare_config(
         self,
         all_rules: AllRules,
         pipe_path: Path,
         chroot_dir: str,
+        resolver_port: int | None = None,
     ) -> tuple[UnshareSetupConfig, list[IPv4Address]]:
-        """Prepare UnshareSetupConfig (DNS, mounts, netfilter)."""
+        """Prepare UnshareSetupConfig (DNS, mounts, netfilter).
+
+        ``resolver_port`` is the port of the filtering resolver, which ``net-resolve=runtime`` needs: the ruleset
+        sends the sandbox DNS there and accepts no other resolver, and no host name is pinned in ``/etc/hosts``.
+        """
         # Verify unshare availability
         if not which_command("unshare"):
             logger.error("unshare not found.")
@@ -291,17 +331,25 @@ class UnshareSSEDaemon(BaseSubProcessDaemon):
         # inside the namespace via tap0; upstream DNS from the host may be unreachable
         # when the daemon runs inside a container (e.g. podman).
         slirp_dns = IPv4Address(SLIRP_DNS)
-        dns_servers = [ip for ip in get_upstream_dns() if isinstance(ip, IPv4Address)]
-        if not dns_servers or os.path.exists("/.dockerenv") or os.path.exists("/run/.containerenv"):
+        runtime = all_rules.net_resolve == "runtime"
+        if runtime:
+            if resolver_port is None:
+                raise SandBoxError("net-resolve=runtime needs the resolver port: the filtering resolver is not up.")
             dns_servers = [slirp_dns]
+            net_filter4 = runtime_netfilter(all_rules.socket_rules, resolver_port, IPv4Address(SLIRP_GW), slirp_dns)
         else:
-            dns_servers = [slirp_dns] + [ip for ip in dns_servers if ip != slirp_dns][:1]
-        net_filter4 = rule_to_netfilter(all_rules.socket_rules, dns_servers, is_ipv6=False)
+            dns_servers = [ip for ip in get_upstream_dns() if isinstance(ip, IPv4Address)]
+            if not dns_servers or os.path.exists("/.dockerenv") or os.path.exists("/run/.containerenv"):
+                dns_servers = [slirp_dns]
+            else:
+                dns_servers = [slirp_dns] + [ip for ip in dns_servers if ip != slirp_dns][:1]
+            net_filter4 = rule_to_netfilter(all_rules.socket_rules, dns_servers, is_ipv6=False)
 
         # Build hosts from OUT ALLOW rules so the sandbox resolves hostnames to the
         # same IPs that iptables allows (avoids mismatch when sandbox uses slirp DNS).
+        # Never in runtime mode: the names go through the filtering resolver, not through a frozen address.
         hosts_entries: set[tuple[str, str]] = set()
-        for socket_rule in all_rules.socket_rules:
+        for socket_rule in () if runtime else all_rules.socket_rules:
             if socket_rule.action != Action.ALLOW or Direction.OUT not in socket_rule.directions:
                 continue
             net = socket_rule.mask.network
@@ -420,7 +468,8 @@ class UnshareSSEDaemon(BaseSubProcessDaemon):
         passed to the child via launch_sandbox's extra_preexec_fn and pass_fds.
         """
         # Prepare UnshareSetupConfig
-        config, _ = self._prepare_unshare_config(all_rules, pipe_path, self._make_chroot_dir())
+        resolver_port = self._start_runtime_dns(all_rules)
+        config, _ = self._prepare_unshare_config(all_rules, pipe_path, self._make_chroot_dir(), resolver_port)
 
         # Write config via FIFO (or file in debug mode). Always pass a path under
         # temp so the unshare child can read it (e.g. under /tmp); with Docker the
@@ -535,6 +584,7 @@ class UnshareSSEDaemon(BaseSubProcessDaemon):
 
         # Write PID for slirp4netns watcher
         Path(self._slirp_pid_file_for_watcher).write_text(str(process_pid))
+        self._attach_runtime_enforcer(process_pid)
 
         # Start slirp4netns watcher (shared helper)
         logger.debug("start slirp4netns watcher...")
@@ -602,6 +652,7 @@ class UnshareSSEDaemon(BaseSubProcessDaemon):
             await super()._shutdown(graceful_shutdown)
         finally:
             await asyncio.to_thread(self._kill_slirp)
+            await asyncio.to_thread(self._stop_runtime_dns)
             await asyncio.to_thread(self._remove_chroot_dirs)
 
     # -- Daemon lifecycle --
@@ -712,8 +763,11 @@ class UnshareSSEDaemon(BaseSubProcessDaemon):
 
             all_rules = all_rules._replace(socket_rules=SocketRules(socket_rules))
 
-            # Prepare UnshareSetupConfig
-            config, dns_servers = self._prepare_unshare_config(all_rules, pipe_path, self._make_chroot_dir())
+            # Prepare UnshareSetupConfig; the filtering resolver listens first, the firewall names its port
+            resolver_port = self._start_runtime_dns(all_rules)
+            config, dns_servers = self._prepare_unshare_config(
+                all_rules, pipe_path, self._make_chroot_dir(), resolver_port
+            )
 
             # Write UnshareSetupConfig via FIFO (or file in debug mode)
             if DEBUG_LAUNCH:
@@ -856,6 +910,8 @@ class UnshareSSEDaemon(BaseSubProcessDaemon):
             # Write unshare PID for slirp4netns to attach to the namespace
             assert process.pid is not None
             Path(pid_file).write_text(str(process.pid))
+            # Before any sandboxed code runs: it starts only once the FIFO below is written
+            self._attach_runtime_enforcer(process.pid)
             logger.debug(
                 "_launch: wrote pid %d to pidfile, starting slirp_watcher pipe_w=%d",
                 process.pid,
