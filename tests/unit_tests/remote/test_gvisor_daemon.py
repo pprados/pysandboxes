@@ -168,15 +168,6 @@ class _FakeSlirp:
 
 @pytest.mark.usefixtures("host")
 class TestLaunchCommand:
-    @pytest.fixture(autouse=True)
-    def tools(self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
-        bin_dir = tmp_path / "bin"
-        bin_dir.mkdir()
-        (bin_dir / "gvisor-bin").mkdir()
-        for name in ("ip", "iptables-restore", "runsc"):
-            (bin_dir / name).touch()
-        monkeypatch.setattr(gvisor_sse_daemon, "which_command", lambda name: bin_dir / name)
-
     def _launch(
         self, tmp_path: Path, envs: dict[str, str] | None = None, **rule_overrides: Any
     ) -> tuple[list[str], dict[str, str], dict[str, Any]]:
