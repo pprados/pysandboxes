@@ -2,7 +2,6 @@
 # License: Apache V2
 """The host side of the smolvm provider: what it asks ``smolvm`` for, and what the guest is allowed to read."""
 
-import sys
 from pathlib import Path
 
 import pytest
@@ -12,6 +11,7 @@ from pysandboxes.all_rules import EmptyRules
 from pysandboxes.e import SandBoxError
 from pysandboxes.guard_files import FSExposeRule
 from pysandboxes.immutable_dict import ImmutableDict
+from pysandboxes.remote import smolvm_sse_daemon
 from pysandboxes.remote.smolvm_sse_daemon import SmolvmSSEDaemon
 from pysandboxes.sb_types import ConfigLine, Envs
 
@@ -59,6 +59,28 @@ class TestLaunchCommand:
         assert script.count(" -v ") == 1
         assert ":ro" in script
 
+    def test_a_package_smolvm_cannot_share_is_taken_from_the_image(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setattr(smolvm_sse_daemon, "_PACKAGE_DIR", Path("/usr/lib/python3/dist-packages/pysandboxes"))
+
+        script = _launch_script(tmp_path, monkeypatch)
+
+        assert "PYTHONPATH" not in script
+        assert script.count(" -v ") == 0
+
+    def test_a_package_smolvm_can_share_is_shared_and_wins_over_the_image(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        package = tmp_path / "src" / "pysandboxes"
+        package.mkdir(parents=True)
+        monkeypatch.setattr(smolvm_sse_daemon, "_PACKAGE_DIR", package)
+
+        script = _launch_script(tmp_path, monkeypatch)
+
+        assert f"PYTHONPATH={package.parent}" in script
+        assert f"{package}:" in script
+
     def test_a_profile_that_needs_more_shares_than_a_guest_takes_is_refused(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
@@ -86,7 +108,7 @@ class TestGuestRules:
         )
 
         readable = [r.path for r in rules.file_rules if isinstance(r, FSExposeRule) and not r.write]
-        assert sys.base_prefix.rstrip("/") + "/lib/" in readable
+        assert "/usr/local/lib/" in readable, "the interpreter of the image, not the host's"
         assert str(Path(pysandboxes.__file__).resolve().parent) + "/" in readable
         assert readable[-1] == "/data/", "the rules of the user come after, and are kept"
 

@@ -2,11 +2,14 @@
 # License: Apache V2
 """smolvm provider: the sandboxed code runs in a libkrun microVM, with its own kernel, started by ``smolvm``.
 
-The guest is an OCI image holding Python and the dependencies of pysandboxes; the package itself is shared read-only
-from the host. The guest receives a few shares of the host and an init script that binds exactly what the rules
-expose (see ``smolvm_root``). The channel is a Unix socket the guest listens on and ``--expose-socket`` makes
-reachable on the host. The config never touches the disk: it goes from the host FIFO to the standard input of the
-guest. The network is off unless a rule opens it, and then filtered by the host side of smolvm.
+The guest is an OCI image holding Python and pysandboxes. The package of the host is shared read-only and wins over
+the image's, unless it sits where smolvm refuses to share (``/usr``, an installed package): the guest then runs the
+copy in its image, which ``make build/smolvm-guest.tar`` installs from the same wheel.
+
+The guest receives a few shares of the host and an init script that binds exactly what the rules expose (see
+``smolvm_root``). The channel is a Unix socket the guest listens on and ``--expose-socket`` makes reachable on the
+host. The config never touches the disk: it goes from the host FIFO to the standard input of the guest. The network
+is off unless a rule opens it, and then filtered by the host side of smolvm.
 """
 
 import logging
@@ -25,7 +28,7 @@ from ..override_compat import override
 from ..sb_types import Args, ConfigLine, ConfigLines, Envs
 from ..tools import Environ
 from .client_subprocess_sse_daemon import BaseSubProcessDaemon
-from .smolvm_root import exposures, init_script, mask_targets, volumes
+from .smolvm_root import exposures, init_script, is_refused_by_smolvm, mask_targets, volumes
 from .smolvm_rules import network_args
 from .tools import which_command
 
@@ -94,7 +97,7 @@ class SmolvmSSEDaemon(BaseSubProcessDaemon):
         implicit = tuple(
             FSExposeRule(path, write, ConfigLine("<implicit smolvm guest>", Path(__file__), 0))
             for path, write in (
-                (f"{sys.base_prefix.rstrip('/')}/lib/", False),
+                (f"{Path(_GUEST_PYTHON).parent.parent}/lib/", False),
                 (f"{_PACKAGE_DIR}/", False),
                 (_GUEST_SOCKET, True),
             )
@@ -142,7 +145,8 @@ class SmolvmSSEDaemon(BaseSubProcessDaemon):
                 f"smolvm does not know {', '.join('smolvm.' + key for key in unknown)}; "
                 f"it takes {', '.join('smolvm.' + key for key in sorted(_PROFILE_KEYS))}"
             )
-        ro, rw = exposures(all_rules, extra_ro=[str(_PACKAGE_DIR)])
+        shared_package = not is_refused_by_smolvm(str(_PACKAGE_DIR))
+        ro, rw = exposures(all_rules, extra_ro=[str(_PACKAGE_DIR)] if shared_package else [])
         share_flags = volumes(ro, rw)
         if len(share_flags) // 2 > _MAX_SHARES:
             raise SandBoxError(
@@ -151,7 +155,8 @@ class SmolvmSSEDaemon(BaseSubProcessDaemon):
             )
         cwd = os.getcwd()
         guest_env = {key: str(value) for key, value in all_rules.envs.items()}
-        guest_env["PYTHONPATH"] = str(_PACKAGE_DIR.parent)
+        if shared_package:
+            guest_env["PYTHONPATH"] = str(_PACKAGE_DIR.parent)
         guest_python = str(params.get("python", "")) or _GUEST_PYTHON
         guest_script = init_script(
             ro=ro,

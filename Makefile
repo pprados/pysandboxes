@@ -808,10 +808,11 @@ QEMU_MICROVM_IMAGE_STAMP := .make-build-image-qemu-microvm
 	touch .make-build-image-qemu-microvm
 endif
 
-build/smolvm-guest.tar: Dockerfile-smolvm-guest
+build/smolvm-guest.tar: Dockerfile-smolvm-guest .make-dist
 	@command -v docker >/dev/null 2>&1 || { echo "docker is required to build the smolvm guest archive"; exit 1; }
 	@mkdir -p build
-	docker build -t python-sb-smolvm-guest:dev -f Dockerfile-smolvm-guest .
+	WHEEL="$$(basename "$$(find dist -maxdepth 1 -name '*.whl' -print -quit)")"; \
+	docker build --build-arg WHEEL="$$WHEEL" -t python-sb-smolvm-guest:dev -f Dockerfile-smolvm-guest .
 	docker save python-sb-smolvm-guest:dev -o build/smolvm-guest.tar
 
 .make-build-image-smolvm: .make-build-image-base Dockerfile-smolvm build/smolvm-guest.tar

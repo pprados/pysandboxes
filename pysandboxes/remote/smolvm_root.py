@@ -24,6 +24,8 @@ STAGE = "/.pysb"
 # The image brings its own system: a host directory bound over one would replace the guest's libraries.
 _IMAGE_OWNED = ("/usr", "/etc", "/bin", "/sbin", "/lib", "/lib64", "/proc", "/dev", "/sys")
 _LEFT_MOUNTED = 70
+# What smolvm refuses to share, after resolving links: it answers "protected system path" before the guest starts.
+_REFUSED = ("/usr", "/etc", "/lib", "/lib64", "/bin", "/sbin", "/boot", "/sys", "/proc", "/dev", "/run", "/var/log")
 
 
 def _strip(path: str) -> str:
@@ -35,6 +37,12 @@ def _host_interpreter_prefixes() -> set[str]:
     return {os.path.realpath(prefix) for prefix in (sys.prefix, sys.base_prefix)}
 
 
+def is_refused_by_smolvm(path: str) -> bool:
+    """Tell whether smolvm refuses to share ``path``, links resolved."""
+    real = os.path.realpath(path)
+    return real in ("/", "/var") or _is_inside(real, _REFUSED)
+
+
 def _is_inside(path: str, parents: Iterable[str]) -> bool:
     return any(path == parent or path.startswith(parent.rstrip("/") + "/") for parent in parents)
 
@@ -43,7 +51,8 @@ def exposures(all_rules: AllRules, *, extra_ro: Iterable[str] = ()) -> tuple[lis
     """Return the host paths the guest receives, ``(read_only, read_write)``; ``extra_ro`` is what the provider adds.
 
     A path exposed both ways stays read-only. A writable path must be a directory, as a share is one: a file is
-    reported and exposed read-only. What the image owns, the host's interpreter and a missing path are left out.
+    reported and exposed read-only. What the image owns, the host's interpreter and a missing path are left out, and
+    so is a path smolvm refuses to share, which is reported.
     """
     write: dict[str, bool] = {}
     for rule in all_rules.file_rules:
@@ -53,6 +62,9 @@ def exposures(all_rules: AllRules, *, extra_ro: Iterable[str] = ()) -> tuple[lis
         if _is_inside(path, _IMAGE_OWNED) or _is_inside(os.path.realpath(path), _host_interpreter_prefixes()):
             continue
         if not os.path.exists(path):
+            continue
+        if is_refused_by_smolvm(path):
+            logger.warning("smolvm refuses to share %s: not exposed to the guest", path)
             continue
         writable = rule.write
         if writable and not os.path.isdir(path):
