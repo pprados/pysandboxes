@@ -2,10 +2,11 @@
 # License: Apache V2
 """smolvm provider: the sandboxed code runs in a libkrun microVM, with its own kernel, started by ``smolvm``.
 
-The guest is an OCI image holding Python and the dependencies of pysandboxes; the package itself is mounted
-read-only from the host. The channel is a Unix socket the guest listens on and ``--expose-socket`` makes reachable
-on the host: the guest needs no network for it. The network is off unless a rule opens it, and then filtered by the
-host side of smolvm.
+The guest is an OCI image holding Python and the dependencies of pysandboxes; the package itself is shared read-only
+from the host. The guest receives a few shares of the host and an init script that binds exactly what the rules
+expose (see ``smolvm_root``). The channel is a Unix socket the guest listens on and ``--expose-socket`` makes
+reachable on the host. The config never touches the disk: it goes from the host FIFO to the standard input of the
+guest. The network is off unless a rule opens it, and then filtered by the host side of smolvm.
 """
 
 import logging
@@ -24,21 +25,22 @@ from ..override_compat import override
 from ..sb_types import Args, ConfigLine, ConfigLines, Envs
 from ..tools import Environ
 from .client_subprocess_sse_daemon import BaseSubProcessDaemon
-from .smolvm_rules import network_args, volume_args
+from .smolvm_root import exposures, init_script, mask_targets, volumes
+from .smolvm_rules import network_args
 from .tools import which_command
 
 logger = logging.getLogger(__name__)
 
 _KVM_DEVICE = Path("/dev/kvm")
 _IMAGE_ENV = "PYSANDBOXES_SMOLVM_IMAGE"
-_GUEST_CONFIG_DIR = "/pysb"
 _PACKAGE_DIR = Path(__file__).resolve().parent.parent
 _GUEST_SOCKET = "/tmp/pysb.sock"
 _GUEST_PYTHON = "/usr/local/bin/python"
 _HOST_PATH = "/usr/local/bin:/usr/bin:/bin"
-# smolvm has no seccomp or landlock switch: the guest is hardened by dropping capabilities (``--unprivileged``).
-# ``--user`` is not offered, as a guest user cannot write to the host directories mounted read-write.
-_PROFILE_KEYS = frozenset({"image", "python", "cpus", "mem", "unprivileged"})
+# libkrun gives a micro-VM a handful of virtio-fs devices: 8 without a network, fewer with one.
+_MAX_SHARES = 6
+# smolvm has no seccomp or landlock switch: the guest is hardened by dropping every capability, as the host user.
+_PROFILE_KEYS = frozenset({"image", "python", "cpus", "mem"})
 
 
 class SmolvmSSEDaemon(BaseSubProcessDaemon):
@@ -123,50 +125,62 @@ class SmolvmSSEDaemon(BaseSubProcessDaemon):
         pipe_path: Path,
         temp: Path,
     ) -> tuple[Args, Environ]:
-        """Return the command that relays the config to the guest, then starts it.
+        """Return the command that hands the config to the guest through its standard input, then starts it.
 
-        The guest cannot open the host FIFO the config travels through: the launcher copies it to a file of a
-        directory mounted read-only, which holds nothing else. What the caller appends to the command line, minus the
-        pipe, is the guest's: the user's arguments of ``python-sb``.
+        The guest cannot open the host FIFO the config travels through, and a file would stay on the disk for anyone
+        to alter: the launcher gives the FIFO to ``smolvm`` as its standard input, which the guest reads as
+        ``/dev/stdin``. What the caller appends to the command line, minus the pipe, is the guest's: the user's
+        arguments of ``python-sb``.
         """
         smolvm = which_command("smolvm")
         if smolvm is None:
             raise SandBoxError("smolvm not found, required for the smolvm provider")
         inner_cmd, _ = super().subprocess_cmd(all_rules, envs, pipe_path, temp=temp)
-        guest_dir = temp / "smolvm-guest"
-        guest_dir.mkdir(mode=0o700, parents=True, exist_ok=True)
         params = all_rules.os_sandbox_params
         if unknown := sorted(set(params.keys()) - _PROFILE_KEYS):
             raise SandBoxError(
                 f"smolvm does not know {', '.join('smolvm.' + key for key in unknown)}; "
                 f"it takes {', '.join('smolvm.' + key for key in sorted(_PROFILE_KEYS))}"
             )
-        unprivileged = str(params.get("unprivileged", "true")).lower() not in ("false", "0", "no")
+        ro, rw = exposures(all_rules, extra_ro=[str(_PACKAGE_DIR)])
+        share_flags = volumes(ro, rw)
+        if len(share_flags) // 2 > _MAX_SHARES:
+            raise SandBoxError(
+                f"the rules need {len(share_flags) // 2} shares of the host and a smolvm guest takes {_MAX_SHARES}: "
+                "fewer top directories, or fewer writable directories"
+            )
+        cwd = os.getcwd()
+        guest_env = {key: str(value) for key, value in all_rules.envs.items()}
+        guest_env["PYTHONPATH"] = str(_PACKAGE_DIR.parent)
         guest_python = str(params.get("python", "")) or _GUEST_PYTHON
-        guest_env = [f"{key}={value}" for key, value in all_rules.envs.items()]
-        guest_env.append(f"PYTHONPATH={_PACKAGE_DIR.parent}")
-        guest_cmd = ["/usr/bin/env", "-i", *guest_env, guest_python, *inner_cmd[1:]]
+        guest_script = init_script(
+            ro=ro,
+            rw=rw,
+            masks=mask_targets(all_rules, cwd, [*ro, *rw]),
+            cwd=cwd,
+            uid=os.getuid(),
+            gid=os.getgid(),
+            env=guest_env,
+            command=[guest_python, *inner_cmd[1:]],
+        )
         socket = ["--expose-socket", f"{_GUEST_SOCKET}:{self.endpoint.path}"] if self.endpoint else []
         cmd = [
             str(smolvm),
             "machine",
             "run",
+            "-i",
             "--image",
             self._image(all_rules),
-            *(["--unprivileged"] if unprivileged else []),
             *(["--cpus", str(params["cpus"])] if params.get("cpus") else []),
             *(["--mem", str(params["mem"])] if params.get("mem") else []),
             *network_args(all_rules),
-            *volume_args(all_rules),
-            "-v",
-            f"{guest_dir}:{_GUEST_CONFIG_DIR}:ro",
-            "-v",
-            f"{_PACKAGE_DIR}:{_PACKAGE_DIR}:ro",
+            *share_flags,
             *socket,
-            "-w",
-            os.getcwd(),
             "--",
-            *guest_cmd,
+            "/bin/sh",
+            "-c",
+            guest_script,
+            "smolvm-guest",
         ]
         q = shlex.quote
         script = "\n".join(
@@ -177,8 +191,7 @@ class SmolvmSSEDaemon(BaseSubProcessDaemon):
                 "  a=$1; shift; n=$((n-1))",
                 '  if [ "$a" = "--_named-pipe" ]; then fifo=$1; shift; n=$((n-1)); else set -- "$@" "$a"; fi',
                 "done",
-                f'cat "$fifo" > {q(str(guest_dir / "config"))} || exit 99',
-                "exec " + " ".join(q(arg) for arg in cmd) + f' "$@" --_named-pipe {_GUEST_CONFIG_DIR}/config',
+                "exec " + " ".join(q(arg) for arg in cmd) + ' "$@" --_named-pipe /dev/stdin < "$fifo"',
             ]
         )
         host_env = {"PATH": _HOST_PATH, "HOME": os.environ.get("HOME", "/")}
