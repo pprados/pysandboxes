@@ -65,7 +65,8 @@ it**: the API of a development branch can change, and `Dockerfile-libkrun` pins 
 - IPv4 only.
 - A rule on `/dev` or `/proc` is not honoured: the guest has its own.
 - Resource limits and seccomp are not configurable.
-- Not tested in Kubernetes. In Docker the micro-VM does not yet boot: the image builds and the tools and libraries are
-  found, but the guest ends without an exit code, even with `--privileged`; the provider runs on the host. In Docker and Podman the container needs `--device /dev/kvm` (and `--device /dev/net/tun` for
-  a profile with a `net=` rule); the image `python-sb-libkrun` (`make build-image-libkrun`) compiles libkrun and
-  libkrunfw from source in a first stage and keeps only their libraries.
+- Not tested in Kubernetes. In Docker and Podman the container needs `--device /dev/kvm` (and `--device /dev/net/tun`
+  for a profile with a `net=` rule); the image `python-sb-libkrun` (`make build-image-libkrun`) compiles libkrun and
+  libkrunfw from source in a first stage and keeps only their libraries. The guest runs without capability: a file or
+  a directory it must read has to be readable by its owner id or by everyone, as the container's `root` has no
+  `CAP_DAC_OVERRIDE` inside the micro-VM.

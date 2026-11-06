@@ -13,6 +13,7 @@ import ctypes
 import json
 import logging
 import os
+import resource
 import shlex
 import socket
 import subprocess
@@ -452,6 +453,13 @@ def _guest_path(arg: str, run_dir: str) -> str:
     return GUEST_RUN_DIR + arg[len(run_dir) :] if arg.startswith(run_dir) else arg
 
 
+def raise_open_files_limit() -> None:
+    """Lift the soft limit on open files to the hard one: file sharing keeps a host descriptor per guest file."""
+    soft, hard = resource.getrlimit(resource.RLIMIT_NOFILE)
+    if soft != hard:
+        resource.setrlimit(resource.RLIMIT_NOFILE, (hard, hard))
+
+
 def main() -> None:
     """CLI entry point: ``--config FILE`` then the arguments of the guest program, which the launcher appends.
 
@@ -466,6 +474,7 @@ def main() -> None:
     if "-" in argv[2:] and not sys.stdin.isatty():
         # The guest has no terminal: the script the host reads on its standard input travels in a file.
         Path(run_dir, STDIN_FILE_NAME).write_bytes(sys.stdin.buffer.read())
+    raise_open_files_limit()
     child = os.fork()
     if child == 0:
         set_pdeathsig()

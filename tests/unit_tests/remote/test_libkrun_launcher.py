@@ -1,6 +1,7 @@
 # Copyright (c) 2026, Philippe PRADOS
 # License: Apache V2
 
+import resource
 import sys
 from pathlib import Path
 
@@ -11,6 +12,7 @@ from pysandboxes.remote.libkrun_launcher import (
     MICROVM_FAILED,
     collect_result,
     generate_guest_init_script,
+    raise_open_files_limit,
 )
 
 _NET = {"address": "10.0.2.200", "prefix": "24", "gateway": "10.0.2.254", "dns": "10.0.2.3"}
@@ -131,6 +133,26 @@ def test_a_path_under_an_exposed_directory_is_not_bound_again() -> None:
 
     assert "mount --bind /usr /proc/usr" in script
     assert "/proc/usr/bin/python3" not in script
+
+
+def test_the_open_files_soft_limit_is_lifted_to_the_hard_one(monkeypatch: pytest.MonkeyPatch) -> None:
+    limits: list[tuple[int, int]] = []
+    monkeypatch.setattr(resource, "getrlimit", lambda _: (1024, 524288))
+    monkeypatch.setattr(resource, "setrlimit", lambda _, value: limits.append(value))
+
+    raise_open_files_limit()
+
+    assert limits == [(524288, 524288)]
+
+
+def test_the_open_files_limit_is_left_alone_when_already_at_the_hard_one(monkeypatch: pytest.MonkeyPatch) -> None:
+    limits: list[tuple[int, int]] = []
+    monkeypatch.setattr(resource, "getrlimit", lambda _: (4096, 4096))
+    monkeypatch.setattr(resource, "setrlimit", lambda _, value: limits.append(value))
+
+    raise_open_files_limit()
+
+    assert limits == []
 
 
 def test_the_host_directories_no_rule_names_are_never_mounted() -> None:
