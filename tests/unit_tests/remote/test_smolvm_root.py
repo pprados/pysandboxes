@@ -63,6 +63,28 @@ class TestExposures:
     def test_a_missing_path_is_left_out(self, tmp_path: Path) -> None:
         assert exposures(_rules((f"{tmp_path / 'missing'}/", False))) == ([], [])
 
+    @pytest.mark.parametrize("path", ["/run/user/", "/var/log/", "/boot/"])
+    def test_a_path_smolvm_refuses_to_share_is_reported_and_left_out(
+        self, path: str, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        if not Path(path).exists():
+            pytest.skip(f"{path} does not exist here")
+
+        with caplog.at_level(logging.WARNING):
+            result = exposures(_rules((path, False)))
+
+        assert result == ([], [])
+        assert path.rstrip("/") in caplog.text and "refuses" in caplog.text
+
+    def test_a_link_to_a_path_smolvm_refuses_is_refused_too(self, tmp_path: Path) -> None:
+        link = tmp_path / "via"
+        link.symlink_to("/run")
+
+        assert exposures(_rules((f"{link}/", False))) == ([], [])
+
+    def test_the_paths_smolvm_accepts_are_kept(self, tmp_path: Path) -> None:
+        assert exposures(_rules((f"{tmp_path}/", False))) == ([str(tmp_path)], [])
+
     def test_the_paths_the_provider_needs_come_after_the_rules(self, tmp_path: Path) -> None:
         ro = tmp_path / "ro"
         extra = tmp_path / "extra"
