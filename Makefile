@@ -746,14 +746,15 @@ QEMU_PKG      := $(if $(filter aarch64 arm64,$(UNAME_M)),qemu-system-aarch64,qem
 	done; \
 	touch .make-build-image-qemu
 
-build/smolvm-guest.tar: Dockerfile-smolvm-guest .make-dist
+build/smolvm-guest-$(PYTHON_VERSION).tar: Dockerfile-smolvm-guest .make-dist
 	@command -v docker >/dev/null 2>&1 || { echo "docker is required to build the smolvm guest archive"; exit 1; }
 	@mkdir -p build
 	WHEEL="$$(basename "$$(find dist -maxdepth 1 -name '*.whl' -print -quit)")"; \
-	docker build --build-arg WHEEL="$$WHEEL" -t python-sb-smolvm-guest:dev -f Dockerfile-smolvm-guest .
-	docker save python-sb-smolvm-guest:dev -o build/smolvm-guest.tar
+	docker build --build-arg WHEEL="$$WHEEL" --build-arg PYTHON_VERSION=$(PYTHON_VERSION) \
+		-t python-sb-smolvm-guest:$(PYTHON_VERSION) -f Dockerfile-smolvm-guest .
+	docker save python-sb-smolvm-guest:$(PYTHON_VERSION) -o build/smolvm-guest-$(PYTHON_VERSION).tar
 
-.make-build-image-smolvm: .make-build-image-base Dockerfile-smolvm build/smolvm-guest.tar
+.make-build-image-smolvm: .make-build-image-base Dockerfile-smolvm build/smolvm-guest-$(PYTHON_VERSION).tar
 	@for CONTAINER_CMD in $(CONTAINER_CMDS); do \
 	  if ! command -v $$CONTAINER_CMD >/dev/null 2>&1; then continue; fi; \
 	  echo "Building python-sb-smolvm:$(PYTHON_VERSION), python-sb-smolvm:latest with $$CONTAINER_CMD..."; \

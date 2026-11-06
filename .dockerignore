@@ -11,7 +11,7 @@ __pycache__
 dist/*
 !dist/*.whl
 build/*
-!build/smolvm-guest.tar
+!build/smolvm-guest-*.tar
 .eggs
 *.md
 !README.md
