@@ -22,6 +22,11 @@ IPAddress = IPv4Address | IPv6Address
 MIN_LEARNED_TTL = 60
 MAX_LEARNED_TTL = 3600
 
+# ``net-resolve=``: ``pinned`` freezes the addresses of the names of the ``net=`` rules at start (``pin_dns``);
+# ``runtime`` resolves them when the sandboxed program asks. The value used when the key is absent is this one line.
+NET_RESOLVE_MODES = ("pinned", "runtime")
+DEFAULT_NET_RESOLVE = "pinned"
+
 
 def _normalize(name: str) -> str:
     return name.strip().rstrip(".").lower()
