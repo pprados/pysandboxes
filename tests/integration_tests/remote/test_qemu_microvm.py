@@ -204,6 +204,11 @@ runcmd:
     mkdir -p /mnt/probe
     mount -t 9p -o trans=virtio,version=9p2000.L probe /mnt/probe
     test "$(cat /mnt/probe/sentinel)" = "9p-ok"
+    test -f /etc/ssl/certs/ca-certificates.crt
+    test -d /etc/ca-certificates
+    test -d /usr/share/ca-certificates
+    python3 -c "import urllib.request; urllib.request.urlopen('https://www.google.com/', timeout=30).read(1)"
+    echo PYSANDBOXES_MICROVM_NATIVE_SSL_OK >/dev/ttyS0
     ip -4 -o address show | tee /dev/ttyS0 | grep -q '10\\.0\\.2\\.'
     echo PYSANDBOXES_MICROVM_MMIO_OK >/dev/ttyS0
     reboot -f
@@ -256,7 +261,7 @@ runcmd:
         "-device",
         "virtio-blk-device,drive=cidata",
         "-netdev",
-        "user,id=net0,restrict=on",
+        "user,id=net0",
         "-device",
         "virtio-net-device,netdev=net0",
         "-fsdev",
@@ -273,4 +278,5 @@ runcmd:
         check=False,
     )
 
+    assert "PYSANDBOXES_MICROVM_NATIVE_SSL_OK" in result.stdout
     assert "PYSANDBOXES_MICROVM_MMIO_OK" in result.stdout

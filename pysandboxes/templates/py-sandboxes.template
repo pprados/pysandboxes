@@ -347,6 +347,19 @@ remote-result-guard=true
 # qemu.ld_closure_libs=full
 
 #######################################################################################
+# QEMU microvm (os-sandbox=qemu-microvm)
+# ======================================
+# Linux x86_64 only. It reuses the qemu.* settings above and extracts a matched kernel/initrd
+# from the root image with 7zip. Set both overrides to bypass extraction:
+# qemu.microvm_kernel=/path/to/vmlinuz
+# qemu.microvm_initrd=/path/to/initrd.img
+# qemu.microvm_optional_paths=/etc/ssl,/etc/pki
+# The machine exposes eight virtio-mmio transports: SCSI and network use two, leaving at most
+# six 9p shares. Optional paths are dropped only when needed to fit; the guest must already
+# contain each dropped path. QEMU_MICROVM_OPTIONAL_PATHS is used when this profile option is absent.
+# Profiles that still exceed capacity fail closed. See wiki/qemu-microvm.md.
+
+#######################################################################################
 # Bubblewrap (os-sandbox=bwrap)
 # ==============================
 # Base command is built from pysandboxes/templates/bwrap.template, then PySandboxes adds

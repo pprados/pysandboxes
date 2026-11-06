@@ -3,9 +3,10 @@ SHELL=/bin/bash
 	unit-tests integration-tests container-tests sample-tests sample-tests-matrix all-tests gh-tests gh-all-tests \
 	spell_check spell_fix pip-audit pip-audit-all clean extra-clean help \
 	api_docs_build api_docs_clean api_docs_linkcheck \
-	build-images build-image-base build-image-landlock build-image-unshare build-image-bwrap build-image-qemu build-image-gvisor build-image-docker build-image-podman build-image-clean \
+	build-images build-image-base build-image-landlock build-image-unshare build-image-bwrap build-image-qemu build-image-qemu-microvm build-image-gvisor build-image-docker build-image-podman build-image-clean \
 	minikube-ready minikube-build-images lock validate inspector github-push-test init \
 	clean-sandbox-temps quick-demo-gif \
+	sample-tests-vm sample-tests-vm-matrix sample-tests-vm-tcg \
 	windows-vm windows-tests windows-tests-user windows-tests-all windows-vm-stop windows-vm-clean macos-vm macos-tests macos-vm-stop \
 	linux-vm linux-tests linux-vm-stop linux-vm-clean \
 	doctor setup-linux setup-macos setup-windows init-macos-vm
@@ -92,7 +93,7 @@ minikube-ready:
 # They are loaded, not rebuilt there: `minikube docker-env` now points at an ssh:// daemon, where buildx
 # falls back to its docker-container driver and fails to start BuildKit.
 MINIKUBE_IMAGES := python-sb:latest python-sb-landlock:latest python-sb-unshare:latest python-sb-bwrap:latest \
-	python-sb-qemu:latest python-sb-gvisor:latest
+	python-sb-qemu:latest python-sb-qemu-microvm:latest python-sb-gvisor:latest
 minikube-build-images: build-images
 	@if command -v minikube >/dev/null 2>&1 && minikube status >/dev/null 2>&1; then \
 	  for IMAGE in $(MINIKUBE_IMAGES); do \
@@ -414,6 +415,30 @@ sample-tests-matrix:
 	done; done; \
 	exit $$status
 
+# VM providers cost a full guest boot per sandbox. Keep this release/nightly lane separate from the fast matrix.
+SAMPLE_VM_PROVIDERS = qemu qemu-microvm
+sample-tests-vm:
+	@status=0; \
+	for provider in $(SAMPLE_VM_PROVIDERS); do \
+		echo "=== samples on Python $${UV_PYTHON:-$$(uv run python -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")')} under $$provider"; \
+		QEMU_MICROVM_OPTIONAL_PATHS=/etc/ssl,/etc/pki,/etc/ca-certificates,/usr/share/ca-certificates \
+			OS_SANDBOX=$$provider $(MAKE) sample-tests || status=1; \
+	done; \
+	exit $$status
+
+sample-tests-vm-matrix:
+	@status=0; \
+	for py in $(SAMPLE_PYTHONS); do for provider in $(SAMPLE_VM_PROVIDERS); do \
+		echo "=== samples on Python $$py under $$provider"; \
+		UV_PYTHON=$$py QEMU_MICROVM_OPTIONAL_PATHS=/etc/ssl,/etc/pki,/etc/ca-certificates,/usr/share/ca-certificates \
+			OS_SANDBOX=$$provider $(MAKE) sample-tests || status=1; \
+	done; done; \
+	exit $$status
+
+# One emulated row keeps TCG startup behavior covered without adding it to every costly sample case.
+sample-tests-vm-tcg:
+	UV_PYTHON=3.13 OS_SANDBOX=qemu-microvm QEMU_USE_KVM=false $(MAKE) sample-tests-mcp-server
+
 
 # `gh act push` alone runs every workflow with a push trigger, whatever its
 # branches or tags filter, so the release-only ones would run and fail here. The
@@ -663,10 +688,11 @@ dist: .make-dist
 #                +-- python-sb-unshare   Dockerfile-unshare ...... build-image-unshare
 #                +-- python-sb-bwrap     Dockerfile-bwrap ........ build-image-bwrap
 #                +-- python-sb-qemu      Dockerfile-qemu ......... build-image-qemu
+#                     +-- python-sb-qemu-microvm Dockerfile-qemu-microvm build-image-qemu-microvm
 #                +-- python-sb-gvisor    Dockerfile-gvisor ....... build-image-gvisor
 #
-# Make encodes this: .make-build-image-{landlock,unshare,bwrap,qemu,gvisor} all prereq .make-build-image-base.
-# PYTHON_VERSION from uv. VARIANT = base | landlock | unshare | bwrap | qemu | gvisor.
+# Make encodes this: provider image stamps depend on their base image. The microvm image depends on qemu.
+# PYTHON_VERSION from uv. VARIANT = base | landlock | unshare | bwrap | qemu | qemu-microvm | gvisor.
 # No firejail: inside a container it runs unconfined, even with --privileged and --force.
 PYTHON_VERSION := $(shell uv run python -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')" 2>/dev/null || echo "3.11")
 VARIANT ?= qemu
@@ -746,6 +772,26 @@ QEMU_PKG      := $(if $(filter aarch64 arm64,$(UNAME_M)),qemu-system-aarch64,qem
 	done; \
 	touch .make-build-image-qemu
 
+ifeq ($(filter x86_64 amd64,$(UNAME_M)),)
+QEMU_MICROVM_IMAGE_STAMP :=
+.make-build-image-qemu-microvm:
+	@echo "Skipping qemu-microvm image: the provider supports Linux x86_64 only."
+else
+QEMU_MICROVM_IMAGE_STAMP := .make-build-image-qemu-microvm
+.make-build-image-qemu-microvm: .make-build-image-qemu Dockerfile-qemu-microvm
+	@for CONTAINER_CMD in $(CONTAINER_CMDS); do \
+	  if ! command -v $$CONTAINER_CMD >/dev/null 2>&1; then continue; fi; \
+	  echo "Building python-sb-qemu-microvm:$(PYTHON_VERSION), python-sb-qemu-microvm:latest with $$CONTAINER_CMD..."; \
+	  $$CONTAINER_CMD build \
+	    --build-arg PYTHON_VERSION=$(PYTHON_VERSION) \
+	    -t python-sb-qemu-microvm:$(PYTHON_VERSION) \
+	    -t python-sb-qemu-microvm:latest \
+	    -t python-sb-qemu-microvm:qemu-microvm \
+	    -f Dockerfile-qemu-microvm . || exit 1; \
+	done; \
+	touch .make-build-image-qemu-microvm
+endif
+
 .make-build-image-gvisor: .make-build-image-base Dockerfile-gvisor
 	@for CONTAINER_CMD in $(CONTAINER_CMDS); do \
 	  if ! command -v $$CONTAINER_CMD >/dev/null 2>&1; then continue; fi; \
@@ -774,6 +820,9 @@ build-image-bwrap: .make-build-image-bwrap
 # Build qemu image (FROM python-sb): python-sb-qemu:$(PYTHON_VERSION), python-sb-qemu:latest
 build-image-qemu: .make-build-image-qemu
 
+# Build qemu-microvm image (FROM python-sb-qemu): python-sb-qemu-microvm:<python>, :latest
+build-image-qemu-microvm: .make-build-image-qemu-microvm
+
 # Build gvisor image (FROM python-sb): python-sb-gvisor:$(PYTHON_VERSION), python-sb-gvisor:latest
 build-image-gvisor: .make-build-image-gvisor
 
@@ -784,9 +833,10 @@ build-images: Dockerfile .make-dist \
 	.make-build-image-unshare \
 	.make-build-image-bwrap \
 	.make-build-image-qemu \
+	$(QEMU_MICROVM_IMAGE_STAMP) \
 	.make-build-image-gvisor
 
-IMAGE_STAMPS := .make-build-image-base .make-build-image-landlock .make-build-image-unshare .make-build-image-bwrap .make-build-image-qemu .make-build-image-gvisor
+IMAGE_STAMPS := .make-build-image-base .make-build-image-landlock .make-build-image-unshare .make-build-image-bwrap .make-build-image-qemu .make-build-image-qemu-microvm .make-build-image-gvisor
 
 # The sentinels say "built", never "built *where*", so they are dropped on both sides:
 # before, because they record a build against the previous daemon and would leave every
@@ -807,7 +857,7 @@ build-image-clean:
 	@echo "Pruning build caches and forcing rebuild..."
 	@command -v docker >/dev/null 2>&1 && docker builder prune -f || true
 	@command -v podman >/dev/null 2>&1 && (podman builder prune -f 2>/dev/null || podman system prune -f 2>/dev/null) || true
-	@rm -f .make-build-image-base .make-build-image-landlock .make-build-image-unshare .make-build-image-bwrap .make-build-image-qemu .make-build-image-gvisor
+	@rm -f .make-build-image-base .make-build-image-landlock .make-build-image-unshare .make-build-image-bwrap .make-build-image-qemu .make-build-image-qemu-microvm .make-build-image-gvisor
 	@$(MAKE) build-images
 
 # ---------------------------------------------------------------------------------------

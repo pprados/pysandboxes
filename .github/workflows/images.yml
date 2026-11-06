@@ -1,7 +1,7 @@
 # Copyright (c) 2026, Carbon-It, Philippe Prados (pprados)
 # License: Apache V2
 #
-# Builds the six container images of a signed release tag and pushes them to Docker Hub, one runner per Python, each
+# Builds the seven container images of a signed release tag and pushes them to Docker Hub, one runner per Python, each
 # FROM the newest patch of its Python. Dispatched on the tag by release.yml once the wheel is published, and on a
 # final tag by images-refresh.yml when python:<minor>-slim moves to a new patch; either way it downloads the published
 # wheel, so the images always embed exactly what was published. Never called as a reusable workflow: the secrets of
@@ -47,7 +47,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     environment: dockerhub
-    # One runner per Python: the qemu image alone holds a guest disk, six images times four would not fit on one.
+    # One runner per Python: the QEMU images hold guest disks and boot artifacts; seven images times four would not fit on one.
     strategy:
       matrix:
         python-version: ${{ fromJSON(inputs.python-versions || '["3.11", "3.12", "3.13", "3.14"]') }}
@@ -104,7 +104,7 @@ jobs:
         --dest dist/
 
     # A fresh checkout's mtimes would make .make-dist rerun uv build, which deletes the wheel.
-    - name: Build the six images from the published wheel
+    - name: Build the seven images from the published wheel
       run: |
         touch .make-dist
         make -o uv.lock CONTAINER_CMDS=docker PYTHON_VERSION="$PATCH" build-images
@@ -123,7 +123,7 @@ jobs:
     - name: Push the tags
       run: |
         mapfile -t tags < <(.github/scripts/image-tags.sh "$VERSION" "$PATCH" "$DEFAULT_PYTHON")
-        for image in python-sb python-sb-landlock python-sb-unshare python-sb-bwrap python-sb-qemu python-sb-gvisor; do
+        for image in python-sb python-sb-landlock python-sb-unshare python-sb-bwrap python-sb-qemu python-sb-qemu-microvm python-sb-gvisor; do
           for tag in "${tags[@]}"; do
             target="docker.io/pprados/$image:$tag"
             docker tag "$image:$PATCH" "$target"

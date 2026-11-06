@@ -50,8 +50,8 @@ python-import=__future__, _codecs_cn, _codecs_hk, _codecs_iso2022, _codecs_jp
 python-import=_codecs_kr, _codecs_tw, _markupbase, _multibytecodec, abc, ast, base64
 python-import=binascii, bisect, calendar, codecs, collections, colorsys, contextlib
 python-import=copy, copyreg, dataclasses, datetime, email, encodings, enum, fnmatch
-python-import=fractions, functools, hashlib, html, http, io, ipaddress, itertools
-python-import=json, logging, math, mimetypes, operator, os, pathlib, pickle, random
+python-import=fractions, functools, hashlib, html, http, io, ipaddress, itertools, locale
+python-import=json, logging, math, mimetypes, operator, os, pathlib, pickle, posixpath, random
 python-import=re, select, socket, ssl, struct, textwrap, threading, time, types
 python-import=typing, unicodedata, urllib, zlib
 

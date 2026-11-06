@@ -9,11 +9,12 @@
 | ☐ 3.15   | ✅ firejail     |            | ✅ API     |
 |          | ✅ unshare       |            | ✅ Eval    |
 |          | ✅ qemu          |            | ☐ Source  |
+|          | ✅ qemu-microvm  |            |           |
 |          | ✅ sandbox-exec  |            | ☐ Regexp  |
 |          | ✅ Docker¹       |            | ☐ DoS     |
 |          | ✅ Podman¹       |            |           |
 |          | ✅ gVisor        |            |           |
-|          | ☐ micro-VM      |            |           |
+|          | ✅ micro-VM      |            |           |
 |          | ✅ appcontainer  |            |           |
 
 ¹ Docker and Podman are not providers of their own: a container runs the
@@ -28,6 +29,9 @@
   local TCP port, with the `subprocess`, `landlock`, `bwrap`, `firejail`, `unshare`, `qemu` and `sandbox-exec`
   providers on Linux and macOS; it falls back to TCP when that is not possible. `remote-endpoint=tcp|unix` forces one
   or the other.
+- Add the Linux x86_64 QEMU microvm provider (`os-sandbox=qemu-microvm`) with direct kernel boot and a dedicated image.
+- Allow QEMU microvm profiles to opt selected guest paths into host-share omission when MMIO capacity is exceeded.
+- Complete the Agno sample's standard-library import whitelist for its HTTP client tests.
 
 ## [0.10.0] - 2026-11-05
 

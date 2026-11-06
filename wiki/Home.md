@@ -56,6 +56,7 @@ PySandboxes runs Python under a deny-by-default policy stored in `.py-sandboxes`
 - [Firejail](firejail.md)
 - [Unshare](unshare.md)
 - [QEMU](qemu.md)
+- [QEMU microvm](qemu-microvm.md)
 - [gVisor](gvisor.md)
 - [macOS `sandbox-exec` (Seatbelt)](sandbox-exec.md)
 - [DNS and network filtering](dns.md): DNS resolution and `iptables` behavior.
