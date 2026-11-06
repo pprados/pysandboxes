@@ -13,6 +13,7 @@
 |          | ✅ Docker¹       |            | ☐ DoS     |
 |          | ✅ Podman¹       |            |           |
 |          | ✅ gVisor        |            |           |
+|          | ✅ smolvm        |            |           |
 |          | ☐ micro-VM      |            |           |
 |          | ✅ appcontainer  |            |           |
 
@@ -28,6 +29,9 @@
   local TCP port, with the `subprocess`, `landlock`, `bwrap`, `firejail`, `unshare`, `qemu` and `sandbox-exec`
   providers on Linux and macOS; it falls back to TCP when that is not possible. `remote-endpoint=tcp|unix` forces one
   or the other.
+- Add the smolvm provider (`os-sandbox=smolvm`): the sandboxed code runs in a hardware-isolated micro-VM with its own
+  kernel, with file, network and environment rules enforced by the host side of smolvm, and a dedicated
+  `python-sb-smolvm` image.
 
 ## [0.10.0] - 2026-11-05
 

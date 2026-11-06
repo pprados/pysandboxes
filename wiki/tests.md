@@ -153,7 +153,7 @@ that loads a profile exercises it implicitly.
 
 ## B. OS_SANDBOX backends
 
-Eleven entries are registered in `pysandboxes/_os_sandbox.py`: ten providers, plus
+Twelve entries are registered in `pysandboxes/_os_sandbox.py`: eleven providers, plus
 `_sse_server`, which is internal and not user-selectable.
 
 | Backend | Host: `tst_usage` | Host: guards | OS-only netfilter | OS-only files | Docker | Podman | Kubernetes |
@@ -165,6 +165,7 @@ Eleven entries are registered in `pysandboxes/_os_sandbox.py`: ten providers, pl
 | `landlock` | yes | yes | yes (ABI v4) | yes (2 modes) | yes | yes | yes |
 | `qemu` | yes | yes | yes (KVM) | yes (2 modes) | yes | yes | yes |
 | `gvisor` | yes | yes | yes | yes | yes | yes | yes |
+| `smolvm` | yes | yes | yes (python-sb, needs a network; `test_smolvm.py`) | yes (python-sb) | not run | not run | not run |
 | `qemu-tcg` (on demand) | yes | yes | — | yes (2 modes) | — | — | — |
 | `sandbox-exec` | yes (macOS only) | yes (macOS only) | yes (2 modes, macOS only) | yes (2 modes, macOS only) | **excluded** | **excluded** | **excluded** |
 | `appcontainer` | yes (Windows only) | yes (Windows only) | — | — | **excluded** | **excluded** | **excluded** |

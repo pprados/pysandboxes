@@ -20,7 +20,7 @@ the Seatbelt `sandbox-exec` of macOS and the `appcontainer` of Windows, so what 
 
 | Your system | What runs | Needs |
 |---|---|---|
-| Linux, or WSL2 | everything: the Python layer and the providers `landlock`, `bwrap`, `firejail`, `unshare`, `qemu`, `gvisor` | the packages and kernel settings below |
+| Linux, or WSL2 | everything: the Python layer and the providers `landlock`, `bwrap`, `firejail`, `unshare`, `qemu`, `gvisor`, `smolvm` | the packages and kernel settings below |
 | macOS | the Python layer over `subprocess` and the `sandbox-exec` provider, which is what `cross-os.yml` proves on macOS | Xcode command line tools, uv; GNU sed, jq and coreutils (`make setup-macos`) for the release-script tests, which are left out without them |
 | native Windows | the Python layer over `subprocess` and the `appcontainer` provider, which is what `cross-os.yml` proves on Windows | uv, git, GNU make, a bash (Git Bash) |
 
@@ -107,7 +107,7 @@ The [`wiki/`](wiki/Home.md) directory holds the documentation a contributor need
 - [`implementation.md`](wiki/implementation.md): how the framework is put together;
 - [`weaknesses.md`](wiki/weaknesses.md) and the two security assessments: what the Python layer does not stop,
   and the attacks already studied;
-- one page per OS provider (`bwrap.md`, `firejail.md`, `unshare.md`, `qemu.md`, `gvisor.md`, `landlock.md`, `sandbox-exec.md`,
+- one page per OS provider (`bwrap.md`, `firejail.md`, `unshare.md`, `qemu.md`, `gvisor.md`, `smolvm.md`, `landlock.md`, `sandbox-exec.md`,
   `appcontainer.md`), and
   [`eval.md`](wiki/eval.md) for the `eval-*` rules;
 - [`tests.md`](wiki/tests.md): which suite covers what, and the gaps;

@@ -1,6 +1,6 @@
 ## Project Overview
 
-PySandboxes = Python security framework. Sandbox envs → run untrusted Python safe. Defense-in-depth: Python API patching + OS isolation. Python guards + 1 OS provider of `none`, `subprocess`, `appcontainer`, `landlock`, `bwrap`, `firejail`, `unshare`, `qemu`, `gvisor`, `sandbox-exec`. Docker/Podman ≠ own provider: container runs `unshare` provider, `--privileged` for Docker.
+PySandboxes = Python security framework. Sandbox envs → run untrusted Python safe. Defense-in-depth: Python API patching + OS isolation. Python guards + 1 OS provider of `none`, `subprocess`, `appcontainer`, `landlock`, `bwrap`, `firejail`, `unshare`, `qemu`, `gvisor`, `smolvm`, `sandbox-exec`. Docker/Podman ≠ own provider: container runs `unshare` provider, `--privileged` for Docker.
 
 All code English.
 
@@ -142,6 +142,6 @@ Rules in `.py-sandboxes` files, whitelist-based:
 
 - Target: AI/LLM-generated code security
 - Config files: whitelist-only model
-- 10 OS providers ship. `none` + `subprocess` = no OS boundary. Kernel-backed (`landlock`, `bwrap`, `firejail`, `unshare`, `qemu`, `gvisor`) = what holds vs compiled code. macOS `sandbox-exec` applies Seatbelt policy but cannot filter remote host/IP. Windows `appcontainer` confines files and network with an AppContainer token; limits in `wiki/os-providers.md`.
+- 11 OS providers ship. `none` + `subprocess` = no OS boundary. Kernel-backed (`landlock`, `bwrap`, `firejail`, `unshare`, `qemu`, `gvisor`, `smolvm`) = what holds vs compiled code. macOS `sandbox-exec` applies Seatbelt policy but cannot filter remote host/IP. Windows `appcontainer` confines files and network with an AppContainer token; limits in `wiki/os-providers.md`.
 - Kernel-backed boundaries are Linux + WSL only. macOS can opt into legacy `sandbox-exec` and Windows into `appcontainer`; the default of both remains `subprocess`. Cross-platform provider claims are tested by `.github/workflows/cross-os.yml`.
 - Known weaknesses documented, not hidden: `wiki/weaknesses.md`, `wiki/audit-eval-security.md`, `wiki/audit-python-security.md`. `SECURITY.md` says which = vulnerability
