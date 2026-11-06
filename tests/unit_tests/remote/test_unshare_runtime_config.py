@@ -2,7 +2,7 @@
 # License: Apache V2
 """`UnshareSSEDaemon` with `net-resolve=runtime`: the configuration, and the life of the filtering resolver."""
 
-from ipaddress import IPv4Address, IPv4Network
+from ipaddress import IPv4Address, IPv4Network, ip_address
 from pathlib import Path
 from typing import Any
 
@@ -144,6 +144,26 @@ def test_a_runtime_profile_needs_nsenter_and_iptables_on_the_host(
         UnshareSSEDaemon("tok")._start_runtime_dns(EmptyRules._replace(net_resolve="runtime", name_rules=NAMES))
 
     assert fake_dns.instances == []
+
+
+def test_a_host_with_no_ipv4_resolver_is_an_error_not_a_silent_servfail(
+    fake_dns: type[FakeDns], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(usd, "get_upstream_dns", lambda: [ip_address("2001:db8::53")])
+
+    with pytest.raises(SandBoxError, match="no IPv4 resolver"):
+        UnshareSSEDaemon("tok")._start_runtime_dns(EmptyRules._replace(net_resolve="runtime", name_rules=NAMES))
+
+    assert fake_dns.instances == []
+
+
+def test_the_end_of_a_one_shot_run_stops_the_resolver_through_kill_slirp(fake_dns: type[FakeDns]) -> None:
+    daemon = UnshareSSEDaemon("tok")
+    daemon._start_runtime_dns(EmptyRules._replace(net_resolve="runtime", name_rules=NAMES))
+
+    daemon._kill_slirp()
+
+    assert fake_dns.instances[0].stopped == 1 and daemon._runtime_dns is None
 
 
 def test_a_restart_stops_the_previous_resolver_before_starting_another(fake_dns: type[FakeDns]) -> None:

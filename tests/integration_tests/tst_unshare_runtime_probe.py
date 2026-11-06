@@ -2,8 +2,10 @@
 # License: Apache V2
 """Probe of test_unshare_runtime_dns: ``net-resolve=runtime`` under ``unshare``, with only the kernel to refuse.
 
-Run as ``python -m tests.integration_tests.tst_unshare_runtime_probe <workdir> <kernel|guard>``; prints one JSON object.
-``kernel`` disarms the Python socket guard so only the firewall can refuse; ``guard`` arms it, so both layers judge.
+Run as ``python -m tests.integration_tests.tst_unshare_runtime_probe <workdir> <kernel|guard|python-sb>``.
+``kernel`` disarms the Python socket guard so only the firewall can refuse; ``guard`` arms it, so both layers judge;
+``python-sb`` runs the one-shot ``python-sb -c`` entry point in this process, guard armed. It prints a JSON object per
+line: the daemon modes one, ``python-sb`` the sandbox's own line and then ours.
 
 The unshare daemon runs in this process, so the probe points its filtering resolver at a fake authoritative server
 of its own (the real one asks port 53 of the host resolvers) and shortens the learned TTL. The name the server answers
@@ -18,9 +20,11 @@ import sys
 import threading
 from ipaddress import IPv4Address
 from pathlib import Path
+from unittest.mock import patch
 
-from pysandboxes import egress_filter, sandbox, sandboxes
+from pysandboxes import egress_filter, python_sb, sandbox, sandboxes
 from pysandboxes.remote import unshare_sse_daemon
+from pysandboxes.remote.runtime_dns import RuntimeDns
 
 GATEWAY = "10.0.2.2"
 ALLOWED_NAME = "app.test.example"
@@ -130,18 +134,55 @@ def _probe(allowed_name: str, denied_name: str, gateway: str, port: int, other_p
     return out
 
 
+def _script(port: int, other_port: int) -> str:
+    """What ``python-sb -c`` runs in the sandbox: one JSON line, like the daemon-mode probe."""
+    return f"""
+import json, socket
+
+def connect(host, target):
+    try:
+        socket.create_connection((host, target), timeout=3).close()
+        return "CONNECTED"
+    except Exception:
+        return "REFUSED"
+
+before = connect("{GATEWAY}", {port})
+address = socket.getaddrinfo("{ALLOWED_NAME}", {port}, socket.AF_INET, socket.SOCK_STREAM)[0][4][0]
+print(json.dumps({{"literal_before_resolution": before, "resolved": [address],
+                  "allowed_port": connect(address, {port}), "other_port": connect(address, {other_port})}}))
+"""
+
+
+def _resolver_state(started: list[RuntimeDns]) -> dict:
+    """Whether the resolver of the sandbox that ran is gone: its loopback port, UDP and TCP, can be bound again."""
+    if not started:
+        return {"resolver_started": False}
+    port = started[-1]._port
+    for kind in (socket.SOCK_DGRAM, socket.SOCK_STREAM):
+        with socket.socket(socket.AF_INET, kind) as probe:
+            try:
+                probe.bind(("127.0.0.1", port))
+            except OSError:
+                return {"resolver_started": True, "resolver_port_free": False}
+    return {"resolver_started": True, "resolver_port_free": True}
+
+
 def main() -> int:
     work, layers = Path(sys.argv[1]), sys.argv[2]
     authority, allowed, other = FakeAuthority(), Listener(), Listener()
     egress_filter.MIN_LEARNED_TTL = egress_filter.MAX_LEARNED_TTL = TTL
     unshare_sse_daemon.get_upstream_dns = lambda: [IPv4Address("127.0.0.1")]
     real = unshare_sse_daemon.RuntimeDns
-    unshare_sse_daemon.RuntimeDns = lambda rules, servers: real(
-        rules, servers, upstream_port=authority.port, upstream_timeout=3.0
-    )
+    started: list[RuntimeDns] = []
+
+    def start_resolver(rules: tuple, servers: list) -> RuntimeDns:
+        started.append(real(rules, servers, upstream_port=authority.port, upstream_timeout=3.0))
+        return started[-1]
+
+    patch.object(unshare_sse_daemon, "RuntimeDns", start_resolver).start()
     profile = work / "runtime.profile"
     profile.write_text(
-        f"py-sandbox={'true' if layers == 'guard' else 'false'}\n"
+        f"py-sandbox={'false' if layers == 'kernel' else 'true'}\n"
         "os-sandbox=unshare\n"
         "net-resolve=runtime\n"
         "python-import=*\n"
@@ -151,13 +192,18 @@ def main() -> int:
         f"net=ALLOW|TCP|{ALLOWED_NAME}|{allowed.port}|OUT\n"
     )
     try:
+        if layers == "python-sb":
+            sys.argv = ["python-sb", f"--pysandboxes-config={profile}", "-c", _script(allowed.port, other.port)]
+            code = python_sb.main()
+            print(json.dumps({"exit_code": code, "questions": len(authority.questions), **_resolver_state(started)}))
+            return 0
         with sandboxes(sandboxes_config=str(profile)):
             result = _probe(ALLOWED_NAME, DENIED_NAME, GATEWAY, allowed.port, other.port, TTL)
     finally:
         authority.close()
         allowed.close()
         other.close()
-    print(json.dumps({"result": result, "questions": len(authority.questions)}))
+    print(json.dumps({"result": result, "questions": len(authority.questions), **_resolver_state(started)}))
     return 0
 
 
