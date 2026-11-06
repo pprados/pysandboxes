@@ -140,7 +140,7 @@ This is the `net-resolve=pinned` mode, the current implementation. It stays avai
 
 ### Runtime DNS filter
 
-`net-resolve=runtime` (`unshare` only) resolves the names when the sandboxed program asks, instead of freezing addresses at start. Three parts, none of which knows the others' internals:
+`net-resolve=runtime` (`unshare`, `bwrap` and `gvisor`) resolves the names when the sandboxed program asks, instead of freezing addresses at start. Three parts, none of which knows the others' internals:
 
 - **`egress_filter`** (host, pure Python, no provider): the name rules (`NameRule`: allow or deny, a pattern, protocols, ports), the table of learned addresses with their expiry (`LearnedTable`), and the `FilteringResolver`. For each query the resolver judges the name with the first matching rule, answers `NXDOMAIN` when no rule allows it, otherwise forwards it and calls the `Enforcer` for every address of the answer **before** the reply goes back, so the first packet of the program never meets a closed address. An enforcer that fails turns the answer into `SERVFAIL`: no address is ever returned that has not been opened.
 - **`remote/runtime_dns.py`** (`RuntimeDns`): runs the resolver on a thread of its own, on an ephemeral loopback port, and forwards the allowed names to the resolvers of the host over TCP. It listens first, because the firewall names its port, and gets its enforcer once the network namespace exists.

@@ -234,7 +234,7 @@ What it does, proved by the integration suite `tests/integration_tests/test_unsh
 
 Limitations:
 
-- **`unshare` only.** Every other provider rejects `net-resolve=runtime` with a configuration error; none falls back to `pinned` silently. `bwrap`, `gvisor` and `firejail` share the network model and are the next candidates, `qemu` and `libkrun` need a channel to the guest, and `landlock`, `sandbox-exec` and `appcontainer` cannot filter by address.
+- **Providers.** `unshare`, `bwrap` and `gvisor` support it, each with the same filtering resolver and the same ruleset: `bwrap` and `gvisor` bind a `resolv.conf` naming the slirp4netns DNS (`10.0.2.3`) over the one of the host, since a host stub such as `127.0.0.53` does not exist in their network namespace. `firejail` cannot: its jail is not in a user namespace of the host user, so only root could add the learned rules (`nsenter` fails with EPERM, `--join-network` is root only). Every other provider rejects `net-resolve=runtime` with a configuration error; none falls back to `pinned` silently. `qemu` and `libkrun` need a channel to the guest, and `landlock`, `sandbox-exec` and `appcontainer` cannot filter by address.
 - **Host prerequisites:** `nsenter` and `iptables` (the sandbox holds no capability and cannot change its own firewall), and at least one IPv4 resolver on the host: without one the start fails with an error instead of answering every name with `SERVFAIL`.
 - **IPv4 only.** An `AAAA` answer is returned but no IPv6 address is opened, and slirp4netns gives the sandbox no IPv6 route by default.
 - **A `net=` rule naming a host applies to `OUT`.** `IN` is an error in this mode. A rule that opens no port is ignored with a warning, as in `pinned` mode.

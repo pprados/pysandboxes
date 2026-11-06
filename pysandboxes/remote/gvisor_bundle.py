@@ -139,6 +139,7 @@ def build_oci_spec(
     empty_file: str,
     cwd: str,
     mount_proc: bool = True,
+    file_binds: tuple[tuple[str, str], ...] = (),
 ) -> dict[str, Any]:
     """Return the OCI spec of a guest that sees only what the rules expose.
 
@@ -152,6 +153,7 @@ def build_oci_spec(
         empty_file: Empty host file bound over a masked file.
         cwd: Working directory of the command.
         mount_proc: Whether to mount ``/proc``.
+        file_binds: ``(host_file, guest_path)`` read-only files bound last, over what the exposures bind.
 
     The guest holds no capability and cannot gain one. It runs in the network namespace of the process
     that launches ``runsc``, which is private and filtered by then, so the spec adds no network namespace.
@@ -181,6 +183,7 @@ def build_oci_spec(
             mounts.append({"destination": path, "type": "tmpfs", "source": "tmpfs", "options": ["ro"]})
         else:
             mounts.append(_bind(empty_file, path, write=False))
+    mounts.extend(_bind(source, destination, write=False) for source, destination in file_binds)
     return {
         "ociVersion": "1.0.0",
         "process": {

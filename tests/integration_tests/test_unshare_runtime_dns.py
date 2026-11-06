@@ -1,6 +1,6 @@
 # Copyright (c) 2026, Philippe PRADOS
 # License: Apache V2
-"""`net-resolve=runtime` under `unshare`: an address opens when an allowed name resolves, and closes at its TTL.
+"""`net-resolve=runtime` under `unshare`, `bwrap` and `gvisor`: an allowed name opens its address until the TTL.
 
 Each scenario runs twice. In ``kernel`` the Python socket guard is disarmed (``py-sandbox=false``), so only the
 firewall of the sandbox can refuse. In ``guard`` both layers judge, which proves the guard of the sandboxed process
@@ -22,13 +22,22 @@ from pysandboxes._os_sandbox import unsupported_platform_reason
 from ._env import provider_skip_reason
 
 ROOT_DIR = Path(__file__).resolve().parent.parent.parent
-_SKIP = (
-    unsupported_platform_reason("unshare")
-    or provider_skip_reason("unshare")
-    or next((f"{tool} is missing" for tool in ("nsenter", "iptables") if shutil.which(tool) is None), None)
-)
+PROVIDERS = ("unshare", "bwrap", "gvisor")
 
-pytestmark = pytest.mark.skipif(bool(_SKIP), reason=_SKIP or "")
+
+def _skip_reason(provider: str) -> str | None:
+    return (
+        unsupported_platform_reason(provider)
+        or provider_skip_reason(provider)
+        or next((f"{tool} is missing" for tool in ("nsenter", "iptables") if shutil.which(tool) is None), None)
+    )
+
+
+@pytest.fixture(scope="module", params=PROVIDERS)
+def provider(request: pytest.FixtureRequest) -> str:
+    if reason := _skip_reason(str(request.param)):
+        pytest.skip(reason)
+    return str(request.param)
 
 
 @pytest.fixture(scope="module", params=("kernel", "guard"))
@@ -38,10 +47,10 @@ def layers(request: pytest.FixtureRequest) -> str:
 
 
 @pytest.fixture(scope="module")
-def outcome(tmp_path_factory: pytest.TempPathFactory, layers: str) -> dict[str, Any]:
+def outcome(tmp_path_factory: pytest.TempPathFactory, layers: str, provider: str) -> dict[str, Any]:
     work = tmp_path_factory.mktemp("runtime_dns")
     result = subprocess.run(
-        [sys.executable, "-m", "tests.integration_tests.tst_unshare_runtime_probe", str(work), layers],
+        [sys.executable, "-m", "tests.integration_tests.tst_unshare_runtime_probe", str(work), layers, provider],
         cwd=ROOT_DIR,
         capture_output=True,
         text=True,
@@ -56,11 +65,11 @@ def _json_lines(stdout: str) -> list[dict[str, Any]]:
 
 
 @pytest.fixture(scope="module")
-def one_shot(tmp_path_factory: pytest.TempPathFactory) -> tuple[dict[str, Any], dict[str, Any]]:
+def one_shot(tmp_path_factory: pytest.TempPathFactory, provider: str) -> tuple[dict[str, Any], dict[str, Any]]:
     """The ``python-sb -c`` entry point: the line the sandbox printed, then the one the probe printed."""
     work = tmp_path_factory.mktemp("runtime_dns_one_shot")
     result = subprocess.run(
-        [sys.executable, "-m", "tests.integration_tests.tst_unshare_runtime_probe", str(work), "python-sb"],
+        [sys.executable, "-m", "tests.integration_tests.tst_unshare_runtime_probe", str(work), "python-sb", provider],
         cwd=ROOT_DIR,
         capture_output=True,
         text=True,

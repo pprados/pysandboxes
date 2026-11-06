@@ -63,15 +63,16 @@ def test_pinned_is_accepted_by_every_provider() -> None:
     assert errors == []
 
 
-def test_runtime_is_accepted_by_unshare() -> None:
+@pytest.mark.parametrize("provider", ["unshare", "bwrap", "gvisor"])
+def test_runtime_is_accepted_by_the_providers_with_an_enforcer(provider: str) -> None:
     errors: list = []
 
-    check_net_resolve_provider("runtime", "unshare", Path("p"), errors)
+    check_net_resolve_provider("runtime", provider, Path("p"), errors)
 
     assert errors == []
 
 
-@pytest.mark.parametrize("provider", ["subprocess", "landlock", "bwrap", "firejail", "qemu", "gvisor", "none"])
+@pytest.mark.parametrize("provider", ["subprocess", "landlock", "firejail", "qemu", "none"])
 def test_runtime_is_an_error_for_a_provider_without_an_enforcer(provider: str) -> None:
     errors: list = []
 
