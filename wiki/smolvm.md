@@ -65,7 +65,13 @@ UDP other than DNS is dropped once an allow list exists; DNS is answered by the 
 Limits to know: a subdomain of an allowed host resolves, so DNS stays an exfiltration channel to those domains.
 
 The host's own Python installation and the directories the image owns (`/usr`, `/etc`, `/lib`, ...) are never
-exposed: the guest has its own. A profile that needs more than 6 shares (top directories of the read-only paths, plus
+exposed: the guest has its own. smolvm also refuses to share `/usr`, `/etc`, `/lib`, `/bin`, `/boot`, `/sys`, `/proc`,
+`/dev`, `/run`, `/var` and `/var/log`, links resolved (`/opt`, `/home`, `/tmp` and `/var/lib` are accepted): a rule on
+one of them is reported and not exposed.
+
+The package of pysandboxes is shared from the host when it can be (a checkout, which then wins over the image's). An
+installed package sits under `/usr`, which smolvm refuses to share: the guest then runs the copy in its image, which
+`make build/smolvm-guest.tar` installs from the same wheel. Rebuild the archive when pysandboxes changes. A profile that needs more than 6 shares (top directories of the read-only paths, plus
 one per writable directory) is refused with a message that says so, rather than failing inside libkrun.
 
 ## Limits
@@ -77,7 +83,7 @@ one per writable directory) is refused with a message that says so, rather than 
 - The guest runs as the user of the host: a file it must read has to be readable by that user, as the guest root has
   no capability to override it.
 - Releases are checksummed, not signed: `Dockerfile-smolvm` pins the version and its SHA-256.
-- Linux only for now. macOS and Windows tags wait for a `cross-os.yml` run.
+- Needs `/dev/kvm`: in a container, the device and a user in its group. Linux only for now. macOS and Windows tags wait for a `cross-os.yml` run.
 
 ## Running it
 
@@ -86,8 +92,19 @@ make build/smolvm-guest.tar
 PYSANDBOXES_SMOLVM_IMAGE=build/smolvm-guest.tar python-sb --pysandboxes-config=my.profile -c 'print(1)'
 ```
 
-In Docker or Podman: `make build-image-smolvm`, then `docker run --device /dev/kvm python-sb-smolvm`. This run is not
-measured yet.
+In Docker, with the image `python-sb-smolvm` (`make build-image-smolvm`: smolvm 1.33.0 pinned by SHA-256, and the guest
+archive):
+
+```bash
+docker run --rm --device /dev/kvm --group-add $(stat -c %g /dev/kvm) --user $(id -u):$(id -g) \
+    -v $PWD:/work python-sb-smolvm python-sb --pysandboxes-config=/work/my.profile -c 'print(1)'
+```
+
+The container must run as a user that can open `/dev/kvm`: smolvm lowers the privileges of a root caller and its VMM
+then loses the device (`KvmOpen(Error(13))`, even with `--privileged`), so `--user` and `--group-add` are required. The
+guest archive is world-readable and `HOME=/tmp` for the same reason: a container user has no other place to write.
+Measured: guest kernel 6.18.60 against the host's 7.0, `expose-ro`, `expose-rw` (the write reaches the host), `ignore=`
+and the address filter all hold. Podman and Kubernetes are not measured.
 
 Tests: `pytest tests/integration_tests/remote/test_smolvm.py` and the `smolvm` row of
 `test_usage_with_providers.py` and `test_guards_with_providers.py`.
