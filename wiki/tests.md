@@ -165,7 +165,7 @@ Twelve entries are registered in `pysandboxes/_os_sandbox.py`: eleven providers,
 | `landlock` | yes | yes | yes (ABI v4) | yes (2 modes) | yes | yes | yes |
 | `qemu` | yes | yes | yes (KVM) | yes (2 modes) | yes | yes | yes |
 | `gvisor` | yes | yes | yes | yes | yes | yes | yes |
-| `smolvm` | yes | yes | yes (python-sb, needs a network; `test_smolvm.py`) | yes (python-sb) | not run | not run | not run |
+| `smolvm` | yes | yes | yes (python-sb, needs a network; `test_smolvm.py`) | yes (python-sb) | measured by hand (image `python-sb-smolvm`, non-root user with the kvm group) | not run | not run |
 | `qemu-tcg` (on demand) | yes | yes | — | yes (2 modes) | — | — | — |
 | `sandbox-exec` | yes (macOS only) | yes (macOS only) | yes (2 modes, macOS only) | yes (2 modes, macOS only) | **excluded** | **excluded** | **excluded** |
 | `appcontainer` | yes (Windows only) | yes (Windows only) | — | — | **excluded** | **excluded** | **excluded** |
