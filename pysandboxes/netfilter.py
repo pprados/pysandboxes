@@ -173,3 +173,34 @@ def rule_to_netfilter(socket_rules: SocketRules, dns_server: list[IPv4Address], 
 
     netfilter.append("COMMIT")
     return netfilter
+
+
+def runtime_netfilter(
+    socket_rules: SocketRules, resolver_port: int, gateway: IPv4Address, slirp_dns: IPv4Address
+) -> List[str]:
+    """The IPv4 ruleset of ``net-resolve=runtime``: the pinned ruleset without any resolver address, plus the
+    filtering resolver.
+
+    The sandbox keeps the DNS address of slirp4netns; the ``nat`` table redirects it to the resolver, which listens
+    on ``resolver_port`` of the host loopback, reached through ``gateway``. The filter accepts that destination and
+    no other resolver, so a program that names its own (8.8.8.8, DoT, DoH) meets the default ``DROP``. The
+    addresses the resolver learns are added to the ``LEARNED`` chain, jumped to after every static rule: a static
+    ``DENY`` keeps its precedence over a name.
+
+    post: __return__.count('COMMIT') == 2
+    """
+    base = rule_to_netfilter(socket_rules, [], is_ipv6=False)
+    established = base.index("-A OUTPUT -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT") + 1
+    resolver = [
+        f"-A OUTPUT -p {proto} -d {gateway}/32 --dport {resolver_port} -m conntrack --ctstate NEW -j ACCEPT"
+        for proto in ("udp", "tcp")
+    ]
+    chain = base.index(":OUTPUT DROP [0:0]") + 1
+    filter_table = base[:chain] + [":LEARNED - [0:0]"] + base[chain:established] + resolver
+    filter_table += base[established:-1] + ["-A OUTPUT -j LEARNED", "COMMIT"]
+    nat = ["*nat", ":OUTPUT ACCEPT [0:0]"]
+    nat += [
+        f"-A OUTPUT -p {proto} -d {slirp_dns}/32 --dport 53 -j DNAT --to-destination {gateway}:{resolver_port}"
+        for proto in ("udp", "tcp")
+    ]
+    return filter_table + nat + ["COMMIT"]
