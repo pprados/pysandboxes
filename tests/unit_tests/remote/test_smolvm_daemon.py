@@ -16,33 +16,61 @@ from pysandboxes.remote.smolvm_sse_daemon import SmolvmSSEDaemon
 from pysandboxes.sb_types import ConfigLine, Envs
 
 
-def _launch_script(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, **params: str) -> str:
+def _launch_script(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, file_rules: tuple[FSExposeRule, ...] = (), **params: str
+) -> str:
     fake = tmp_path / "bin"
     fake.mkdir(exist_ok=True)
     (fake / "smolvm").write_text("#!/bin/sh\n")
     (fake / "smolvm").chmod(0o755)
     monkeypatch.setenv("PATH", f"{fake}:/usr/bin:/bin")
-    rules = EmptyRules._replace(os_sandbox_params=ImmutableDict({"image": "guest.tar", **params}))
+    rules = EmptyRules._replace(
+        os_sandbox_params=ImmutableDict({"image": "guest.tar", **params}), file_rules=file_rules
+    )
     args, _ = SmolvmSSEDaemon("token").subprocess_cmd(rules, {}, tmp_path / "pipe", tmp_path)
     assert args[:2] == ["sh", "-c"]
     return args[2]
 
 
 class TestLaunchCommand:
-    def test_the_guest_is_unprivileged_unless_the_profile_says_otherwise(
-        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
-        assert " --unprivileged " in _launch_script(tmp_path, monkeypatch)
-        assert "--unprivileged" not in _launch_script(tmp_path, monkeypatch, unprivileged="false")
-
-    def test_the_guest_reads_its_config_from_the_mounted_file_and_runs_on_a_clean_environment(
+    def test_the_config_reaches_the_guest_through_its_standard_input_and_never_the_disk(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         script = _launch_script(tmp_path, monkeypatch)
 
-        assert script.rstrip().endswith("--_named-pipe /pysb/config")
-        assert "/usr/bin/env -i" in script
-        assert "-v " + str(tmp_path / "smolvm-guest") + ":/pysb:ro" in script
+        assert script.rstrip().endswith('--_named-pipe /dev/stdin < "$fifo"')
+        assert " -i " in script
+        assert "cat " not in script, "the FIFO is not copied to a file"
+
+    def test_the_guest_runs_a_script_that_drops_its_capabilities_and_clears_its_environment(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        script = _launch_script(tmp_path, monkeypatch)
+
+        assert "--bounding-set=-all" in script and "--no-new-privs" in script
+        assert "env -i" in script
+        assert "--unprivileged" not in script, "the init script needs the capability to mount"
+
+    def test_the_package_is_shared_read_only_and_nothing_else_of_the_host_is_by_default(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        script = _launch_script(tmp_path, monkeypatch)
+
+        assert script.count(" -v ") == 1
+        assert ":ro" in script
+
+    def test_a_profile_that_needs_more_shares_than_a_guest_takes_is_refused(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        directories = [tmp_path / f"w{i}" for i in range(8)]
+        for directory in directories:
+            directory.mkdir()
+        file_rules = tuple(
+            FSExposeRule(f"{directory}/", True, ConfigLine("", Path("p"), 1)) for directory in directories
+        )
+
+        with pytest.raises(SandBoxError, match="shares of the host"):
+            _launch_script(tmp_path, monkeypatch, file_rules=file_rules)
 
     def test_a_key_smolvm_does_not_know_is_refused(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         with pytest.raises(SandBoxError, match="seccomp"):

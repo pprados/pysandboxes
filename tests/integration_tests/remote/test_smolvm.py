@@ -119,9 +119,52 @@ print("SYS_ADMIN", bool(cap_eff >> {_SYS_ADMIN_BIT} & 1))
 """
 
 
-def test_the_guest_drops_its_capabilities_unless_the_profile_keeps_them(tmp_path: Path) -> None:
-    assert "SYS_ADMIN False" in _in_guest(tmp_path, _CAPABILITIES_PROBE)
-    assert "SYS_ADMIN True" in _in_guest(tmp_path, _CAPABILITIES_PROBE, "smolvm.unprivileged=false"), "the control"
+def test_the_command_runs_as_the_host_user_with_no_capability(tmp_path: Path) -> None:
+    probe = _CAPABILITIES_PROBE + "import os\nprint('UID', os.getuid())\n"
+
+    out = _in_guest(tmp_path, probe)
+
+    assert "SYS_ADMIN False" in out
+    assert f"UID {os.getuid()}" in out
+    guest_root = subprocess.run(
+        ["smolvm", "machine", "run", "--image", os.environ["PYSANDBOXES_SMOLVM_IMAGE"], "--", "python", "-c", probe],
+        capture_output=True,
+        text=True,
+        timeout=120,
+        check=False,
+    )
+    assert "SYS_ADMIN True" in guest_root.stdout, "the control: a guest left alone is root with every capability"
+
+
+def test_an_ignore_rule_hides_a_file_inside_an_exposed_directory_even_to_native_code(tmp_path: Path) -> None:
+    exposed = tmp_path / "exposed"
+    exposed.mkdir()
+    (exposed / ".env").write_text("SECRET")
+    (exposed / "kept.txt").write_text("KEPT")
+    probe = f"""
+print("KEPT", open({str(exposed / "kept.txt")!r}).read())
+print("ENV", repr(open({str(exposed / ".env")!r}).read()))
+"""
+
+    out = _in_guest(tmp_path, probe, f"expose-ro={exposed}", "ignore=.env")
+
+    assert "KEPT KEPT" in out, "the control: what is not ignored is there"
+    assert "ENV ''" in out
+    assert "SECRET" in (exposed / ".env").read_text()
+
+
+def test_more_read_only_rules_than_a_guest_has_devices_still_start(tmp_path: Path) -> None:
+    directories = []
+    for index in range(12):
+        directory = tmp_path / f"d{index}"
+        directory.mkdir()
+        (directory / "f").write_text(str(index))
+        directories.append(directory)
+    probe = "\n".join(f"print({str(d / 'f')!r}, open({str(d / 'f')!r}).read())" for d in directories)
+
+    out = _in_guest(tmp_path, probe, *(f"expose-ro={d}" for d in directories))
+
+    assert all(f"{d / 'f'} {i}" in out for i, d in enumerate(directories))
 
 
 def _reachable(host: str, port: int) -> bool:

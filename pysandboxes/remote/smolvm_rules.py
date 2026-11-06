@@ -1,26 +1,16 @@
 # Copyright (c) 2026, Philippe PRADOS
 # License: Apache V2
-"""``smolvm machine run`` flags of a profile: the network, the mounts and the environment of the guest."""
+"""``smolvm machine run`` flags of the ``net=`` rules of a profile."""
 
 import logging
-import os
-import sys
 from ipaddress import IPv4Network
 
 from ..all_rules import AllRules
-from ..guard_files import FSExposeRule, IgnoreRule
 from ..guard_socket import Action, Direction, Kind
 
 logger = logging.getLogger(__name__)
 
-# The image brings its own system: a host directory mounted over one would replace the guest's libraries.
-_IMAGE_OWNED = ("/usr", "/etc", "/bin", "/sbin", "/lib", "/lib64", "/proc", "/dev", "/sys")
 _ALL_PORTS = range(65536)
-
-
-def _host_interpreter_prefixes() -> set[str]:
-    """The installation of the host's Python: the guest runs the image's, so mounting it would only cost a device."""
-    return {os.path.realpath(prefix) for prefix in (sys.prefix, sys.base_prefix)}
 
 
 def _udp_ports(ports: tuple[int, ...] | range) -> list[str]:
@@ -73,30 +63,3 @@ def network_args(all_rules: AllRules) -> list[str]:
         for value in dict.fromkeys(values):
             args += [flag, value]
     return args
-
-
-def volume_args(all_rules: AllRules) -> list[str]:
-    """Return the ``-v`` flags of the ``expose`` rules, each directory at its own path in the guest.
-
-    smolvm mounts directories only: a file rule is reported and left out, which is narrower than the rule.
-    A path the image owns is left out, and so is a missing one. Exposed both ways, a path is read-only.
-    """
-    write: dict[str, bool] = {}
-    for rule in all_rules.file_rules:
-        if isinstance(rule, IgnoreRule):
-            logger.warning("smolvm mounts directories whole: ignore=%s is not enforced by the guest", rule.source)
-        if not isinstance(rule, FSExposeRule):
-            continue
-        path = rule.path.rstrip("/") or "/"
-        if any(path == owned or path.startswith(owned + "/") for owned in _IMAGE_OWNED):
-            continue
-        real = os.path.realpath(path)
-        if any(real == prefix or real.startswith(prefix + "/") for prefix in _host_interpreter_prefixes()):
-            continue
-        if not os.path.exists(path):
-            continue
-        if not os.path.isdir(path):
-            logger.warning("smolvm mounts directories only: %s is not enforced and stays hidden", path)
-            continue
-        write[path] = write.get(path, True) and rule.write
-    return [arg for path, writable in write.items() for arg in ("-v", f"{path}:{path}" + ("" if writable else ":ro"))]
