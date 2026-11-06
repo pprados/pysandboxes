@@ -448,3 +448,6 @@ eval-namespace=closed
 eval-syntax=arith, compare
 eval-max-iterations=100_000
 eval-timeout=2s
+python-import=locale
+python-import=posixpath
+python-import=string

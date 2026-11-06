@@ -102,3 +102,6 @@ python-import=zstandard
 # Standard Python
 python-import=_hmac, annotationlib, compression
 
+python-import=locale
+python-import=posixpath
+python-import=string
