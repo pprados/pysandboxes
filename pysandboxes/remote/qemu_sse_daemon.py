@@ -48,20 +48,20 @@ from .parameters import (
     qemu_start_timeout,
 )
 from .qemu_guest_console_io import start_qemu_serial_drain_tasks
-from .qemu_microvm_boot import ensure_microvm_boot_artifacts
-from .qemu_setup import microvm_mmio_capacity
 from .qemu_image import (
     ensure_image,
     get_default_image_path,
     normalize_qemu_m_memory_arg,
     qemu_accel_args,
 )
+from .qemu_microvm_boot import ensure_microvm_boot_artifacts
 from .qemu_setup import (
-    GUEST_CONFIG_MOUNT,
     GUEST_CIDATA_MOUNT,
+    GUEST_CONFIG_MOUNT,
     GUEST_RUN_MOUNT,
     QEMU_HOST_RUN_PREFIX,
     augment_all_rules_for_qemu_run_mount,
+    microvm_mmio_capacity,
     prepare_guest_env,
 )
 from .tools import SSE_READ_BUFSIZE, is_transient_connection_error, which_command
@@ -1586,6 +1586,7 @@ class QemuMicrovmSSEDaemon(QemuSSEDaemon):
         kernel, initrd = ensure_microvm_boot_artifacts(image, all_rules.os_sandbox_params)
         memory = normalize_qemu_m_memory_arg(all_rules.os_sandbox_params.get("memory", "2048").strip())
         image_format = "qcow2" if image.suffix == ".qcow2" or "cloudimg" in image.name else "raw"
+        forward = f"unix:{self.endpoint.path}-:{port}" if self.endpoint is not None else f"tcp:127.0.0.1:{port}-:{port}"
         cmd: Args = [
             binary,
             *accel_args,
@@ -1622,7 +1623,7 @@ class QemuMicrovmSSEDaemon(QemuSSEDaemon):
             "-device",
             "scsi-cd,drive=cidata,bus=scsi0.0,channel=0,scsi-id=1,lun=0",
             "-netdev",
-            f"user,id=net0,hostfwd=tcp:127.0.0.1:{port}-:{port}",
+            f"user,id=net0,hostfwd={forward}",
             "-device",
             "virtio-net-device,netdev=net0",
         ]

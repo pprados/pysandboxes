@@ -8,8 +8,8 @@ import pytest
 
 from pysandboxes.all_rules import EmptyRules
 from pysandboxes.immutable_dict import ImmutableDict
-from pysandboxes.remote import qemu_sse_daemon as daemon
 from pysandboxes.remote import qemu_setup
+from pysandboxes.remote import qemu_sse_daemon as daemon
 
 
 def test_microvm_command_and_capacity(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -21,8 +21,10 @@ def test_microvm_command_and_capacity(monkeypatch: pytest.MonkeyPatch) -> None:
     rules = EmptyRules._replace(os_sandbox_params=ImmutableDict({"accel": "tcg"}))
     assets = daemon._QemuLaunchAssets(Path("root.raw"), Path("seed.iso"), [("share", Path("/tmp"), "/share")])
     instance = object.__new__(daemon.QemuMicrovmSSEDaemon)
+    instance.endpoint = None
     cmd = instance._machine_command(rules, assets, 1234)
     probe.assert_called_once_with(cmd[0], ["-enable-kvm"])
+    assert "user,id=net0,hostfwd=tcp:127.0.0.1:1234-:1234" in cmd
     accel.assert_called_once()
     assert "-enable-kvm" in cmd
     assert "microvm,acpi=off,pcie=off,rtc=off" in cmd
@@ -58,11 +60,28 @@ def test_microvm_preserves_interpreter_symlinks_without_changing_writable_shares
     monkeypatch.setattr(daemon, "qemu_accel_args", lambda *_: [])
     monkeypatch.setattr(daemon, "ensure_microvm_boot_artifacts", lambda *_: (Path("kernel"), Path("initrd")))
 
-    cmd = object.__new__(daemon.QemuMicrovmSSEDaemon)._machine_command(rules, assets, 1234)
+    instance = object.__new__(daemon.QemuMicrovmSSEDaemon)
+    instance.endpoint = None
+    cmd = instance._machine_command(rules, assets, 1234)
 
     share = cmd[cmd.index("-fsdev") + 1]
     assert f"security_model={security}" in share
     assert ("readonly=on" in share) is not write
+
+
+def test_microvm_forwards_the_channel_to_the_unix_socket_the_host_hands_down(monkeypatch: pytest.MonkeyPatch) -> None:
+    from pysandboxes.remote.endpoint import UNIX, Endpoint
+
+    monkeypatch.setattr(daemon, "microvm_mmio_capacity", lambda *_: 16)
+    monkeypatch.setattr(daemon, "qemu_accel_args", lambda *_: [])
+    monkeypatch.setattr(daemon, "ensure_microvm_boot_artifacts", lambda *_: (Path("kernel"), Path("initrd")))
+    assets = daemon._QemuLaunchAssets(Path("root.raw"), Path("seed.iso"), [])
+    instance = object.__new__(daemon.QemuMicrovmSSEDaemon)
+    instance.endpoint = Endpoint(UNIX, path="/tmp/pysb_x/s")
+
+    cmd = instance._machine_command(EmptyRules, assets, 1234)
+
+    assert "user,id=net0,hostfwd=unix:/tmp/pysb_x/s-:1234" in cmd
 
 
 def test_capacity_probe_uses_launch_acceleration(monkeypatch: pytest.MonkeyPatch) -> None:
