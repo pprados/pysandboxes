@@ -1,5 +1,6 @@
 """Smoke tests for CLI wiring without live LLM calls."""
 
+import os
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
@@ -29,6 +30,8 @@ def test_main_kickoff_prints(
     mock_result.raw = "Task complete."
     mock_crew.kickoff.return_value = mock_result
     mock_crew_cls.return_value = mock_crew
+    vm_images = os.environ.get("PYSANDBOXES_VM_IMAGES_DIR", str(Path.home() / ".local/share/vm-images"))
+    monkeypatch.setenv("PYSANDBOXES_VM_IMAGES_DIR", vm_images)
     monkeypatch.setenv("HOME", str(tmp_path))
     monkeypatch.setenv("USERPROFILE", str(tmp_path))
     monkeypatch.setenv("LOCALAPPDATA", str(tmp_path / "AppData/Local"))

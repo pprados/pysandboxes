@@ -66,6 +66,12 @@ construction. Extend provider metadata with supported CPU architectures so unsup
 | 9 | Roadmap stays pending if deployment gates incomplete. |
 | 10 | PR creation conflicts with deferred integration; prepare evidence locally only. |
 
+### Ruling after Task 6 runtime probe
+
+**Ruling:** QEMU microvm supports 8 MMIO transports, while shared profiles initially requested 20–22. Keep every explicit file/network contract; eliminate nested duplicate mounts only when access and symlink semantics match, use one virtio-scsi MMIO controller for root and NoCloud disks, and place serialized daemon config on the read-only NoCloud ISO. The `/etc` parent export may replace CA child exports only with `security_model=none` and read-only access. Microvm execution-only mounts become read-only; they are runtime support paths, not user write grants. TCG also maps a virtio IRQ to RTC IRQ 8 and Linux rejects the shared line; disable the guest RTC for both modes and verify guest wall-clock/TLS after network setup. Use a CD SCSI device for the NoCloud ISO and pin root disk address, because Linux disk probe order was unstable. Costs if wrong: mount compaction may change visibility or write access, and disabling RTC may break guest wall-clock/TLS. Tests must prove explicit RW children stay writable, protected paths stay protected, and Python boots. Optional host shares may be omitted only through explicit `qemu.microvm_optional_paths` opt-in, only as needed to fit, and only when the guest verifies the native path exists.
+
+User follow-up: validate native guest CA paths as optional MMIO consumers. The guest Ubuntu image has `/etc/ssl/certs/ca-certificates.crt`; a KVM boot completed an HTTPS request to `www.google.com` without sharing host `/etc/ssl`. Unit selection tests cover retaining all shares under capacity, dropping only enough in configured order, and failing closed if required capacity remains. The Agno sample passed all 15 tests with `/etc/ssl` opted in.
+
 - A changed cloud image must invalidate cached kernel/initrd artifacts; Task 2 tests digest/version mismatch.
 - More MMIO consumers than the machine exposes must fail before guest execution; Task 3 tests the boundary.
 - A failed 9p or ignore mount must stop the guest; Task 4 injects both failures.

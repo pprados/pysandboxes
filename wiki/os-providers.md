@@ -20,9 +20,10 @@ Start here; the matrix below gives the detail behind each line.
 | Default on Linux: nothing to install, no privilege, files and TCP ports | `landlock` |
 | Untrusted native code, or host and UDP filtering | `bwrap` or `unshare` |
 | Strongest separation, in a VM (more than 20 s to start) | `qemu` |
+| Smaller QEMU machine, x86_64 Linux, with at most eight virtio-mmio transports | [`qemu-microvm`](qemu-microvm.md) |
 | Compiled code or kernel exploits, user-space kernel, starts in about a second | `gvisor` |
 | Resource limits and seccomp | `firejail` |
-| Inside Docker or Podman | `landlock` or `qemu` unprivileged; `unshare`, `bwrap` or `gvisor` with `--privileged` |
+| Inside Docker or Podman | `landlock`, `qemu` or `qemu-microvm` unprivileged; `unshare`, `bwrap` or `gvisor` with `--privileged` |
 | Files and ports on macOS (Seatbelt, no host filtering) | [`sandbox-exec`](sandbox-exec.md) |
 | Process separation only, no OS boundary (also on macOS, and the only choice on Windows) | `subprocess` |
 
@@ -40,6 +41,7 @@ The providers that can wrap the Python sandbox are:
 | [unshare](https://man7.org/linux/man-pages/man2/unshare.2.html) | [here](unshare.md)                    | • Disk mapping (without rename)<br/>• File filtering<br/>• Network filtering | This is a technology that allows isolating a Linux process at the disk and network levels using `unshare`, `slirp4netns` and `iptables`. |
 | [landlock](https://landlock.io/)                                | [here](landlock.md)                   | • Directory access<br/>• Network TCP port filtering                          | This is a technology that allows an auto isolation inside a Linux process.                                                               |
 | [qemu](https://www.qemu.org/)                            | [here](qemu.md)                       | • Total emulation of OS and CPU                                              | No need of privilege. Use KVM if it's possible, else use the emulation.                                                                  |
+| [qemu-microvm](https://www.qemu.org/docs/master/system/i386/microvm.html) | [here](qemu-microvm.md) | • Separate guest kernel<br/>• virtio-mmio only<br/>• Linux x86_64 | Direct kernel boot; KVM recommended. Eight transport limit; TCG is much slower. |
 | [gvisor](https://gvisor.dev)                             | [here](gvisor.md)                     | • User-space kernel (Sentry)<br/>• Disk mapping<br/>• File filtering<br/>• Network filtering | `runsc` in a private network namespace filtered by `iptables`, with `slirp4netns`. |
 | sandbox-exec | [here](sandbox-exec.md) | • Seatbelt path and port filtering<br/>• Deprecated by Apple<br/>• No remote host/IP filtering | Legacy macOS-only profile launcher. |
 | [appcontainer](appcontainer.md) | [here](appcontainer.md) | • File ACLs<br/>• AppContainer network capabilities<br/>• Job Object | Windows-only provider; its administrator and standard-user suites pass, and `cross-os.yml` runs them on the Windows runner. |
@@ -82,11 +84,25 @@ A ❌ means the provider does not enforce that control. The Python layer may sti
 
 ¹ `appcontainer` is Windows-only: the Docker and Kubernetes rows do not apply. ² `ignore=` covers only paths present at launch, and their names may remain listable. ³ AppContainer denies outbound network access by default. An `ALLOW` `net=` rule grants a broad public-Internet or private-network capability; AppContainer itself does not filter host, port, protocol, or loopback. The Python guard checks the first three only while enabled, so native code can bypass those checks. Loopback is blocked by AppContainer even when a rule allows it.
 
-QEMU passes the `readonly=on` export option for `expose-ro` mounts; an end-to-end native guest write regression test covers this behavior. Landlock denies TCP bind/connect by default on ABI v4+, but cannot filter UDP and is unavailable below ABI v4. See [QEMU security limitations](qemu.md#security-limitations) and [Landlock limits](landlock.md#limits).
+QEMU and QEMU microvm pass the `readonly=on` export option for `expose-ro` mounts; end-to-end native guest write regressions cover both. Microvm fails closed when the eight virtio-mmio transports are exhausted. Landlock denies TCP bind/connect by default on ABI v4+, but cannot filter UDP and is unavailable below ABI v4. See [QEMU security limitations](qemu.md#security-limitations), [QEMU microvm limits](qemu-microvm.md#limits), and [Landlock limits](landlock.md#limits).
+
+### QEMU microvm rule enforcement
+
+| Rule | OS-layer result | Evidence and limit |
+|---|---|---|
+| `expose-ro` | Read-only virtio-9p export | Native guest open-for-write is refused. |
+| `expose-rw` | Writable virtio-9p export | Native guest create/write succeeds only in the exposed directory. |
+| Unexposed files | Not exported | Native guest read fails; each distinct share consumes a transport. |
+| `ignore=` | Guest bind-mount masks original content | Native guest sees no original bytes. |
+| `net=` | Guest iptables filter | Native deny and allow controls pass, with a host control. |
+| Environment | Host allowlist copied to guest | Unlisted host variables are absent. |
+| Guest setup | Required mount failures stop startup | Fault injection verifies no user code starts. |
+
+These OS checks ran with Python guards disabled where applicable. Python import, API and `eval-*` rules remain in the Python layer.
 
 On `sandbox-exec`, the `• host` row is ❌ because Seatbelt filters by protocol and port only: `net=ALLOW|TCP|203.0.113.7|443|OUT` becomes "TCP port 443, any remote host". Only the Python socket guard still checks the host, so with `py-sandbox=false` native code reaches any host on an allowed port. A port rule is still enforced by the kernel. When DNS (UDP 53) is allowed, the rule becomes a grant on the system resolver socket (`mDNSResponder`), not a UDP rule. Details: [network limitations](sandbox-exec.md#network-limitations).
 
-`ignore=` is enforced differently by each technology: **py-sandbox** and **firejail** make the path disappear (`FileNotFoundError`), **unshare** and **sandbox-exec** have the OS refuse it (`PermissionError`), and **bwrap**, **qemu** and **gvisor** mask it, so a read succeeds and returns nothing. **landlock** denies access to a path but cannot hide one, so it has no equivalent: with `--py-sandbox=False` an ignored file stays readable there.
+`ignore=` is enforced differently by each technology: **py-sandbox** and **firejail** make the path disappear (`FileNotFoundError`), **unshare** and **sandbox-exec** have the OS refuse it (`PermissionError`), and **bwrap**, **qemu**, **qemu-microvm** and **gvisor** mask it, so a read returns no original file contents. **landlock** denies access to a path but cannot hide one, so it has no equivalent: with `--py-sandbox=False` an ignored file stays readable there.
 
 **landlock** under Kubernetes needs no capability at all, which is why its three Kubernetes rows are identical: unlike **unshare** and **bwrap**, it never asks the pod for `SYS_ADMIN` or `NET_ADMIN`, it restricts itself from the inside. Its single requirement sits elsewhere, on the *node*: the kernel must expose Landlock ABI v4 (Linux 6.7+) for the provider's default TCP deny policy, and the ABI seen inside the pod is the node's, not the image's. On a managed cluster, where the node kernel is not yours to choose, verify it before relying on it. Native UDP remains outside Landlock's network controls.
 
@@ -151,6 +167,7 @@ keep `py-sandbox` on, and put one OS provider around it (see [Recommendations](#
 | Hostile native code | Dependencies with C extensions, `ctypes`, database drivers | on | `bwrap` or `unshare` | Mount and network namespaces: a path that is not exposed does not exist, the network is filtered |
 | Hostile native code, kernel exploits | Code that may attack the kernel itself | on | `gvisor` | The guest talks to a user-space kernel (Sentry), which makes a small set of host system calls |
 | Worst case, or another CPU | Code you cannot reason about | on | `qemu` | A VM with its own Linux kernel: the host kernel is out of the guest's reach |
+| Smaller x86_64 guest with strict device budget | Code needing a separate guest kernel | on | `qemu-microvm` | A Linux VM booted directly from a matched kernel and initrd |
 
 `firejail` is a variant of the namespace row for hosts that already have it: it adds resource limits and a seccomp
 filter. `sandbox-exec` (macOS) and `appcontainer` (Windows) are the choices on those systems.
@@ -170,13 +187,14 @@ Measured on one host with `py-sandbox=false`, one run each. Start-up counts the 
 | `unshare` | 1.43 s | 0.03 s | User namespaces, `slirp4netns`, `iptables` | ✅ |
 | `gvisor` (`systrap`) | 0.74 s | 0.16 s | `runsc`, `slirp4netns`, `iptables`, `/dev/net/tun` | ✅ |
 | `qemu` | 12.8 s | 0.06 s | `qemu-system`; KVM makes it faster | ✅ |
+| `qemu-microvm` | 20.4 s KVM<br/>110.3 s TCG | — | Linux x86_64, `qemu-system-x86_64`, `7zip`; KVM recommended | ✅ |
 
 Three consequences:
 
 - `gvisor` pays on system calls, not on computation: code that stays in the interpreter runs at the speed of the
   others, while a loop of `stat`, `open` or socket calls is 6 to 8 times slower. Its `ptrace` and `kvm` platforms are
   slower still on this host (see [gVisor](gvisor.md)).
-- `qemu` pays once, at start-up. Keep the sandbox alive across calls (`with sandboxes():`) instead of starting one per
+- `qemu` and `qemu-microvm` pay once, at start-up. Keep the sandbox alive across calls (`with sandboxes():`) instead of starting one per
   call.
 - `landlock`, `bwrap` and `firejail` cost almost nothing, which is why the default is not the strongest provider: go
   up only when the threat in the first table calls for it.
@@ -185,7 +203,7 @@ Three consequences:
 
 A container adds a second boundary around the provider and takes nothing away from it.
 
-- `landlock` and `qemu` run without extra privilege.
+- `landlock`, `qemu` and `qemu-microvm` run without extra privilege; mount `/dev/kvm` to a container when acceleration is available.
 - `bwrap`, `unshare` and `gvisor` create namespaces of their own, which the default container confinement refuses:
   lower it as each provider page describes, or use `--privileged`.
 - `firejail` does not run in a container, even with `--privileged`.
@@ -204,5 +222,5 @@ A container adds a second boundary around the provider and takes nothing away fr
 ## References
 
 - [bubblewrap](https://github.com/containers/bubblewrap), [firejail](https://github.com/netblue30/firejail), [unshare](https://man7.org/linux/man-pages/man2/unshare.2.html), [landlock](https://landlock.io/), [qemu](https://www.qemu.org/), [gVisor](https://gvisor.dev)
-- Provider pages: [bwrap](bwrap.md), [firejail](firejail.md), [unshare](unshare.md), [landlock](landlock.md), [qemu](qemu.md), [gvisor](gvisor.md)
+- Provider pages: [bwrap](bwrap.md), [firejail](firejail.md), [unshare](unshare.md), [landlock](landlock.md), [qemu](qemu.md), [qemu-microvm](qemu-microvm.md), [gvisor](gvisor.md)
 - [Database drivers](database.md), [transport unpickle guard](transport-unpickle-guard.md)

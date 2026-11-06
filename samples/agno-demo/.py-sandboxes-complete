@@ -37,8 +37,8 @@ python-import=_codecs_kr, _codecs_tw, _markupbase, _multibytecodec, _thread, abc
 python-import=ast, base64, binascii, bisect, calendar, codecs, collections, colorsys
 python-import=contextlib, copy, copyreg, dataclasses, datetime, email, encodings
 python-import=enum, errno, fnmatch, fractions, functools, gettext, hashlib, html
-python-import=http, io, ipaddress, itertools, json, keyword, logging, math
-python-import=mimetypes, operator, os, pathlib, pickle, random, re, select, socket
+python-import=http, io, ipaddress, itertools, json, keyword, locale, logging, math
+python-import=mimetypes, operator, os, pathlib, pickle, posixpath, random, re, select, socket
 python-import=ssl, stat, struct, textwrap, threading, time, types, typing
 python-import=unicodedata, urllib, uuid, weakref, zlib
 
@@ -73,4 +73,3 @@ python-import=_socket, reprlib
 # Add rules (2026/10/07 at 16:46)
 # Standard Python
 python-import=annotationlib
-

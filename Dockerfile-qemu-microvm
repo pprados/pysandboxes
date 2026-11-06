@@ -1,0 +1,9 @@
+# Copyright (c) 2026, Philippe PRADOS
+# License: Apache V2
+#
+# The microvm provider adds a matched direct-boot kernel/initrd pair to the QEMU image.
+# Build: make build-image-qemu-microvm => python-sb-qemu-microvm:<python>, python-sb-qemu-microvm:latest
+ARG PYTHON_VERSION=3.11
+FROM python-sb-qemu:${PYTHON_VERSION}
+
+RUN python -c 'from pysandboxes.remote.qemu_image import get_default_image_path; from pysandboxes.remote.qemu_microvm_boot import ensure_microvm_boot_artifacts; ensure_microvm_boot_artifacts(get_default_image_path(), {})'

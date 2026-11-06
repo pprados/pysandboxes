@@ -24,6 +24,7 @@ def test_microvm_command_and_capacity(monkeypatch: pytest.MonkeyPatch) -> None:
     accel.assert_called_once()
     assert "-enable-kvm" in cmd
     assert "microvm,acpi=off,pcie=off,rtc=off" in cmd
+    assert cmd[cmd.index("-cpu") + 1] == "max"
     assert "console=ttyS0 root=/dev/sda1 ro reboot=t" in cmd
     assert "virtio-scsi-device,id=scsi0" in cmd
     assert "scsi-hd,drive=root,bus=scsi0.0,channel=0,scsi-id=0,lun=0" in cmd
@@ -45,3 +46,52 @@ def test_capacity_probe_uses_launch_acceleration(monkeypatch: pytest.MonkeyPatch
     assert command[:2] == ["fake-qemu", "-enable-kvm"]
     assert command[command.index("-machine") + 1] == "microvm,acpi=off,pcie=off,rtc=off"
     assert run.call_args.kwargs["input"] == "info qtree\nquit\n"
+
+
+def test_optional_guest_native_mounts_are_dropped_only_to_fit_capacity() -> None:
+    mounts = [
+        ("required", Path("/host/project"), "/project"),
+        ("ssl", Path("/etc/ssl"), "/etc/ssl"),
+        ("pki", Path("/etc/pki"), "/etc/pki"),
+    ]
+
+    selected, native_paths = daemon._select_microvm_mounts(mounts, ["/etc/ssl", "/etc/pki"], 4)
+
+    assert selected == [mounts[0], mounts[2]]
+    assert native_paths == ["/etc/ssl"]
+
+    selected, native_paths = daemon._select_microvm_mounts(mounts, ["/etc/ssl", "/etc/pki"], 5)
+    assert selected == mounts
+    assert native_paths == []
+
+
+def test_optional_guest_native_mounts_do_not_hide_capacity_errors() -> None:
+    mounts = [("required", Path("/host/project"), "/project")]
+
+    with pytest.raises(ValueError, match="not mounts"):
+        daemon._select_microvm_mounts(mounts, ["/etc/ssl"], 3)
+
+    with pytest.raises(ValueError, match="needs 3 MMIO devices but supports 2"):
+        daemon._select_microvm_mounts(mounts, [], 2)
+
+    with pytest.raises(ValueError, match="needs 5 MMIO devices but supports 2"):
+        daemon._select_microvm_mounts(
+            [
+                ("project", Path("/host/project"), "/project"),
+                ("ssl", Path("/etc/ssl"), "/etc/ssl"),
+                ("pki", Path("/etc/pki"), "/etc/pki"),
+            ],
+            ["/etc/ssl"],
+            2,
+        )
+
+    with pytest.raises(ValueError, match="overlaps another mount: /etc/ssl"):
+        daemon._select_microvm_mounts(
+            [
+                ("etc", Path("/host/etc"), "/etc"),
+                ("ssl", Path("/etc/ssl"), "/etc/ssl"),
+                ("project", Path("/host/project"), "/project"),
+            ],
+            ["/etc/ssl"],
+            4,
+        )

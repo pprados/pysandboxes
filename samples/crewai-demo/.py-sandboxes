@@ -89,12 +89,12 @@ python-import=concurrent, contextlib, contextvars, copy, copyreg, csv, dataclass
 python-import=datetime, decimal, difflib, dis, email, encodings, enum, errno, fcntl
 python-import=fnmatch, fractions, functools, getpass, glob, graphlib, grp, gzip
 python-import=hashlib, heapq, hmac, html, http, io, ipaddress, itertools, json
-python-import=keyword, logging, marshal, math, mimetypes, multiprocessing, numbers
+python-import=keyword, locale, logging, marshal, math, mimetypes, multiprocessing, numbers
 python-import=operator, os, pathlib, pickle, platform, posixpath, pprint, pwd, queue
 python-import=random, re, reprlib, resource, select, shlex, shutil, signal, socket
 python-import=sqlite3, ssl, stat, string, struct, tarfile, tempfile, termios
 python-import=textwrap, threading, time, tomllib, traceback, types, typing
-python-import=unicodedata, urllib, uuid, weakref, zipfile, zipimport, zlib
+python-import=unicodedata, urllib, uuid, weakref, zoneinfo, zipfile, zipimport, zlib
 
 # External modules (Are you sure about the origin?)
 python-import=aiofiles

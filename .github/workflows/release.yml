@@ -207,6 +207,7 @@ jobs:
     uses: ./.github/workflows/full-gate.yml
     with:
       exclude-tcg: true
+      vm-sample-python-versions: '["3.11", "3.12", "3.13", "3.14"]'
 
   # Tests run from the checkout import the source tree, so a file left out of the wheel passes them. These run
   # against the wheel about to be published, installed in a venv that holds the test dependencies but not the project.

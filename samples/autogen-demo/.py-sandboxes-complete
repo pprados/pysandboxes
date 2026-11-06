@@ -68,6 +68,8 @@ python-import=sniffio
 python-import=soupsieve
 python-import=typing_extensions
 
+python-import=locale
+
 expose-ro=.
 
 # Add rules (2026/10/07 at 16:46)

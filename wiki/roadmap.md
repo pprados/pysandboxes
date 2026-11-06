@@ -42,7 +42,7 @@ Planned work, in no committed order:
     - [ ] lxc
     - [ ] vagrant
   - [ ] micro-VM
-    - [ ] [QEMU-microvm](https://www.qemu.org/docs/master/system/i386/microvm.html)
+    - [X] [QEMU-microvm](qemu-microvm.md) (Linux x86_64; eight virtio-mmio transports)
     - [ ] [Firecracker](https://firecracker-microvm.github.io/)
     - [ ] [Fargate](https://aws.amazon.com/fr/fargate/)
     - [ ] [Kata Containers](https://katacontainers.io/) (compatible classical containers management)

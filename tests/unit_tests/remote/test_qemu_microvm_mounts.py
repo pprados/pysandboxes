@@ -34,6 +34,17 @@ def test_compacted_bootstrap_preserves_import_paths() -> None:
     assert "mount -t 9p" in script
 
 
+def test_bootstrap_requires_guest_native_fallback_paths() -> None:
+    from pysandboxes.remote.qemu_setup import _bootstrap_script_content
+
+    script = _bootstrap_script_content(
+        [("__pysb_native__", "/etc/ssl")], "/run", "3.14", python_paths=["/runtime/site-packages"]
+    )
+
+    assert '[ "$tag" = "__pysb_native__" ]' in script
+    assert '[ -e "$path" ] || _pysb_fatal "optional 9p path is absent from the guest image: $path"' in script
+
+
 def test_microvm_config_uses_readonly_iso_without_config_share(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     from types import SimpleNamespace
     from pysandboxes.remote import qemu_setup
@@ -54,6 +65,37 @@ def test_microvm_config_uses_readonly_iso_without_config_share(monkeypatch: pyte
     assert (tmp_path / "config.pkl").read_bytes() == b"serialized-config"
     assert "config.pkl=config.pkl" in commands[0]
     assert 'CONFIG_PATH="/mnt/cidata/config.pkl"' in (tmp_path / "user-data").read_text()
+
+
+@pytest.mark.parametrize("source", ["profile", "environment"])
+def test_microvm_optional_paths_are_selected_before_cloud_init(
+    source: str, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    from types import SimpleNamespace
+
+    mounts = [("project", tmp_path / "project", "/project"), ("ssl", Path("/etc/ssl"), "/etc/ssl")]
+    cloud_init_mounts: list[tuple[str, str]] = []
+    monkeypatch.setattr(daemon, "ensure_image", lambda _: None)
+    monkeypatch.setattr(daemon, "_file_rules_mounts", lambda *args, **kwargs: (mounts, [(a, c) for a, _, c in mounts]))
+    monkeypatch.setattr(daemon, "_qemu_binary", lambda: "qemu")
+    monkeypatch.setattr(daemon, "qemu_accel_args", lambda _: [])
+    monkeypatch.setattr(daemon, "microvm_mmio_capacity", lambda *_: 3)
+    monkeypatch.setattr(
+        daemon,
+        "prepare_guest_env",
+        lambda *args, **kwargs: cloud_init_mounts.extend(kwargs["mounts"]) or tmp_path / "seed.iso",
+    )
+    params = {"microvm_optional_paths": "/etc/ssl"} if source == "profile" else {}
+    if source == "environment":
+        monkeypatch.setenv("QEMU_MICROVM_OPTIONAL_PATHS", "/etc/ssl,/etc/pki")
+    rules = SimpleNamespace(os_sandbox_params=params, file_rules=[])
+
+    assets = daemon._prepare_qemu_launch(
+        rules, tmp_path, SimpleNamespace(all_rules=rules), tmp_path / "pipe", microvm=True
+    )
+
+    assert assets.mount_specs == [mounts[0]]
+    assert cloud_init_mounts == [("project", "/project"), ("__pysb_native__", "/etc/ssl")]
 
 
 def test_execution_mount_is_readonly_but_explicit_write_grant_is_not(monkeypatch: pytest.MonkeyPatch) -> None:

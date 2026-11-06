@@ -72,7 +72,7 @@ jobs:
     - name: Install the OS providers
       run: |
         sudo apt-get install -y bubblewrap firejail slirp4netns iptables iproute2 \
-          qemu-system-x86 qemu-utils genisoimage
+          qemu-system-x86 qemu-utils genisoimage 7zip
         sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0 || true
 
     # runsc comes with a sidecar directory (/usr/bin/gvisor-bin): the apt package installs both, a lone binary
@@ -136,9 +136,16 @@ jobs:
     - name: Fetch the QEMU guest image
       run: uv run python -m pysandboxes.remote.qemu_fetch_image
 
+    - name: Prepare the microvm direct-boot artifacts
+      run: >-
+        uv run python -c 'from pysandboxes.remote.qemu_image import get_default_image_path;
+        from pysandboxes.remote.qemu_microvm_boot import ensure_microvm_boot_artifacts;
+        ensure_microvm_boot_artifacts(get_default_image_path(), {})'
+
     - name: Run integration tests
       env:
         PYSANDBOXES_FAIL_ON_SKIP: "1"
+        PYSANDBOXES_QEMU_TCG: "1"
         PYSANDBOXES_FIREJAIL_TEST_BRIDGE: br-pysb-test
         PYTEST_ADDOPTS: --durations=20 ${{ inputs.exclude-tcg && '-m "not slow"' || '' }}
       run: make integration-tests

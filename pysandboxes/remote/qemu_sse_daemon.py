@@ -1042,6 +1042,41 @@ def _compact_microvm_mounts(
     return [mount for mount in mounts if mount in kept]
 
 
+def _select_microvm_mounts(
+    mounts: list[tuple[str, Path, str]], optional_paths: list[str], capacity: int
+) -> tuple[list[tuple[str, Path, str]], list[str]]:
+    """Drop opted-in host shares only when required, using matching guest-native paths."""
+    optional: list[str] = []
+    for raw_path in optional_paths:
+        guest_path = str(Path(raw_path))
+        if not Path(guest_path).is_absolute() or guest_path != raw_path:
+            raise ValueError(f"qemu.microvm_optional_paths must contain normalized absolute paths: {raw_path!r}")
+        if guest_path not in optional:
+            optional.append(guest_path)
+
+    mount_paths = {guest for _, _, guest in mounts}
+    invalid = [path for path in optional if path not in mount_paths]
+    if invalid:
+        raise ValueError(f"qemu.microvm_optional_paths contains paths that are not mounts: {', '.join(invalid)}")
+
+    needed = max(0, 2 + len(mounts) - capacity)
+    if not needed:
+        return mounts, []
+
+    dropped = optional[:needed]
+    if len(dropped) != needed:
+        raise ValueError(f"QEMU microvm needs {2 + len(mounts)} MMIO devices but supports {capacity}")
+    kept = [mount for mount in mounts if mount[2] not in dropped]
+    for guest_path in dropped:
+        target = Path(guest_path)
+        if any(
+            Path(other_guest).is_relative_to(target) or target.is_relative_to(Path(other_guest))
+            for _, _, other_guest in kept
+        ):
+            raise ValueError(f"qemu.microvm_optional_paths path overlaps another mount: {guest_path}")
+    return kept, dropped
+
+
 class _QemuLaunchAssets(NamedTuple):
     image_path: Path
     nocloud_iso: Path
@@ -1063,6 +1098,23 @@ def _prepare_qemu_launch(
     mount_specs, mount_list = _file_rules_mounts(
         all_rules, temp, pipe_path, config_dir=None if microvm else config_dir, stage_root=stage_root, microvm=microvm
     )
+    if microvm:
+        optional_value = str(all_rules.os_sandbox_params.get("microvm_optional_paths", "")).strip()
+        if not optional_value:
+            optional_value = os.environ.get("QEMU_MICROVM_OPTIONAL_PATHS", "")
+        optional_paths = [path.strip() for path in optional_value.split(",") if path.strip()]
+        if optional_paths:
+            params = all_rules.os_sandbox_params
+            capacity = microvm_mmio_capacity(_qemu_binary(), qemu_accel_args(params))
+            if not all_rules.os_sandbox_params.get("microvm_optional_paths"):
+                mount_paths = {guest for _, _, guest in mount_specs}
+                optional_paths = [path for path in optional_paths if path in mount_paths]
+            try:
+                mount_specs, native_paths = _select_microvm_mounts(mount_specs, optional_paths, capacity)
+            except ValueError as error:
+                raise SandBoxError(str(error)) from error
+            mount_list = [(tag, guest) for tag, _, guest in mount_specs]
+            mount_list.extend(("__pysb_native__", guest) for guest in native_paths)
     python_version = f"{sys.version_info.major}.{sys.version_info.minor}"
     config_guest_path = f"{GUEST_CONFIG_MOUNT}/config.pkl" if config_dir else None
     if microvm and config_dir:
@@ -1523,6 +1575,8 @@ class QemuMicrovmSSEDaemon(QemuSSEDaemon):
             *accel_args,
             "-machine",
             "microvm,acpi=off,pcie=off,rtc=off",
+            "-cpu",
+            "max",
             "-nodefaults",
             "-no-user-config",
             "-display",

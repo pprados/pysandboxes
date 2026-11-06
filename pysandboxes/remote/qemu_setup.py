@@ -191,6 +191,10 @@ def _bootstrap_script_content(
         lines.append("echo '[pysandbox-9p] mounting file_rules shares' >&2")
         lines.append("while read -r tag path; do")
         lines.append('  [ -z "$tag" ] && continue')
+        lines.append('  if [ "$tag" = "__pysb_native__" ]; then')
+        lines.append('    [ -e "$path" ] || _pysb_fatal "optional 9p path is absent from the guest image: $path"')
+        lines.append("    continue")
+        lines.append("  fi")
         lines.append('  mkdir -p "$path"')
         lines.append('  echo "[pysandbox-9p] $tag -> $path" >&2')
         lines.append(
