@@ -24,7 +24,7 @@ Start here; the matrix below gives the detail behind each line.
 | Resource limits and seccomp | `firejail` |
 | Inside Docker or Podman | `landlock` or `qemu` unprivileged; `unshare`, `bwrap` or `gvisor` with `--privileged` |
 | Files and ports on macOS (Seatbelt, no host filtering) | [`sandbox-exec`](sandbox-exec.md) |
-| Process separation only, no OS boundary (also on macOS, and the only choice on Windows) | `subprocess` |
+| Process separation only, no OS boundary (also on macOS, and the fallback on Windows) | [`subprocess`](subprocess.md) |
 
 Two limits to know before choosing `landlock`: it denies a path but cannot hide it, and it does not protect the host's named Unix sockets (see [Host sockets under `/run`](#host-sockets-under-run)). Against untrusted native code, prefer `bwrap` or `unshare`.
 
@@ -34,7 +34,7 @@ The providers that can wrap the Python sandbox are:
 
 | Technology                                                      | Implementation<br/>&amp;<br/>Configuration | Specifics                                                                    | Description                                                                                                                              |
 |-----------------------------------------------------------------|--------------------------------------------|------------------------------------------------------------------------------|------------------------------------------------------------------------------------------------------------------------------------------|
-| subprocess                                                      |                                            | • no complementary security                                                  |                                                                                                                                          |
+| [subprocess](subprocess.md)                                     | [here](subprocess.md)                 | • no complementary security                                                  | Separate Python process of the same user, with no OS boundary. Runs on every platform.                                                   |
 | [bwrap](https://github.com/containers/bubblewrap)               | [here](bwrap.md)                      | • Disk mapping (without rename)<br/>• File filtering<br/>• Network filtering | This is a technology that allows isolating a Linux process at the disk and network levels.                                               |
 | [firejail](https://github.com/netblue30/firejail)               | [here](firejail.md)                   | • Disk mapping (without rename)<br/>• File filtering<br/>• Network filtering | This is a technology that allows isolating a Linux process at the disk and network levels.                                               |
 | [unshare](https://man7.org/linux/man-pages/man2/unshare.2.html) | [here](unshare.md)                    | • Disk mapping (without rename)<br/>• File filtering<br/>• Network filtering | This is a technology that allows isolating a Linux process at the disk and network levels using `unshare`, `slirp4netns` and `iptables`. |
@@ -222,5 +222,5 @@ A container adds a second boundary around the provider and takes nothing away fr
 ## References
 
 - [bubblewrap](https://github.com/containers/bubblewrap), [firejail](https://github.com/netblue30/firejail), [unshare](https://man7.org/linux/man-pages/man2/unshare.2.html), [landlock](https://landlock.io/), [qemu](https://www.qemu.org/), [gVisor](https://gvisor.dev)
-- Provider pages: [bwrap](bwrap.md), [firejail](firejail.md), [unshare](unshare.md), [landlock](landlock.md), [qemu](qemu.md), [gvisor](gvisor.md)
+- Provider pages: [subprocess](subprocess.md), [bwrap](bwrap.md), [firejail](firejail.md), [unshare](unshare.md), [landlock](landlock.md), [qemu](qemu.md), [gvisor](gvisor.md)
 - [Database drivers](database.md), [transport unpickle guard](transport-unpickle-guard.md)
