@@ -76,9 +76,14 @@ def test_rejects_unmatched_pair_without_publishing_cache(image: Path) -> None:
     assert not list(image.parent.glob("*.microvm-*"))
 
 
-def test_malformed_image_leaves_no_published_cache(tmp_path: Path) -> None:
+def test_malformed_image_leaves_no_published_cache(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     image = tmp_path / "bad.qcow2"
     image.write_bytes(b"not an image")
+
+    def malformed(*_args: str) -> str:
+        raise subprocess.CalledProcessError(1, "qemu-img")
+
+    monkeypatch.setattr(boot, "_run", malformed)
     with pytest.raises((ValueError, subprocess.CalledProcessError)):
         boot.ensure_microvm_boot_artifacts(image, {})
     assert not list(tmp_path.glob("*.microvm-*"))
