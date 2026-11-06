@@ -16,7 +16,11 @@ import threading
 from ipaddress import IPv4Address
 from typing import Sequence
 
+from ..all_rules import AllRules
+from ..e import SandBoxError
 from ..egress_filter import Enforcer, FilteringResolver, IPAddress, NameRule
+from .netns_enforcer import NetnsIptablesEnforcer
+from .tools import get_upstream_dns, which_command
 
 logger = logging.getLogger(__name__)
 
@@ -127,3 +131,47 @@ class RuntimeDns:
             return
         loop.call_soon_threadsafe(loop.stop)
         thread.join(5)
+
+
+class RuntimeDnsSession:
+    """The filtering resolver of one sandbox whose network namespace the host drives with ``nsenter ... iptables``.
+
+    Shared by the providers that give the sandbox such a namespace: they start it before the firewall is built,
+    because the redirection of the sandbox DNS names its port, attach it once the namespace exists, and stop it with
+    the sandbox. A profile that is not ``net-resolve=runtime`` makes every call a no-op.
+    """
+
+    def __init__(self) -> None:
+        self._dns: RuntimeDns | None = None
+
+    @property
+    def running(self) -> bool:
+        return self._dns is not None
+
+    def start(self, all_rules: AllRules) -> int | None:
+        """Start the resolver and return its port; ``None`` for ``pinned``. A restart stops the previous one first."""
+        self.stop()
+        if all_rules.net_resolve != "runtime":
+            return None
+        for tool in ("nsenter", "iptables"):
+            if not which_command(tool):
+                raise SandBoxError(f"net-resolve=runtime needs {tool} on the host.")
+        servers = [ip for ip in get_upstream_dns() if isinstance(ip, IPv4Address)]
+        if not servers:
+            raise SandBoxError("net-resolve=runtime found no IPv4 resolver on the host to forward the names to.")
+        self._dns = RuntimeDns(all_rules.name_rules, servers)
+        return self._dns.start()
+
+    def attach(self, pid: int) -> None:
+        """Let the resolver open addresses in the network namespace held by ``pid``, once that namespace exists."""
+        if self._dns is None:
+            return
+        nsenter, iptables = which_command("nsenter"), which_command("iptables")
+        if nsenter is None or iptables is None:
+            raise SandBoxError("net-resolve=runtime needs nsenter and iptables on the host.")
+        self._dns.attach(NetnsIptablesEnforcer(pid, str(nsenter), str(iptables)))
+
+    def stop(self) -> None:
+        dns, self._dns = self._dns, None
+        if dns is not None:
+            dns.stop()

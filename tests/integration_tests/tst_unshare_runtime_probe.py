@@ -23,7 +23,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from pysandboxes import egress_filter, python_sb, sandbox, sandboxes
-from pysandboxes.remote import unshare_sse_daemon
+from pysandboxes.remote import runtime_dns
 from pysandboxes.remote.runtime_dns import RuntimeDns
 
 GATEWAY = "10.0.2.2"
@@ -171,15 +171,15 @@ def main() -> int:
     work, layers = Path(sys.argv[1]), sys.argv[2]
     authority, allowed, other = FakeAuthority(), Listener(), Listener()
     egress_filter.MIN_LEARNED_TTL = egress_filter.MAX_LEARNED_TTL = TTL
-    unshare_sse_daemon.get_upstream_dns = lambda: [IPv4Address("127.0.0.1")]
-    real = unshare_sse_daemon.RuntimeDns
+    runtime_dns.get_upstream_dns = lambda: [IPv4Address("127.0.0.1")]
+    real = runtime_dns.RuntimeDns
     started: list[RuntimeDns] = []
 
     def start_resolver(rules: tuple, servers: list) -> RuntimeDns:
         started.append(real(rules, servers, upstream_port=authority.port, upstream_timeout=3.0))
         return started[-1]
 
-    patch.object(unshare_sse_daemon, "RuntimeDns", start_resolver).start()
+    patch.object(runtime_dns, "RuntimeDns", start_resolver).start()
     profile = work / "runtime.profile"
     profile.write_text(
         f"py-sandbox={'false' if layers == 'kernel' else 'true'}\n"
