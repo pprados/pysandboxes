@@ -52,6 +52,8 @@ def test_pc_command_preserves_disks_devices_and_mount_order(
         [
             "qemu-system-x86_64",
             *accel,
+            "-cpu",
+            "max",
             "-m",
             "1024",
             "-snapshot",

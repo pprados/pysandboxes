@@ -1303,6 +1303,8 @@ class QemuSSEDaemon(VMSSEDaemon):
         cmd: Args = [
             _qemu_binary(),
             *enable_kvm,
+            "-cpu",
+            "max",
             "-m",
             memory,
             "-snapshot",
