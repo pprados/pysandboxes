@@ -125,6 +125,19 @@ def _create(temp: Path, config: Any = None, mounts: Any = (), **kwargs: Any) -> 
 
 
 class TestNoCloudFiles:
+    def test_the_microvm_python_sb_bootstrap_disables_serial_echo(
+        self, tmp_path: Path, iso: list[dict[str, Any]]
+    ) -> None:
+        config = _process_config(
+            all_rules=EmptyRules._replace(os_sandbox="qemu-microvm"),
+            python_main_args=("-m", "mcp_server.main"),
+        )
+
+        _create(tmp_path, config)
+
+        user_data = (tmp_path / "user-data").read_text()
+        assert "stty raw -echo </dev/ttyS0" in user_data
+
     def test_the_inputs_are_written_next_to_the_iso(self, tmp_path: Path, iso: list[dict[str, Any]]) -> None:
         mounts = [("tag0", "/guest/a"), ("tag1", "/guest/b")]
 

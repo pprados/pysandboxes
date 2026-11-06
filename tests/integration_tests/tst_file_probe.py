@@ -15,6 +15,7 @@ import sys
 import tempfile
 from collections.abc import Callable
 from pathlib import Path
+from typing import cast
 
 from pysandboxes import sandbox, sandboxes
 
@@ -39,7 +40,7 @@ def _native_read(path: str) -> bytes:
     if fd < 0:
         raise OSError(ctypes.get_errno(), path)
     try:
-        chunks = []
+        chunks: list[bytes] = []
         buffer = ctypes.create_string_buffer(65536)
         while True:
             size = libc.read(fd, buffer, len(buffer))
@@ -85,7 +86,10 @@ def _check_files(
         return _native_read(path) if native else Path(path).read_text()
 
     def write(path: str) -> object:
-        return _native_write(path) if native else Path(path).write_text("written")
+        if native:
+            _native_write(path)
+            return None
+        return Path(path).write_text("written")
 
     outcomes = {
         "ro_read": _outcome(lambda: read(ro_file)),
@@ -122,7 +126,7 @@ def _check_files_in_sandbox(
 
 def main() -> int:
     args = [arg for arg in sys.argv[1:] if arg not in ("--plain", "--native")]
-    profile, paths = args[0], args[1:6]
+    profile, paths = args[0], cast(tuple[str, str, str, str, str], tuple(args[1:6]))
     ignored_digest = args[6] if "--native" in sys.argv else ""
     if "--plain" in sys.argv:
         print(_check_files(*paths, native="--native" in sys.argv, ignored_digest=ignored_digest))

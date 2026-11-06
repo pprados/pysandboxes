@@ -6,6 +6,9 @@ from pathlib import Path
 
 import pytest
 
+from pysandboxes.all_rules import EmptyRules
+from pysandboxes.immutable_dict import ImmutableDict
+from pysandboxes.remote.daemon_parameters import DaemonParameters
 from pysandboxes.remote import qemu_sse_daemon as daemon
 
 
@@ -46,7 +49,6 @@ def test_bootstrap_requires_guest_native_fallback_paths() -> None:
 
 
 def test_microvm_config_uses_readonly_iso_without_config_share(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
-    from types import SimpleNamespace
     from pysandboxes.remote import qemu_setup
 
     monkeypatch.setattr(daemon, "ensure_image", lambda _: None)
@@ -57,9 +59,10 @@ def test_microvm_config_uses_readonly_iso_without_config_share(monkeypatch: pyte
     config = tmp_path / "config"
     config.mkdir()
     (config / "config.pkl").write_bytes(b"serialized-config")
-    rules = SimpleNamespace(os_sandbox_params={}, file_rules=[])
+    rules = EmptyRules
+    process_config = DaemonParameters(rules, 20, "", False, "token", 1234, "")
     assets = daemon._prepare_qemu_launch(
-        rules, tmp_path, SimpleNamespace(all_rules=rules), tmp_path / "pipe", config_dir=config, microvm=True
+        rules, tmp_path, process_config, tmp_path / "pipe", config_dir=config, microvm=True
     )
     assert assets.mount_specs == []
     assert (tmp_path / "config.pkl").read_bytes() == b"serialized-config"
@@ -71,8 +74,6 @@ def test_microvm_config_uses_readonly_iso_without_config_share(monkeypatch: pyte
 def test_microvm_optional_paths_are_selected_before_cloud_init(
     source: str, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
-    from types import SimpleNamespace
-
     mounts = [("project", tmp_path / "project", "/project"), ("ssl", Path("/etc/ssl"), "/etc/ssl")]
     cloud_init_mounts: list[tuple[str, str]] = []
     monkeypatch.setattr(daemon, "ensure_image", lambda _: None)
@@ -80,32 +81,30 @@ def test_microvm_optional_paths_are_selected_before_cloud_init(
     monkeypatch.setattr(daemon, "_qemu_binary", lambda: "qemu")
     monkeypatch.setattr(daemon, "qemu_accel_args", lambda _: [])
     monkeypatch.setattr(daemon, "microvm_mmio_capacity", lambda *_: 3)
-    monkeypatch.setattr(
-        daemon,
-        "prepare_guest_env",
-        lambda *args, **kwargs: cloud_init_mounts.extend(kwargs["mounts"]) or tmp_path / "seed.iso",
-    )
+
+    def prepare_guest_env(*args: object, mounts: list[tuple[str, str]], **kwargs: object) -> Path:
+        cloud_init_mounts.extend(mounts)
+        return tmp_path / "seed.iso"
+
+    monkeypatch.setattr(daemon, "prepare_guest_env", prepare_guest_env)
     params = {"microvm_optional_paths": "/etc/ssl"} if source == "profile" else {}
     if source == "environment":
         monkeypatch.setenv("QEMU_MICROVM_OPTIONAL_PATHS", "/etc/ssl,/etc/pki")
-    rules = SimpleNamespace(os_sandbox_params=params, file_rules=[])
+    rules = EmptyRules._replace(os_sandbox_params=ImmutableDict(params))
+    process_config = DaemonParameters(rules, 20, "", False, "token", 1234, "")
 
-    assets = daemon._prepare_qemu_launch(
-        rules, tmp_path, SimpleNamespace(all_rules=rules), tmp_path / "pipe", microvm=True
-    )
+    assets = daemon._prepare_qemu_launch(rules, tmp_path, process_config, tmp_path / "pipe", microvm=True)
 
     assert assets.mount_specs == [mounts[0]]
     assert cloud_init_mounts == [("project", "/project"), ("__pysb_native__", "/etc/ssl")]
 
 
 def test_execution_mount_is_readonly_but_explicit_write_grant_is_not(monkeypatch: pytest.MonkeyPatch) -> None:
-    from types import SimpleNamespace
     from pysandboxes.guard_files import FSExposeRule
     from pysandboxes.sb_types import ConfigLine
 
-    rules = SimpleNamespace(
-        os_sandbox_params={},
-        file_rules=[FSExposeRule("/app/tmp", True, ConfigLine("expose-rw=/app/tmp", Path("profile"), 1))],
+    rules = EmptyRules._replace(
+        file_rules=(FSExposeRule("/app/tmp", True, ConfigLine("expose-rw=/app/tmp", Path("profile"), 1)),),
     )
     mounts = [("pysb_exec_0", Path("/app"), "/app"), ("pysb_0", Path("/app/tmp"), "/app/tmp")]
     readonly = daemon._microvm_readonly_tags(rules, mounts)
@@ -183,30 +182,28 @@ def test_guard_fixture_fits_eight_transports(monkeypatch: pytest.MonkeyPatch, tm
 
 
 def test_runtime_paths_preserve_most_specific_explicit_write_grant() -> None:
-    from types import SimpleNamespace
     from pysandboxes.guard_files import FSExposeRule
     from pysandboxes.sb_types import ConfigLine
 
     config = ConfigLine("expose-rw=/app", Path("profile"), 1)
-    rules = SimpleNamespace(file_rules=[FSExposeRule("/app", True, config)])
+    rules = EmptyRules._replace(file_rules=(FSExposeRule("/app", True, config),))
     mounts = [("pysb_0", Path("/app"), "/app"), ("pysb_exec_0", Path("/app/lib"), "/app/lib")]
     readonly = daemon._microvm_readonly_tags(rules, mounts)
     assert "pysb_exec_0" not in readonly
     assert daemon._compact_microvm_mounts(mounts, readonly, "mapped-xattr") == mounts[:1]
-    rules.file_rules.append(FSExposeRule("/app/lib", False, config))
+    rules = rules._replace(file_rules=(*rules.file_rules, FSExposeRule("/app/lib", False, config)))
     assert "pysb_exec_0" in daemon._microvm_readonly_tags(rules, mounts)
 
 
 def test_equal_depth_explicit_modes_follow_mount_order() -> None:
-    from types import SimpleNamespace
     from pysandboxes.guard_files import FSExposeRule
     from pysandboxes.sb_types import ConfigLine
 
     config = ConfigLine("expose-rw=/app", Path("profile"), 1)
     rw, ro = FSExposeRule("/app", True, config), FSExposeRule("/app", False, config)
     mounts = [("pysb_exec_0", Path("/app/lib"), "/app/lib")]
-    assert "pysb_exec_0" in daemon._microvm_readonly_tags(SimpleNamespace(file_rules=[rw, ro]), mounts)
-    assert "pysb_exec_0" not in daemon._microvm_readonly_tags(SimpleNamespace(file_rules=[ro, rw]), mounts)
+    assert "pysb_exec_0" in daemon._microvm_readonly_tags(EmptyRules._replace(file_rules=(rw, ro)), mounts)
+    assert "pysb_exec_0" not in daemon._microvm_readonly_tags(EmptyRules._replace(file_rules=(ro, rw)), mounts)
 
 
 def test_microvm_prepares_guest_only_cwd_with_safe_shell_quoting(tmp_path: Path) -> None:

@@ -53,6 +53,10 @@ still exceeds capacity fails closed before user code runs.
 It is useful for sample suites that share profiles across providers. Candidates that are not mounted by the current
 profile are ignored; any candidate actually omitted still must exist in the guest image.
 
+The VM sample targets omit CrewAI for `qemu-microvm`: its profile needs ten shares, while the provider has six 9p slots.
+Only three excess shares can safely fall back to paths present in the Ubuntu guest. The target still runs CrewAI for
+the regular `qemu` provider.
+
 ## Run it
 
 ```text
@@ -62,6 +66,10 @@ qemu.use_kvm=true
 
 The provider accepts the shared `qemu.*` settings documented in [QEMU](qemu.md). `qemu.show_boot_console=true` prints
 the guest boot and bootstrap log. KVM and TCG test rows are separate; a TCG result is not KVM evidence.
+
+`python-sb` supports stdin/stdout protocols such as MCP. It holds input until the guest program is ready and delivers
+stdin through a pipe, preserving long messages, control bytes, and EOF. Leave `qemu.show_boot_console=false` for
+protocol clients so boot messages do not enter their stdout stream.
 
 ## Containers
 

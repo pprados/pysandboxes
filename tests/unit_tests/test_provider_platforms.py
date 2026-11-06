@@ -65,6 +65,12 @@ def test_other_platforms_only_list_their_providers(platform: str, expected: list
         assert _os_sandbox.platform_providers() == expected
 
 
+def test_native_microvm_probes_are_excluded_on_other_platforms() -> None:
+    from tests.conftest import _LINUX_ONLY_TESTS
+
+    assert "integration_tests/remote/test_qemu_microvm.py" in _LINUX_ONLY_TESTS
+
+
 def test_platform_refusal_does_not_import_the_provider() -> None:
     with (
         patch("sys.platform", "freebsd"),

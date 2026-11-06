@@ -140,6 +140,7 @@ def _bootstrap_script_content(
     *,
     bootstrap_verbose: bool = False,
     python_paths: list[str] | None = None,
+    serial_stdin: bool = False,
 ) -> str:
     """Build the guest bootstrap script: mount cidata,
     verify Python version (no install), then run main_sandbox
@@ -304,6 +305,9 @@ def _bootstrap_script_content(
         quoted_cwd = shlex.quote(guest_cwd)
         lines.append(f"mkdir -p -- {quoted_cwd} || _pysb_fatal 'cannot prepare guest working directory'")
         cwd_command = f"cd -- {quoted_cwd} || _pysb_fatal 'cannot enter guest working directory'"
+    if serial_stdin:
+        lines.append("stty raw -echo </dev/ttyS0")
+        lines.append("exec </dev/ttyS0")
     lines.extend(
         [
             cwd_command,
@@ -361,6 +365,10 @@ def _create_nocloud_iso(
         guest_cwd=guest_cwd,
         bootstrap_verbose=bootstrap_verbose,
         python_paths=python_paths,
+        serial_stdin=(
+            getattr(all_rules, "os_sandbox", None) in {"qemu", "qemu-microvm"}
+            and bool(getattr(process_config, "python_main_args", ()))
+        ),
     )
     script_yaml = "\n".join("      " + line for line in script_content.splitlines())
     (temp / PIPE_NAME_FILE).write_text(pipe_basename.strip(), encoding="utf-8")

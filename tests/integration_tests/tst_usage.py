@@ -440,10 +440,10 @@ def _test_files() -> int:
             pass
         logger.info(f"{OK} write to tmp/test.remove is accepted")
     except SandBoxError:  # type: ignore
-        logger.error(f"{KO} write to tmp/test.remove is denied")
+        logger.exception(f"{KO} write to tmp/test.remove is denied")
         rc = 1
     except OSError:
-        logger.error(f"{KO} write to tmp/test.remove is denied")
+        logger.exception(f"{KO} write to tmp/test.remove is denied")
         rc = 1
 
     # 2. Test denied access

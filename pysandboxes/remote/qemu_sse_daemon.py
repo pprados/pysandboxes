@@ -1013,7 +1013,7 @@ def _microvm_readonly_tags(all_rules: AllRules, mounts: list[tuple[str, Path, st
 
 
 def _microvm_security_model(host: Path, readonly: bool, configured: str) -> str:
-    if readonly and host == Path("/etc"):
+    if readonly:
         return "none"
     return _virtfs_security_model(host, configured)
 
@@ -1310,7 +1310,12 @@ class QemuSSEDaemon(VMSSEDaemon):
             drive_image,
             "-drive",
             drive_nocloud,
-            "-nographic",
+            "-display",
+            "none",
+            "-monitor",
+            "none",
+            "-serial",
+            "stdio",
             *net,
             *virtfs_args,
             *qga,

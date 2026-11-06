@@ -46,7 +46,7 @@ python-import=collections, concurrent, contextlib, contextvars, copy, copyreg
 python-import=dataclasses, datetime, email, encodings, enum, errno, fnmatch
 python-import=functools, gettext, hashlib, heapq, html, http, io, ipaddress
 python-import=itertools, json, keyword, logging, math, mimetypes, operator, os
-python-import=pathlib, queue, re, select, signal, socket, ssl, stat, struct
+python-import=pathlib, posixpath, queue, re, select, signal, socket, ssl, stat, struct
 python-import=textwrap, threading, time, types, typing, unicodedata, urllib, uuid
 python-import=weakref, zlib
 
