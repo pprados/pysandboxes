@@ -17,7 +17,7 @@ Planned work, in no committed order:
   - [ ] Management of regular expressions
   - [X] Control of `exec()`, `eval()` and `compile()` (the [`eval-*` rules](eval.md))
     - See [here](https://huntr.com/bounties/63ab1cfe-b573-4cf5-a7d3-fb6c957e34b0)
-- [ ] OS Compatible
+- [X] OS Compatible
   - [X] Linux
   - [X] Windows
   - [X] Mac OS
@@ -43,12 +43,12 @@ Planned work, in no committed order:
     - [X] ~~vagrant~~ (rejected: developer environment orchestrator on top of third-party hypervisors, not a runtime sandbox; multi-second startup latency and heavy dependencies)
   - [ ] micro-VM
     - [ ] [QEMU-microvm](https://www.qemu.org/docs/master/system/i386/microvm.html) (fast QEMU machine type, boots in ~100ms without PCI/ACPI overhead)
+    - [ ] [Smolvm](https://korben.info/smolvm-microvm-portable-rust.html)
+    - [ ] [libkrun](https://github.com/containers/libkrun) (lightweight VMM library designed for process isolation with virtio-fs) - **Waiting release v2**
     - [ ] [Cloud Hypervisor](https://github.com/cloud-hypervisor/cloud-hypervisor) (Rust-based VMM with native virtio-fs and vsock)
-    - [ ] [libkrun](https://github.com/containers/libkrun) (lightweight VMM library designed for process isolation with virtio-fs)
     - [ ] [Firecracker](https://firecracker-microvm.github.io/)
     - [ ] [Fargate](https://aws.amazon.com/fr/fargate/)
     - [ ] [Kata Containers](https://katacontainers.io/) (compatible classical containers management)
-    - [ ] [Smolvm](https://korben.info/smolvm-microvm-portable-rust.html)
   - [ ] Others strategies
     - [ ] [container2wasm](https://github.com/container2wasm/container2wasm)
     - [ ] [Cloud morph](https://cloud.morph.so/)
@@ -62,6 +62,7 @@ Planned work, in no committed order:
     - [X] ~~Windows Sandbox~~ (rejected: a single sandbox can run at a time on a host, incompatible with concurrent or nested `sandboxes()`)
   - [ ] Network strategies
     - [X] local netfilter and pin DNS
+    - [ ] drives a runtime DNS and hostname filter, which resolves addresses at connection time rather than freezing static IP snapshots when the sandbox is created.
     - [ ] Proxy (SOCKS/HTTP over a Unix socket bound into the sandbox, relayed by socat: 
     filtering by domain, not only by IP)
   - [ ] Host/guest channel (`remote-endpoint=auto|tcp|unix`, `auto` by default and falling back to TCP: the host binds a 0600 Unix socket and hands the descriptor down, so the sandbox needs no file or network rule for it)
