@@ -37,7 +37,7 @@ from ..e import SandBoxError
 from ..guard_files import FSExposeRule, IgnoreRule, is_special_file
 from ..immutable_dict import ImmutableDict
 from ..main_logger import ErrorMsg
-from ..netfilter import rule_to_netfilter
+from ..netfilter import rule_to_netfilter, runtime_netfilter
 from ..override_compat import override
 from ..sb_types import Args, ConfigLines, Envs
 from ..tools import (
@@ -61,6 +61,7 @@ from .parameters import (
     LOOP_FOR_PING,
     TIMEOUT_FOR_PING,
 )
+from .runtime_dns import RuntimeDnsSession
 from .slirp4netns_common import (
     SLIRP_DNS,
     SLIRP_GW,
@@ -262,6 +263,7 @@ class BWrapSSEDaemon(BaseSubProcessDaemon):
         "_slirp_process_holder",
         "_slirp_shutdown_event",
         "_slirp_api_socket",
+        "_dns_session",
     )
 
     supports_unix_endpoint = True
@@ -287,6 +289,7 @@ class BWrapSSEDaemon(BaseSubProcessDaemon):
         self._slirp_process_holder: list[subprocess.Popen[bytes] | None] = [None]
         self._slirp_shutdown_event: threading.Event = threading.Event()
         self._slirp_api_socket: str = ""
+        self._dns_session = RuntimeDnsSession()
 
     @staticmethod
     def _shares_host_network(all_rules: AllRules) -> bool:
@@ -298,16 +301,29 @@ class BWrapSSEDaemon(BaseSubProcessDaemon):
 
     @staticmethod
     def _use_network_filtering(all_rules: AllRules) -> bool:
-        """True when socket rules exist and bwrap should use unshare-net + iptables."""
-        return bool(all_rules.socket_rules) and not BWrapSSEDaemon._shares_host_network(all_rules)
+        """True when socket or name rules exist and bwrap should use unshare-net + iptables."""
+        return bool(all_rules.socket_rules or all_rules.name_rules) and not BWrapSSEDaemon._shares_host_network(
+            all_rules
+        )
 
     @staticmethod
-    def _build_netfilter_rules(all_rules: AllRules, port: int) -> tuple[str, ...]:
-        """Build iptables rules from socket rules; DNS 10.0.2.3, allow SSE from 10.0.2.2."""
+    def _build_netfilter_rules(all_rules: AllRules, port: int, resolver_port: int | None = None) -> tuple[str, ...]:
+        """Build iptables rules from socket rules; DNS 10.0.2.3, allow SSE from 10.0.2.2.
+
+        With ``net-resolve=runtime`` the ruleset is the runtime one: DNS goes to the filtering resolver on
+        ``resolver_port`` and the host resolvers are not opened.
+        """
         from ipaddress import IPv4Address
 
         dns_guest = [IPv4Address(SLIRP_DNS)]
-        netfilter = rule_to_netfilter(all_rules.socket_rules, dns_guest, is_ipv6=False)
+        if all_rules.net_resolve == "runtime":
+            if resolver_port is None:
+                raise SandBoxError("net-resolve=runtime needs the resolver port")
+            netfilter = runtime_netfilter(
+                all_rules.socket_rules, resolver_port, IPv4Address(SLIRP_GW), IPv4Address(SLIRP_DNS)
+            )
+        else:
+            netfilter = rule_to_netfilter(all_rules.socket_rules, dns_guest, is_ipv6=False)
         if "COMMIT" in netfilter:
             idx = netfilter.index("COMMIT")
             sse_allow = (
@@ -315,6 +331,20 @@ class BWrapSSEDaemon(BaseSubProcessDaemon):
             )
             netfilter = list(netfilter[:idx]) + [sse_allow] + list(netfilter[idx:])
         return tuple(netfilter)
+
+    @staticmethod
+    def _runtime_resolv_conf_args(all_rules: AllRules, temp: Path) -> list[str]:
+        """Bind a ``resolv.conf`` naming the slirp4netns DNS over the real one, with ``net-resolve=runtime``.
+
+        The host file usually names a loopback stub (``127.0.0.53``) that does not exist in the sandbox namespace.
+        The bind targets the file a symlinked ``/etc/resolv.conf`` resolves to, since bwrap cannot mount on a link.
+        """
+        if all_rules.net_resolve != "runtime":
+            return []
+        target = os.path.realpath("/etc/resolv.conf")
+        source = temp / "pysb_resolv.conf"
+        source.write_text(f"nameserver {SLIRP_DNS}\n")
+        return ["--ro-bind", str(source), target]
 
     def _filtered_network(
         self,
@@ -328,10 +358,12 @@ class BWrapSSEDaemon(BaseSubProcessDaemon):
         on its config pipe until on_launched has loaded the filter and slirp4netns is up. No sandboxed code runs
         before them, and a filter that cannot be loaded, or a network that never comes up, kills the sandbox instead.
         """
-        netfilter_rules = self._build_netfilter_rules(all_rules, process_config.port)
         if reason := BWrapSSEDaemon.network_filter_unavailable_reason():
             logger.error("%s. Install them or use bwrap.share-net=yes to keep host network.", reason)
             raise SandBoxError(f"{reason}.")
+        netfilter_rules = self._build_netfilter_rules(
+            all_rules, process_config.port, self._dns_session.start(all_rules)
+        )
         self._stop_previous_slirp()
         self._slirp_shutdown_event.clear()
         slirp_pipe_r, slirp_pipe_w = os.pipe()
@@ -346,6 +378,7 @@ class BWrapSSEDaemon(BaseSubProcessDaemon):
             try:
                 sandbox_pid = _sandbox_pid(pid)
                 _apply_netfilter_from_host(sandbox_pid, netfilter_rules)
+                self._dns_session.attach(sandbox_pid)
                 threading.Thread(
                     target=slirp_run_watcher,
                     args=(self._slirp_shutdown_event, slirp_pipe_w, api_socket),
@@ -360,6 +393,7 @@ class BWrapSSEDaemon(BaseSubProcessDaemon):
                 if not _slirp_ready(slirp_pipe_r, SLIRP_WATCHER_TIMEOUT):
                     raise SandBoxError("slirp4netns never brought up the bwrap sandbox network")
             except Exception:
+                self._dns_session.stop()
                 self._slirp_shutdown_event.set()
                 for p in (sandbox_pid, pid):
                     if p is not None:
@@ -533,6 +567,7 @@ class BWrapSSEDaemon(BaseSubProcessDaemon):
         args.extend(["--ro-bind", "/etc", "/etc"])
         for run_path in _dns_run_paths():
             args.extend(["--ro-bind-try", run_path, run_path])
+        args.extend(self._runtime_resolv_conf_args(all_rules, temp))
         for lib_dir in ("/lib", "/lib64"):
             if Path(lib_dir).is_dir():
                 args.extend(["--ro-bind", lib_dir, lib_dir])
@@ -737,9 +772,22 @@ class BWrapSSEDaemon(BaseSubProcessDaemon):
             pass
         self._slirp_process_holder[0] = None
 
+    def _kill_slirp(self) -> None:
+        """End of a one-shot ``python-sb`` run, which calls this hook by name: stop the filtering resolver."""
+        self._dns_session.stop()
+
+    @override
+    async def _shutdown(self, graceful_shutdown: bool = True) -> None:
+        """Shutdown the sandbox, then the filtering resolver of ``net-resolve=runtime``."""
+        try:
+            await super()._shutdown(graceful_shutdown)
+        finally:
+            await asyncio.to_thread(self._dns_session.stop)
+
     async def _stop(self, max_pending: int) -> None:
         """Stop daemon and slirp4netns when network filtering was used."""
         self._slirp_shutdown_event.set()
+        self._dns_session.stop()
         proc = self._slirp_process_holder[0] if self._slirp_process_holder else None
         if proc is not None:
             try:

@@ -1,8 +1,9 @@
 # Copyright (c) 2026, Philippe PRADOS
 # License: Apache V2
-"""Probe of test_unshare_runtime_dns: ``net-resolve=runtime`` under ``unshare``, with only the kernel to refuse.
+"""Probe of test_unshare_runtime_dns: ``net-resolve=runtime`` under a provider, with only the kernel to refuse.
 
-Run as ``python -m tests.integration_tests.tst_unshare_runtime_probe <workdir> <kernel|guard|python-sb>``.
+Run as ``python -m tests.integration_tests.tst_unshare_runtime_probe <workdir> <kernel|guard|python-sb> [provider]``;
+the provider is ``unshare`` by default.
 ``kernel`` disarms the Python socket guard so only the firewall can refuse; ``guard`` arms it, so both layers judge;
 ``python-sb`` runs the one-shot ``python-sb -c`` entry point in this process, guard armed. It prints a JSON object per
 line: the daemon modes one, ``python-sb`` the sandbox's own line and then ours.
@@ -169,6 +170,7 @@ def _resolver_state(started: list[RuntimeDns]) -> dict:
 
 def main() -> int:
     work, layers = Path(sys.argv[1]), sys.argv[2]
+    provider = sys.argv[3] if len(sys.argv) > 3 else "unshare"
     authority, allowed, other = FakeAuthority(), Listener(), Listener()
     egress_filter.MIN_LEARNED_TTL = egress_filter.MAX_LEARNED_TTL = TTL
     runtime_dns.get_upstream_dns = lambda: [IPv4Address("127.0.0.1")]
@@ -183,7 +185,7 @@ def main() -> int:
     profile = work / "runtime.profile"
     profile.write_text(
         f"py-sandbox={'false' if layers == 'kernel' else 'true'}\n"
-        "os-sandbox=unshare\n"
+        f"os-sandbox={provider}\n"
         "net-resolve=runtime\n"
         "python-import=*\n"
         "expose-ro=.\n"

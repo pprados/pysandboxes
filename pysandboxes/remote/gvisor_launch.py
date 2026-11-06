@@ -6,7 +6,7 @@ import shlex
 from ipaddress import IPv4Address
 
 from ..all_rules import AllRules
-from ..netfilter import rule_to_netfilter
+from ..netfilter import rule_to_netfilter, runtime_netfilter
 from .slirp4netns_common import SLIRP_DNS, SLIRP_GW
 
 
@@ -19,6 +19,19 @@ def netfilter_rules(all_rules: AllRules, port: int) -> tuple[str, ...]:
     post: sum(1 for rule in __return__ if f'--dport {port} ' in rule and '-s 10.0.2.2/32' in rule) == 1
     """
     rules = rule_to_netfilter(all_rules.socket_rules, [IPv4Address(SLIRP_DNS)], is_ipv6=False)
+    daemon = f"-A INPUT -p tcp -s {SLIRP_GW}/32 --dport {port} -m conntrack --ctstate NEW,ESTABLISHED -j ACCEPT"
+    index = rules.index("COMMIT")
+    return (*rules[:index], daemon, *rules[index:])
+
+
+def runtime_netfilter_rules(all_rules: AllRules, port: int, resolver_port: int) -> tuple[str, ...]:
+    """Return the ``iptables-restore`` input of ``net-resolve=runtime``: the runtime ruleset, the daemon port open.
+
+    pre: 0 < port < 65536 and 0 < resolver_port < 65536
+    post: __return__.count('COMMIT') == 2 and ':LEARNED - [0:0]' in __return__
+    post: sum(1 for rule in __return__ if f'--dport {port} ' in rule and '-s 10.0.2.2/32' in rule) == 1
+    """
+    rules = runtime_netfilter(all_rules.socket_rules, resolver_port, IPv4Address(SLIRP_GW), IPv4Address(SLIRP_DNS))
     daemon = f"-A INPUT -p tcp -s {SLIRP_GW}/32 --dport {port} -m conntrack --ctstate NEW,ESTABLISHED -j ACCEPT"
     index = rules.index("COMMIT")
     return (*rules[:index], daemon, *rules[index:])
