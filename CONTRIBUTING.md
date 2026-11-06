@@ -107,7 +107,7 @@ The [`wiki/`](wiki/Home.md) directory holds the documentation a contributor need
 - [`implementation.md`](wiki/implementation.md): how the framework is put together;
 - [`weaknesses.md`](wiki/weaknesses.md) and the two security assessments: what the Python layer does not stop,
   and the attacks already studied;
-- one page per OS provider (`subprocess.md`, `bwrap.md`, `firejail.md`, `unshare.md`, `qemu.md`, `gvisor.md`, `landlock.md`, `sandbox-exec.md`,
+- one page per OS provider (`subprocess.md`, `bwrap.md`, `firejail.md`, `unshare.md`, `qemu.md`, `gvisor.md`, `smolvm.md`, `landlock.md`, `sandbox-exec.md`,
   `appcontainer.md`), and
   [`eval.md`](wiki/eval.md) for the `eval-*` rules;
 - [`tests.md`](wiki/tests.md): which suite covers what, and the gaps;

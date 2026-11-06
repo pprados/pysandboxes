@@ -13,7 +13,7 @@ Report privately, never in a public issue or pull request:
 - **Alternative**: `github[at]prados.fr`.
 
 Please include the provider in use (`none`, `subprocess`, `landlock`, `bwrap`,
-`firejail`, `unshare`, `qemu`, `qemu-microvm`, `gvisor`, `sandbox-exec`, `appcontainer`), the `.py-sandboxes` rules in force, the Python
+`firejail`, `unshare`, `qemu`, `qemu-microvm`, `gvisor`, `smolvm`, `sandbox-exec`, `appcontainer`), the `.py-sandboxes` rules in force, the Python
 and kernel versions, and a proof of concept small enough to run. A report
 naming the layer it defeats is worth far more than one that only shows an
 outcome.
