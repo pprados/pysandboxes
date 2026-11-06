@@ -26,6 +26,7 @@ _ROOT_DIR = Path(__file__).resolve().parent.parent
 _LINUX_ONLY_TESTS = [
     "containers_tests/*",
     "integration_tests/test_slirp_cleanup.py",
+    "integration_tests/test_unshare_runtime_dns.py",
     "integration_tests/remote/test_bwrap.py",
     "integration_tests/remote/test_providers.py",
     "unit_tests/test_qemu_*.py",

@@ -51,6 +51,47 @@ def outcome(tmp_path_factory: pytest.TempPathFactory, layers: str) -> dict[str, 
     return json.loads(result.stdout.strip().splitlines()[-1])
 
 
+def _json_lines(stdout: str) -> list[dict[str, Any]]:
+    return [json.loads(line) for line in stdout.splitlines() if line.startswith("{")]
+
+
+@pytest.fixture(scope="module")
+def one_shot(tmp_path_factory: pytest.TempPathFactory) -> tuple[dict[str, Any], dict[str, Any]]:
+    """The ``python-sb -c`` entry point: the line the sandbox printed, then the one the probe printed."""
+    work = tmp_path_factory.mktemp("runtime_dns_one_shot")
+    result = subprocess.run(
+        [sys.executable, "-m", "tests.integration_tests.tst_unshare_runtime_probe", str(work), "python-sb"],
+        cwd=ROOT_DIR,
+        capture_output=True,
+        text=True,
+        timeout=300,
+    )
+    assert result.returncode == 0, result.stderr[-3000:]
+    sandbox_line, probe_line = _json_lines(result.stdout)[-2:]
+    return sandbox_line, probe_line
+
+
+def test_the_resolver_of_a_daemon_run_is_gone_with_the_sandbox(outcome: dict[str, Any]) -> None:
+    assert outcome["resolver_started"] is True and outcome["resolver_port_free"] is True
+
+
+def test_a_one_shot_python_sb_run_opens_the_address_of_an_allowed_name(
+    one_shot: tuple[dict[str, Any], dict[str, Any]],
+) -> None:
+    seen, probe = one_shot
+
+    assert probe["exit_code"] == 0 and probe["questions"] >= 1
+    assert seen["literal_before_resolution"] == "REFUSED"
+    assert seen["resolved"] == ["10.0.2.2"] and seen["allowed_port"] == "CONNECTED"
+    assert seen["other_port"] == "REFUSED"
+
+
+def test_a_one_shot_python_sb_run_leaves_no_resolver_behind(
+    one_shot: tuple[dict[str, Any], dict[str, Any]],
+) -> None:
+    assert one_shot[1]["resolver_started"] is True and one_shot[1]["resolver_port_free"] is True
+
+
 def test_an_address_nobody_resolved_is_refused_even_when_the_listener_is_there(outcome: dict[str, Any]) -> None:
     assert outcome["result"]["literal_before_resolution"] == "REFUSED"
 

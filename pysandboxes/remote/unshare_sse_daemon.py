@@ -281,6 +281,8 @@ class UnshareSSEDaemon(BaseSubProcessDaemon):
             if not which_command(tool):
                 raise SandBoxError(f"net-resolve=runtime needs {tool} on the host.")
         servers = [ip for ip in get_upstream_dns() if isinstance(ip, IPv4Address)]
+        if not servers:
+            raise SandBoxError("net-resolve=runtime found no IPv4 resolver on the host to forward the names to.")
         self._runtime_dns = RuntimeDns(all_rules.name_rules, servers)
         return self._runtime_dns.start()
 
@@ -613,7 +615,11 @@ class UnshareSSEDaemon(BaseSubProcessDaemon):
             ).start()
 
     def _kill_slirp(self) -> None:
-        """Terminate the slirp4netns process if it is still running."""
+        """Terminate the slirp4netns process if it is still running, and the filtering resolver of the sandbox.
+
+        ``python-sb`` reaches the end of a one-shot run through this method alone, as the daemon does at shutdown.
+        """
+        self._stop_runtime_dns()
         self._slirp_shutdown_event.set()
         proc = self._slirp_process_holder[0] if self._slirp_process_holder else None
         if proc is not None:
@@ -652,7 +658,6 @@ class UnshareSSEDaemon(BaseSubProcessDaemon):
             await super()._shutdown(graceful_shutdown)
         finally:
             await asyncio.to_thread(self._kill_slirp)
-            await asyncio.to_thread(self._stop_runtime_dns)
             await asyncio.to_thread(self._remove_chroot_dirs)
 
     # -- Daemon lifecycle --
