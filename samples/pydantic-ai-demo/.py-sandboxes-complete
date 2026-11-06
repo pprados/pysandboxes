@@ -71,3 +71,5 @@ python-import=_socket, reprlib
 # Standard Python
 python-import=annotationlib
 
+python-import=locale
+python-import=posixpath
