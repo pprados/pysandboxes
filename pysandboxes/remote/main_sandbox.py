@@ -443,9 +443,10 @@ def main() -> int:
 
     # Initialize learn
     set_learning_path(all_rules.learning_path)
-    from ..guard_socket import set_pin_dns
+    from ..guard_socket import set_name_rules, set_pin_dns
 
     set_pin_dns(all_rules.pin_dns)
+    set_name_rules(all_rules.name_rules)
     # When pin_dns is set but use_py_sandbox is False, patch resolution so guest uses pinned IPs
     if all_rules.pin_dns:
         import socket as _socket_mod

@@ -421,6 +421,8 @@ class SSEServerDaemon(BaseSSESandbox):
             envs_rules=(),
             socket_rules=all_rules.socket_rules,
             pin_dns=all_rules.pin_dns,
+            net_resolve=all_rules.net_resolve,
+            name_rules=all_rules.name_rules,
             file_rules=all_rules.file_rules,
             import_rules=all_rules.import_rules,
             api_rules=all_rules.api_rules,

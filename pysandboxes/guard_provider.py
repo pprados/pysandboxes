@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Any, List, Tuple, cast
 
 from .config import CONFIG_NAME
+from .egress_filter import DEFAULT_NET_RESOLVE, NET_RESOLVE_MODES
 from .main_logger import ErrorMsg, format_error_list, format_ruleref
 from .sb_types import ConfigLine, ConfigLines
 
@@ -45,6 +46,51 @@ def parse_remote_endpoint(rules: ConfigLines, errors: List[ErrorMsg]) -> Tuple[s
                 )
             )
     return endpoint, others
+
+
+NET_RESOLVE_RUNTIME_PROVIDERS = ("unshare",)
+
+
+def parse_net_resolve(rules: ConfigLines, errors: List[ErrorMsg]) -> Tuple[str, ConfigLines]:
+    """Extract ``net-resolve=pinned|runtime``, which picks how the host names of ``net=`` rules are resolved.
+
+    The last line wins.
+
+    Returns:
+        The chosen mode (``DEFAULT_NET_RESOLVE`` when unset) and the remaining rules.
+    """
+    mode = DEFAULT_NET_RESOLVE
+    others: ConfigLines = []
+    for rule in rules:
+        if not rule.rule.startswith("net-resolve="):
+            others.append(rule)
+            continue
+        value = rule.rule.split("=", 1)[1].strip().lower()
+        if value in NET_RESOLVE_MODES:
+            mode = value
+        else:
+            errors.append(
+                (
+                    f"{format_ruleref(rule)}: Invalid value {value!r} for net-resolve. "
+                    f"Use {' or '.join(NET_RESOLVE_MODES)}.",
+                    rule.path,
+                    rule.ln,
+                )
+            )
+    return mode, others
+
+
+def check_net_resolve_provider(net_resolve: str, os_sandbox: str, config_path: Path, errors: List[ErrorMsg]) -> None:
+    """Refuse ``net-resolve=runtime`` for a provider that has no enforcer, instead of falling back to ``pinned``."""
+    if net_resolve == "runtime" and os_sandbox not in NET_RESOLVE_RUNTIME_PROVIDERS:
+        errors.append(
+            (
+                f"net-resolve=runtime is not supported by the {os_sandbox!r} provider "
+                f"(supported: {', '.join(NET_RESOLVE_RUNTIME_PROVIDERS)}). Use net-resolve=pinned.",
+                config_path,
+                0,
+            )
+        )
 
 
 def parse_rules(
