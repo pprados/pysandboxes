@@ -104,19 +104,14 @@ def find_libkrunfw() -> str | None:
 
 
 def check_krun_result(lib: ctypes.CDLL, res: int, err: ctypes.c_void_p, action: str) -> None:
-    """Check a libkrun function return code and raise a RuntimeError on failure."""
+    """Check a libkrun function return code and raise a RuntimeError on failure.
+
+    The text of a libkrun error is handed to a ``KrunPushStr`` writer, which needs a vtable of callbacks: the error is
+    released and reported by the action that failed.
+    """
     if err and err.value:
-        msg = f"libkrun error during {action}"
-        try:
-            lib.krun_error_message.argtypes = [ctypes.c_void_p]
-            lib.krun_error_message.restype = KrunStr
-            err_str = lib.krun_error_message(err)
-            msg += f": {err_str.to_str()}"
-            lib.krun_error_destroy.argtypes = [ctypes.c_void_p]
-            lib.krun_error_destroy(err)
-        except Exception:
-            pass
-        raise RuntimeError(msg)
+        lib.krun_error_destroy(err)
+        raise RuntimeError(f"libkrun error during {action}")
     if res != 0:
         raise RuntimeError(f"libkrun failed during {action} (return code: {res})")
 
@@ -160,8 +155,6 @@ class LibkrunFFI:
         lib.krun_init_log.restype = ctypes.c_uint64
 
         # Error handling
-        lib.krun_error_message.argtypes = [ctypes.c_void_p]
-        lib.krun_error_message.restype = KrunStr
         lib.krun_error_destroy.argtypes = [ctypes.c_void_p]
         lib.krun_error_destroy.restype = None
 
@@ -196,8 +189,8 @@ class LibkrunFFI:
         # Devices: Device Manager
         lib.krun_mmio_device_manager_new.argtypes = []
         lib.krun_mmio_device_manager_new.restype = ctypes.c_void_p
-        lib.krun_device_manager_add.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p]
-        lib.krun_device_manager_add.restype = ctypes.c_uint64
+        lib.krun_device_manager_add.argtypes = [ctypes.c_void_p, ctypes.c_void_p]
+        lib.krun_device_manager_add.restype = None
 
         # Devices: Filesystem (virtio-fs)
         lib.krun_fs_device_new.argtypes = [KrunStr, KrunStr, ctypes.c_void_p]
@@ -235,6 +228,7 @@ class LibkrunFFI:
             KrunStr,
             KrunBytes,
             ctypes.c_uint32,
+            ctypes.c_uint32,
             ctypes.c_void_p,
         ]
         lib.krun_net_device_new_unixstream_path.restype = ctypes.c_void_p
@@ -242,6 +236,7 @@ class LibkrunFFI:
             KrunStr,
             ctypes.c_int,
             KrunBytes,
+            ctypes.c_uint32,
             ctypes.c_uint32,
             ctypes.c_void_p,
         ]

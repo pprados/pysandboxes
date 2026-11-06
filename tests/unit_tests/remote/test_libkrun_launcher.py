@@ -126,5 +126,12 @@ def test_a_masked_directory_and_file_are_hidden_before_the_switch() -> None:
     assert script.index("/proc/work/file") < script.index("pivot_root")
 
 
+def test_a_path_under_an_exposed_directory_is_not_bound_again() -> None:
+    script = _script(ro_paths=["/usr", "/usr/bin/python3"])
+
+    assert "mount --bind /usr /proc/usr" in script
+    assert "/proc/usr/bin/python3" not in script
+
+
 def test_the_host_directories_no_rule_names_are_never_mounted() -> None:
     assert "/home" not in _script(ro_paths=["/usr", "/etc"])

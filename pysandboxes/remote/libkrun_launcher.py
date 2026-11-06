@@ -181,11 +181,15 @@ def generate_guest_init_script(
         f"mount -t proc proc {nr}/proc",
     ]
 
+    bound_dirs: list[str] = []
     for path in sorted(dict.fromkeys(ro_paths or []), key=_tree_depth):
         target = q(nr + path)
+        if any(path.startswith(d.rstrip("/") + "/") for d in bound_dirs):
+            continue
         if os.path.islink(path):
             lines.append(f"mkdir -p {q(nr + os.path.dirname(path))} && ln -s {q(os.readlink(path))} {target}")
         elif os.path.isdir(path):
+            bound_dirs.append(path)
             lines.append(
                 f"mkdir -p {target} && mount --bind {q(path)} {target} && mount -o remount,bind,ro {target} "
                 f"|| fail 'cannot expose {path}'"
@@ -357,7 +361,7 @@ def run_launcher(config_path: str, guest_args: list[str] | None = None) -> None:
     k_root_path, _ = make_krun_str(root_dir)
     root_fs = lib.krun_fs_device_new_read_only(k_root_tag, k_root_path, ctypes.byref(err))
     check_krun_result(lib, 0, err, "krun_fs_device_new_read_only(rootfs)")
-    lib.krun_device_manager_add(mmio, root_fs, ctypes.byref(err))
+    lib.krun_device_manager_add(mmio, root_fs)
     check_krun_result(lib, 0, err, "krun_device_manager_add(rootfs)")
 
     # Run directory filesystem (read-write)
@@ -365,7 +369,7 @@ def run_launcher(config_path: str, guest_args: list[str] | None = None) -> None:
     k_run_path, _ = make_krun_str(run_dir)
     run_fs = lib.krun_fs_device_new(k_run_tag, k_run_path, ctypes.byref(err))
     check_krun_result(lib, 0, err, "krun_fs_device_new(pysb_run)")
-    lib.krun_device_manager_add(mmio, run_fs, ctypes.byref(err))
+    lib.krun_device_manager_add(mmio, run_fs)
     check_krun_result(lib, 0, err, "krun_device_manager_add(pysb_run)")
 
     # Additional virtio-fs mounts
@@ -379,7 +383,7 @@ def run_launcher(config_path: str, guest_args: list[str] | None = None) -> None:
         else:
             fs_dev = lib.krun_fs_device_new(k_tag, k_path, ctypes.byref(err))
         check_krun_result(lib, 0, err, f"krun_fs_device_new({tag})")
-        lib.krun_device_manager_add(mmio, fs_dev, ctypes.byref(err))
+        lib.krun_device_manager_add(mmio, fs_dev)
         check_krun_result(lib, 0, err, f"krun_device_manager_add({tag})")
 
     # Console device
@@ -388,7 +392,7 @@ def run_launcher(config_path: str, guest_args: list[str] | None = None) -> None:
     check_krun_result(lib, res_con, err, "krun_console_builder_add_default_console")
     console_dev = lib.krun_console_builder_build(cb, ctypes.byref(err))
     check_krun_result(lib, 0, err, "krun_console_builder_build")
-    lib.krun_device_manager_add(mmio, console_dev, ctypes.byref(err))
+    lib.krun_device_manager_add(mmio, console_dev)
     check_krun_result(lib, 0, err, "krun_device_manager_add(console)")
 
     # Vsock port forwarding (if requested)
@@ -398,16 +402,16 @@ def run_launcher(config_path: str, guest_args: list[str] | None = None) -> None:
         k_sock, _ = make_krun_str(unix_socket)
         res_pf = lib.krun_vsock_device_add_unix_port(vsock, port, k_sock, True)
         check_krun_result(lib, res_pf, err, "krun_vsock_device_add_unix_port")
-        lib.krun_device_manager_add(mmio, vsock, ctypes.byref(err))
+        lib.krun_device_manager_add(mmio, vsock)
         check_krun_result(lib, 0, err, "krun_device_manager_add(vsock)")
 
     # Network device (if requested): the host side of the user-space stack that filters and relays the traffic
     if net_fd is not None:
         k_net_id, _ = make_krun_str("net0")
         k_mac, _ = make_krun_bytes(b"\x5a\x94\xef\xe4\x0c\xee")
-        net_dev = lib.krun_net_device_new_unixstream_fd(k_net_id, net_fd, k_mac, 0, ctypes.byref(err))
+        net_dev = lib.krun_net_device_new_unixstream_fd(k_net_id, net_fd, k_mac, 0, 0, ctypes.byref(err))
         check_krun_result(lib, 0, err, "krun_net_device_new_unixstream_fd")
-        lib.krun_device_manager_add(mmio, net_dev, ctypes.byref(err))
+        lib.krun_device_manager_add(mmio, net_dev)
         check_krun_result(lib, 0, err, "krun_device_manager_add(net)")
 
     # 5. Attach devices and build VMM

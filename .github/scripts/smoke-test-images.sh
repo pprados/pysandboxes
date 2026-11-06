@@ -20,7 +20,7 @@ in_image() {
     "$engine" run --rm "$image:$tag" "$@"
 }
 
-for image in python-sb python-sb-landlock python-sb-unshare python-sb-bwrap python-sb-qemu python-sb-gvisor; do
+for image in python-sb python-sb-landlock python-sb-unshare python-sb-bwrap python-sb-qemu python-sb-gvisor python-sb-libkrun; do
     held=$(in_image "$image" python -c "import importlib.metadata as m; print(m.version('pysandboxes'))")
     if [[ $held != "$version" ]]; then
         echo "::error::$image:$tag holds pysandboxes $held, expected $version"
@@ -47,6 +47,14 @@ in_image python-sb-gvisor unshare --version
 in_image python-sb-gvisor iptables-restore --version
 in_image python-sb-gvisor ip -V
 in_image python-sb-gvisor slirp4netns --version
+# libkrun is compiled in the image's first stage: its library and the guest kernel library must be found by the loader.
+in_image python-sb-libkrun sh -c 'ldconfig -p | grep -q libkrun.so && ldconfig -p | grep -q libkrunfw.so'
+in_image python-sb-libkrun setpriv --version
+in_image python-sb-libkrun pivot_root --version
+in_image python-sb-libkrun passt --version
+in_image python-sb-libkrun slirp4netns --version
+in_image python-sb-libkrun iptables-restore --version
+in_image python-sb-libkrun ip -V
 # shellcheck disable=SC2016  # expanded inside the image, where the variable is set
 in_image python-sb-qemu sh -c 'ls "$PYSANDBOXES_VM_IMAGES_DIR"/* >/dev/null'
 if [[ -c $kvm ]]; then

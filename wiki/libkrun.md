@@ -21,6 +21,13 @@ with sandboxes(os_sandbox="libkrun"):
 `unavailable_reason()` checks `/dev/kvm` and the two libraries and says which one is missing. The interpreter needs no
 `AF_VSOCK` support: the guest creates its vsock socket through libc (`ctypes`).
 
+## libkrun version
+
+The provider uses the C API that libkrun generates with ffier (`krun_vmm_builder_*`, `krun_vsock_device_*`,
+`krun_net_device_*`), which the releases up to 1.19 do not have. It is built on libkrun `2.0.0-dev`, the `main` branch of
+[libkrun](https://github.com/libkrun/libkrun), with libkrunfw 5.5.0. **Follow the publication of libkrun v2 and move to
+it**: the API of a development branch can change, and `Dockerfile-libkrun` pins a commit for that reason.
+
 ## How it works
 
 - **Channel.** libkrun relays a Unix socket the host binds to a vsock port of the guest. A shim started by the guest,
@@ -58,4 +65,7 @@ with sandboxes(os_sandbox="libkrun"):
 - IPv4 only.
 - A rule on `/dev` or `/proc` is not honoured: the guest has its own.
 - Resource limits and seccomp are not configurable.
-- Not tested in Docker, Podman or Kubernetes.
+- Not tested in Kubernetes. In Docker the micro-VM does not yet boot: the image builds and the tools and libraries are
+  found, but the guest ends without an exit code, even with `--privileged`; the provider runs on the host. In Docker and Podman the container needs `--device /dev/kvm` (and `--device /dev/net/tun` for
+  a profile with a `net=` rule); the image `python-sb-libkrun` (`make build-image-libkrun`) compiles libkrun and
+  libkrunfw from source in a first stage and keeps only their libraries.
