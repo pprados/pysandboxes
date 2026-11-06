@@ -101,6 +101,9 @@ def _ensure_runtime_directories() -> None:
         ".local/share/crewai/credentials",
     ):
         (Path.home() / relative_path).mkdir(parents=True, exist_ok=True)
+    if sys.platform == "darwin":
+        for relative_path in ("crewai-demo", "crewai/credentials"):
+            (Path.home() / "Library/Application Support" / relative_path).mkdir(parents=True, exist_ok=True)
 
 
 def chat(agent: Agent, *, verbose: bool) -> int:

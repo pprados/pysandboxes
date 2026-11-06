@@ -309,8 +309,8 @@ class TestPrepareGuestEnv:
     def test_it_hands_its_arguments_to_the_iso_builder(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         received: list[tuple[Any, ...]] = []
 
-        def create(*args: Any) -> Path:
-            received.append(args)
+        def create(*args: Any, **kwargs: Any) -> Path:
+            received.append((*args, kwargs))
             return tmp_path / "iso"
 
         monkeypatch.setattr(qemu_setup, "_create_nocloud_iso", create)
@@ -321,19 +321,32 @@ class TestPrepareGuestEnv:
         )
 
         assert result == tmp_path / "iso"
-        assert received == [(tmp_path, config, [("t", "/g")], "pipe", "/mnt/run", "3.12", "/py", "/cfg/config.pkl")]
+        assert received == [
+            (
+                tmp_path,
+                config,
+                [("t", "/g")],
+                "pipe",
+                "/mnt/run",
+                "3.12",
+                "/py",
+                "/cfg/config.pkl",
+                {"python_paths": None},
+            )
+        ]
 
     def test_the_defaults_are_the_standard_run_mount_and_python_311(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         received: list[tuple[Any, ...]] = []
 
-        def create(*args: Any) -> Path:
-            received.append(args)
+        def create(*args: Any, **kwargs: Any) -> Path:
+            received.append((*args, kwargs))
             return tmp_path
 
         monkeypatch.setattr(qemu_setup, "_create_nocloud_iso", create)
 
         qemu_setup.prepare_guest_env(tmp_path, _process_config(), tmp_path / "pipe", [])
 
-        assert received[0][4:] == (qemu_setup.GUEST_RUN_MOUNT, "3.11", None, None)
+        assert received[0][4:-1] == (qemu_setup.GUEST_RUN_MOUNT, "3.11", None, None)
+        assert received[0][-1] == {"python_paths": None}

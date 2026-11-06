@@ -35,6 +35,7 @@ def test_main_kickoff_prints(
     monkeypatch.setenv("HOME", str(tmp_path))
     monkeypatch.setenv("USERPROFILE", str(tmp_path))
     monkeypatch.setenv("LOCALAPPDATA", str(tmp_path / "AppData/Local"))
+    monkeypatch.setattr("crewai_demo.main.sys.platform", "darwin")
 
     code = main(["--task", "Use tools to add 1 and 1 via evaluate_expression only."])
 
@@ -44,3 +45,5 @@ def test_main_kickoff_prints(
     assert (tmp_path / ".local/share/crewai/credentials").is_dir()
     assert (tmp_path / "AppData/Local/CrewAI/crewai-demo").is_dir()
     assert (tmp_path / "AppData/Local/crewai/credentials").is_dir()
+    assert (tmp_path / "Library/Application Support/crewai-demo").is_dir()
+    assert (tmp_path / "Library/Application Support/crewai/credentials").is_dir()
