@@ -142,3 +142,88 @@ class TestGVisor:
         daemon._kill_slirp()
 
         assert ("stop", None) in session.calls
+
+
+class TestFirejail:
+    def test_the_enforcer_enters_the_jail_with_join_network(self) -> None:
+        from pysandboxes.remote.netns_enforcer import NetnsIptablesEnforcer
+
+        enforcer = NetnsIptablesEnforcer.via_firejail(4242, "/usr/bin/firejail", "/usr/sbin/iptables")
+
+        assert enforcer._prefix == ["/usr/bin/firejail", "--join-network=4242", "/usr/sbin/iptables"]
+
+    def test_a_session_that_joins_with_firejail_refuses_to_start_without_root(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        from pysandboxes.remote import runtime_dns as rd
+
+        monkeypatch.setattr(rd.os, "geteuid", lambda: 1000)
+
+        with pytest.raises(SandBoxError, match="needs root"):
+            rd.RuntimeDnsSession(join="firejail").start(RUNTIME)
+
+    def test_a_session_as_root_starts_on_the_bridge_address_and_joins_with_firejail(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        from pysandboxes.remote import runtime_dns as rd
+
+        started: dict[str, Any] = {}
+
+        class FakeDns:
+            def __init__(self, rules: Any, servers: Any, **kwargs: Any) -> None:
+                started.update(kwargs)
+
+            def start(self) -> int:
+                return 15353
+
+            def attach(self, enforcer: Any) -> None:
+                started["prefix"] = enforcer._prefix
+
+            def stop(self) -> None:
+                pass
+
+        monkeypatch.setattr(rd.os, "geteuid", lambda: 0)
+        monkeypatch.setattr(rd, "RuntimeDns", FakeDns)
+        monkeypatch.setattr(rd, "which_command", lambda name: Path("/usr/bin") / name)
+        monkeypatch.setattr(rd, "get_upstream_dns", lambda: [IPv4Address("198.51.100.53")])
+        session = rd.RuntimeDnsSession(join="firejail")
+
+        assert session.start(RUNTIME, "172.17.0.1") == 15353
+        session.attach(77)
+
+        assert started["host"] == "172.17.0.1"
+        assert started["prefix"] == ["/usr/bin/firejail", "--join-network=77", "/usr/bin/iptables"]
+
+    def test_the_address_of_an_interface_is_read_from_the_host(self) -> None:
+        from pysandboxes.remote.firejail_sse_daemon import _interface_ipv4
+
+        assert str(_interface_ipv4("lo")) == "127.0.0.1"
+        with pytest.raises(SandBoxError, match="IPv4 address"):
+            _interface_ipv4("nonexistent0")
+
+    def test_the_hook_of_a_one_shot_run_and_the_launch_hook_without_resolver_do_nothing_or_stop(self) -> None:
+        from pysandboxes.remote.firejail_sse_daemon import FireJailSSEDaemon
+
+        daemon = FireJailSSEDaemon("tok")
+        session = FakeSession()
+        daemon._dns_session = session  # type: ignore[assignment]
+
+        daemon._kill_slirp()
+
+        assert session.calls == [("stop", None)]
+
+    def test_the_resolver_joins_the_jail_once_its_network_is_up(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        from pysandboxes.remote import firejail_sse_daemon as fsd
+
+        class Running(FakeSession):
+            running = True
+
+        daemon = fsd.FireJailSSEDaemon("tok")
+        session = Running()
+        daemon._dns_session = session  # type: ignore[assignment]
+        answers = iter([None, None, IPv4Address("172.17.0.2")])
+        monkeypatch.setattr(fsd, "parse_firejail_net_print", lambda pid: next(answers))
+
+        daemon._on_process_launched(99)
+
+        assert session.calls == [("attach", 99)]
