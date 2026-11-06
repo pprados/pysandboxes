@@ -3,7 +3,7 @@ SHELL=/bin/bash
 	unit-tests integration-tests container-tests sample-tests sample-tests-matrix all-tests gh-tests gh-all-tests \
 	spell_check spell_fix pip-audit pip-audit-all clean extra-clean help \
 	api_docs_build api_docs_clean api_docs_linkcheck \
-	build-images build-image-base build-image-landlock build-image-unshare build-image-bwrap build-image-qemu build-image-gvisor build-image-docker build-image-podman build-image-clean \
+	build-images build-image-base build-image-landlock build-image-unshare build-image-bwrap build-image-qemu build-image-gvisor build-image-smolvm build-image-docker build-image-podman build-image-clean \
 	minikube-ready minikube-build-images lock validate inspector github-push-test init \
 	clean-sandbox-temps quick-demo-gif \
 	windows-vm windows-tests windows-tests-user windows-tests-all windows-vm-stop windows-vm-clean macos-vm macos-tests macos-vm-stop \
@@ -746,6 +746,25 @@ QEMU_PKG      := $(if $(filter aarch64 arm64,$(UNAME_M)),qemu-system-aarch64,qem
 	done; \
 	touch .make-build-image-qemu
 
+build/smolvm-guest.tar: Dockerfile-smolvm-guest
+	@command -v docker >/dev/null 2>&1 || { echo "docker is required to build the smolvm guest archive"; exit 1; }
+	@mkdir -p build
+	docker build -t python-sb-smolvm-guest:dev -f Dockerfile-smolvm-guest .
+	docker save python-sb-smolvm-guest:dev -o build/smolvm-guest.tar
+
+.make-build-image-smolvm: .make-build-image-base Dockerfile-smolvm build/smolvm-guest.tar
+	@for CONTAINER_CMD in $(CONTAINER_CMDS); do \
+	  if ! command -v $$CONTAINER_CMD >/dev/null 2>&1; then continue; fi; \
+	  echo "Building python-sb-smolvm:$(PYTHON_VERSION), python-sb-smolvm:latest with $$CONTAINER_CMD..."; \
+	  $$CONTAINER_CMD build \
+	  	--build-arg PYTHON_VERSION=$(PYTHON_VERSION) \
+	  	-t python-sb-smolvm:$(PYTHON_VERSION) \
+	  	-t python-sb-smolvm:latest \
+	  	-t python-sb-smolvm:smolvm \
+	  	-f Dockerfile-smolvm . || exit 1; \
+	done; \
+	touch .make-build-image-smolvm
+
 .make-build-image-gvisor: .make-build-image-base Dockerfile-gvisor
 	@for CONTAINER_CMD in $(CONTAINER_CMDS); do \
 	  if ! command -v $$CONTAINER_CMD >/dev/null 2>&1; then continue; fi; \
@@ -777,6 +796,9 @@ build-image-qemu: .make-build-image-qemu
 # Build gvisor image (FROM python-sb): python-sb-gvisor:$(PYTHON_VERSION), python-sb-gvisor:latest
 build-image-gvisor: .make-build-image-gvisor
 
+# Build smolvm image (FROM python-sb): python-sb-smolvm:$(PYTHON_VERSION), python-sb-smolvm:latest
+build-image-smolvm: .make-build-image-smolvm
+
 ## Build all provider images (and base first); see dependency graph above (for minikube: make minikube-build-images)
 build-images: Dockerfile .make-dist \
 	.make-build-image-base \
@@ -784,9 +806,10 @@ build-images: Dockerfile .make-dist \
 	.make-build-image-unshare \
 	.make-build-image-bwrap \
 	.make-build-image-qemu \
-	.make-build-image-gvisor
+	.make-build-image-gvisor \
+	.make-build-image-smolvm
 
-IMAGE_STAMPS := .make-build-image-base .make-build-image-landlock .make-build-image-unshare .make-build-image-bwrap .make-build-image-qemu .make-build-image-gvisor
+IMAGE_STAMPS := .make-build-image-base .make-build-image-landlock .make-build-image-unshare .make-build-image-bwrap .make-build-image-qemu .make-build-image-gvisor .make-build-image-smolvm
 
 # The sentinels say "built", never "built *where*", so they are dropped on both sides:
 # before, because they record a build against the previous daemon and would leave every
@@ -807,7 +830,7 @@ build-image-clean:
 	@echo "Pruning build caches and forcing rebuild..."
 	@command -v docker >/dev/null 2>&1 && docker builder prune -f || true
 	@command -v podman >/dev/null 2>&1 && (podman builder prune -f 2>/dev/null || podman system prune -f 2>/dev/null) || true
-	@rm -f .make-build-image-base .make-build-image-landlock .make-build-image-unshare .make-build-image-bwrap .make-build-image-qemu .make-build-image-gvisor
+	@rm -f .make-build-image-base .make-build-image-landlock .make-build-image-unshare .make-build-image-bwrap .make-build-image-qemu .make-build-image-gvisor .make-build-image-smolvm
 	@$(MAKE) build-images
 
 # ---------------------------------------------------------------------------------------
