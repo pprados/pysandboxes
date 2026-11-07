@@ -68,6 +68,9 @@ def main() -> None:
             if microvm and daemon._process is not None:
                 owned.add(daemon._process.pid)
         if microvm:
+            settle_deadline = time.monotonic() + 10
+            while time.monotonic() < settle_deadline and any(Path(f"/proc/{pid}").exists() for pid in owned):
+                time.sleep(0.2)
             result["left"] = [pid for pid in owned if Path(f"/proc/{pid}").exists()]
     except BaseException as error:  # noqa: BLE001 - the verdict is reported even when the shutdown fails
         result["error"] = f"{type(error).__name__}: {error}"[:300]
