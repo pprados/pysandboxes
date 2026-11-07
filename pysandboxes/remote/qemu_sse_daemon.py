@@ -31,11 +31,12 @@ from ..e import SandBoxError
 from ..guard_files import _CA_STORES, FSExposeRule, is_special_file
 from ..immutable_dict import ImmutableDict
 from ..main_logger import ErrorMsg
-from ..netfilter import rule_to_netfilter
+from ..netfilter import rule_to_netfilter, runtime_netfilter
 from ..override_compat import override
 from ..sb_types import Args, ConfigLines, Envs
 from ..tools import Environ, follow_links_executable
 from .client_subprocess_sse_daemon import (
+    find_free_port,
     get_log_formatter,
     launch_sandbox,
     use_rich_handler,
@@ -61,6 +62,7 @@ from .qemu_setup import (
     augment_all_rules_for_qemu_run_mount,
     prepare_guest_env,
 )
+from .runtime_dns import RuntimeDnsSession
 from .tools import SSE_READ_BUFSIZE, is_transient_connection_error, which_command
 from .vm_sse_daemon import VMSSEDaemon
 
@@ -997,7 +999,7 @@ class QemuSSEDaemon(VMSSEDaemon):
 
     host_run_temp_prefix = QEMU_HOST_RUN_PREFIX
 
-    __slots__ = ("_iso_config", "_qemu_console_tasks", "_stage_root")
+    __slots__ = ("_iso_config", "_qemu_console_tasks", "_stage_root", "_dns_session", "_resolver_port", "_control_port")
     supports_unix_endpoint = True
     endpoint_handed_down = False
 
@@ -1012,15 +1014,40 @@ class QemuSSEDaemon(VMSSEDaemon):
     def augment_rules_for_guest_run_mount(self, all_rules: AllRules) -> AllRules:
         return augment_all_rules_for_qemu_run_mount(all_rules)
 
+    def prepare_runtime_dns(self, all_rules: AllRules, token: str) -> int:
+        """Start the filtering resolver and give it the control port of the guest, which the guest serves."""
+        resolver_port = self._dns_session.start(all_rules)
+        self._resolver_port = resolver_port
+        self._control_port = find_free_port() if resolver_port is not None else 0
+        self._dns_session.attach_guest(self._control_port, token)
+        return self._control_port
+
+    def _kill_slirp(self) -> None:
+        """End of a one-shot ``python-sb`` run, which calls this hook by name: stop the filtering resolver."""
+        self._dns_session.stop()
+
     def guest_netfilter_rules(self, all_rules: AllRules, port: int) -> tuple[str, ...]:
-        """Rules from the socket rules, DNS at 10.0.2.3, and the host (10.0.2.2 in user mode) allowed on ``port``."""
-        netfilter = list(rule_to_netfilter(all_rules.socket_rules, [IPv4Address("10.0.2.3")], is_ipv6=False))
+        """Rules from the socket rules, DNS at 10.0.2.3, and the host (10.0.2.2 in user mode) allowed on ``port``.
+
+        With ``net-resolve=runtime`` the guest asks the DNS address that its ``nat`` table sends to the resolver of
+        the host, and the host reaches the control port of the guest as it reaches the daemon.
+        """
+        if self._resolver_port is not None:
+            netfilter = list(
+                runtime_netfilter(
+                    all_rules.socket_rules, self._resolver_port, IPv4Address("10.0.2.2"), IPv4Address("10.0.2.3")
+                )
+            )
+        else:
+            netfilter = list(rule_to_netfilter(all_rules.socket_rules, [IPv4Address("10.0.2.3")], is_ipv6=False))
         if "COMMIT" in netfilter:
             idx = netfilter.index("COMMIT")
-            sse_allow = (
-                f"-A INPUT -p tcp -s 10.0.2.2/32 --dport {port} -m conntrack --ctstate NEW,ESTABLISHED -j ACCEPT"
-            )
-            netfilter = netfilter[:idx] + [sse_allow] + netfilter[idx:]
+            host_ports = [port] + ([self._control_port] if self._resolver_port is not None else [])
+            sse_allow = [
+                f"-A INPUT -p tcp -s 10.0.2.2/32 --dport {p} -m conntrack --ctstate NEW,ESTABLISHED -j ACCEPT"
+                for p in host_ports
+            ]
+            netfilter = netfilter[:idx] + sse_allow + netfilter[idx:]
         return tuple(netfilter)
 
     def __init__(self, token: str, *, python_args: list[str] | None = None, **kwargs: Any) -> None:
@@ -1034,6 +1061,9 @@ class QemuSSEDaemon(VMSSEDaemon):
         self._iso_config: DaemonParameters | None = None
         self._qemu_console_tasks: list[asyncio.Task[None]] = []
         self._stage_root: tempfile.TemporaryDirectory[str] | None = None
+        self._dns_session = RuntimeDnsSession(join="guest")
+        self._resolver_port = None
+        self._control_port = 0
 
     def _remove_stage_root(self) -> None:
         if self._stage_root is not None:
@@ -1055,6 +1085,7 @@ class QemuSSEDaemon(VMSSEDaemon):
         try:
             await super()._shutdown(graceful_shutdown)
         finally:
+            await asyncio.to_thread(self._dns_session.stop)
             self._remove_stage_root()
 
     @override
@@ -1120,6 +1151,8 @@ class QemuSSEDaemon(VMSSEDaemon):
         # QEMU creates the socket itself; the guest keeps serving TCP behind the forward. The directory name has no
         # "-" or ",", which QEMU's forward syntax would read as separators.
         forward = f"unix:{self.endpoint.path}-:{port}" if self.endpoint is not None else f"tcp:127.0.0.1:{port}-:{port}"
+        if self._resolver_port is not None:
+            forward += f",hostfwd=tcp:127.0.0.1:{self._control_port}-:{self._control_port}"
         net = [
             "-nic",
             f"user,hostfwd={forward},model=virtio-net-pci",
@@ -1235,6 +1268,7 @@ class QemuSSEDaemon(VMSSEDaemon):
             module, func_ref = get_callable_info(init_fn)
             init_fn_ref = f"{module}:{func_ref}"
 
+        self.prepare_runtime_dns(all_rules, self._token)
         netfilter_rules = self.guest_netfilter_rules(all_rules, port)
 
         process_config = DaemonParameters(
@@ -1246,6 +1280,7 @@ class QemuSSEDaemon(VMSSEDaemon):
             port=port,
             init_fn=init_fn_ref,
             netfilter_rules=netfilter_rules,
+            learned_control_port=self._control_port,
             guest_run_dir=GUEST_RUN_MOUNT,
             guest_working_dir=str(Path.cwd().resolve()),
             # hostfwd reaches the guest on its NIC, not on the guest loopback.

@@ -177,8 +177,8 @@ def main() -> int:
     real = runtime_dns.RuntimeDns
     started: list[RuntimeDns] = []
 
-    def start_resolver(rules: tuple, servers: list) -> RuntimeDns:
-        started.append(real(rules, servers, upstream_port=authority.port, upstream_timeout=3.0))
+    def start_resolver(rules: tuple, servers: list, **kwargs: str) -> RuntimeDns:
+        started.append(real(rules, servers, upstream_port=authority.port, upstream_timeout=3.0, **kwargs))
         return started[-1]
 
     patch.object(runtime_dns, "RuntimeDns", start_resolver).start()
@@ -189,7 +189,7 @@ def main() -> int:
         "net-resolve=runtime\n"
         "python-import=*\n"
         "expose-ro=.\n"
-        "expose-ro=/etc\n"
+        f"{'' if provider == 'qemu' else 'expose-ro=/etc' + chr(10)}"
         f"expose-ro={sys.base_prefix}/lib\n"
         f"net=ALLOW|TCP|{ALLOWED_NAME}|{allowed.port}|OUT\n"
     )

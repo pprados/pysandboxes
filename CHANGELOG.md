@@ -28,7 +28,7 @@
   local TCP port, with the `subprocess`, `landlock`, `bwrap`, `firejail`, `unshare`, `qemu` and `sandbox-exec`
   providers on Linux and macOS; it falls back to TCP when that is not possible. `remote-endpoint=tcp|unix` forces one
   or the other.
-- `net-resolve=pinned|runtime` chooses when the host names of `net=` rules are resolved: `pinned` (the current behaviour) freezes their addresses at start, `runtime` (`unshare`, `bwrap`, `gvisor` and `firejail` (as root)) resolves them when the program asks, through a filtering resolver that opens the addresses of an allowed name for their TTL and refuses every other name and resolver.
+- `net-resolve=pinned|runtime` chooses when the host names of `net=` rules are resolved: `pinned` (the current behaviour) freezes their addresses at start, `runtime` (`unshare`, `bwrap`, `gvisor`, `qemu` and `firejail` (as root)) resolves them when the program asks, through a filtering resolver that opens the addresses of an allowed name for their TTL and refuses every other name and resolver.
 
 ## [0.10.0] - 2026-11-05
 

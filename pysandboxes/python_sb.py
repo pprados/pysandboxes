@@ -235,6 +235,7 @@ def _main(stack: ExitStack) -> int:
                 }
             )
             guest_all_rules = vm.augment_rules_for_guest_run_mount(all_rules._replace(envs=guest_envs))
+            learned_control_port = vm.prepare_runtime_dns(all_rules, token)
             process_config = DaemonParameters(
                 all_rules=guest_all_rules,
                 log_level=log_level,
@@ -244,6 +245,7 @@ def _main(stack: ExitStack) -> int:
                 port=vm.port,
                 init_fn="",
                 netfilter_rules=vm.guest_netfilter_rules(all_rules, vm.port),
+                learned_control_port=learned_control_port,
                 python_main_args=tuple(python_cmd),
                 guest_run_dir=vm.guest_run_dir_mount(),
                 guest_working_dir=str(Path.cwd().resolve()),

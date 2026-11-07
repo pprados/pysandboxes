@@ -60,6 +60,10 @@ class VMSSEDaemon(BaseSubProcessDaemon, ABC):
     def guest_netfilter_rules(self, all_rules: AllRules, port: int) -> tuple[str, ...]:
         """Return the iptables rules the guest applies to itself, from the profile's socket rules."""
 
+    def prepare_runtime_dns(self, all_rules: AllRules, token: str) -> int:
+        """Start what ``net-resolve=runtime`` needs on the host; the control port of the guest, 0 for none."""
+        return 0
+
     @staticmethod
     def show_boot_console_truthy(all_rules: Any | None) -> bool:
         """Whether the profile requests full VM serial / verbose bootstrap (truthy ``show_boot_console``)."""

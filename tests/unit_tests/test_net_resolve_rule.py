@@ -63,7 +63,7 @@ def test_pinned_is_accepted_by_every_provider() -> None:
     assert errors == []
 
 
-@pytest.mark.parametrize("provider", ["unshare", "bwrap", "gvisor", "firejail"])
+@pytest.mark.parametrize("provider", ["unshare", "bwrap", "gvisor", "firejail", "qemu"])
 def test_runtime_is_accepted_by_the_providers_with_an_enforcer(provider: str) -> None:
     errors: list = []
 
@@ -72,7 +72,7 @@ def test_runtime_is_accepted_by_the_providers_with_an_enforcer(provider: str) ->
     assert errors == []
 
 
-@pytest.mark.parametrize("provider", ["subprocess", "landlock", "qemu", "none"])
+@pytest.mark.parametrize("provider", ["subprocess", "landlock", "none"])
 def test_runtime_is_an_error_for_a_provider_without_an_enforcer(provider: str) -> None:
     errors: list = []
 
