@@ -184,6 +184,8 @@ def _safe_realpath(path: str) -> str:
     token = _canonicalizing.set(True)
     try:
         return _os_path_realpath(path)
+    except OSError:
+        return os.path.abspath(path)
     finally:
         _canonicalizing.reset(token)
 

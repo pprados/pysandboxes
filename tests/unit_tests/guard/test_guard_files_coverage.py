@@ -16,6 +16,7 @@ rules disarmed first, since a post-condition check goes through the very
 guard the test just armed, and a hidden file reads as absent to `exists()`.
 """
 
+import errno
 import logging
 import os
 import sys
@@ -133,6 +134,16 @@ def test_the_canonical_helpers_flag_the_canonicalization_while_they_run(monkeypa
 
     assert realpath_seen == [True]
     assert islink_seen == [True]
+    assert guard_files._canonicalizing.get() is False
+
+
+def test_a_link_the_system_cannot_resolve_keeps_its_absolute_path(monkeypatch: pytest.MonkeyPatch) -> None:
+    def loop(path: str) -> str:
+        raise OSError(errno.ELOOP, "Too many levels of symbolic links", path)
+
+    monkeypatch.setattr(guard_files, "_os_path_realpath", loop)
+
+    assert guard_files._safe_realpath("/etc/../etc/rmt") == "/etc/rmt"
     assert guard_files._canonicalizing.get() is False
 
 
