@@ -227,3 +227,70 @@ class TestFirejail:
         daemon._on_process_launched(99)
 
         assert session.calls == [("attach", 99)]
+
+
+class TestQemu:
+    @staticmethod
+    def _daemon(session: Any = None) -> Any:
+        from pysandboxes.remote.qemu_sse_daemon import QemuSSEDaemon
+
+        daemon = QemuSSEDaemon("tok")
+        if session is not None:
+            daemon._dns_session = session
+        return daemon
+
+    def test_the_pinned_guest_ruleset_is_unchanged(self) -> None:
+        rules = self._daemon().guest_netfilter_rules(EmptyRules._replace(socket_rules=(STATIC,)), 4242)
+
+        assert ":LEARNED - [0:0]" not in rules and "*nat" not in rules
+
+    def test_the_runtime_guest_ruleset_opens_the_daemon_port_and_the_control_port_to_the_host(self) -> None:
+        daemon = self._daemon()
+        daemon._resolver_port, daemon._control_port = 15353, 40000
+
+        rules = daemon.guest_netfilter_rules(RUNTIME, 4242)
+
+        expected = runtime_netfilter(RUNTIME.socket_rules, 15353, GATEWAY, SLIRP_DNS)
+        accepts = [
+            f"-A INPUT -p tcp -s 10.0.2.2/32 --dport {p} -m conntrack --ctstate NEW,ESTABLISHED -j ACCEPT"
+            for p in (4242, 40000)
+        ]
+        index = expected.index("COMMIT")
+        assert list(rules) == [*expected[:index], *accepts, *expected[index:]]
+
+    def test_preparing_a_runtime_profile_starts_the_resolver_and_attaches_the_guest_channel(self) -> None:
+        class Session(FakeSession):
+            def attach_guest(self, port: int, token: str) -> None:
+                self.calls.append(("attach_guest", (port, token)))
+
+        session = Session()
+        daemon = self._daemon(session)
+
+        port = daemon.prepare_runtime_dns(RUNTIME, "the-token")
+
+        assert port > 0 and daemon._resolver_port == 15353
+        assert session.calls[-1] == ("attach_guest", (port, "the-token"))
+
+    def test_preparing_a_pinned_profile_opens_no_control_port(self) -> None:
+        class Pinned(FakeSession):
+            def start(self, all_rules: Any) -> None:  # type: ignore[override]
+                return None
+
+            def attach_guest(self, port: int, token: str) -> None:
+                self.calls.append(("attach_guest", (port, token)))
+
+        daemon = self._daemon(Pinned())
+
+        assert daemon.prepare_runtime_dns(EmptyRules, "t") == 0 and daemon._resolver_port is None
+
+    def test_the_hook_of_a_one_shot_run_stops_the_resolver(self) -> None:
+        session = FakeSession()
+
+        self._daemon(session)._kill_slirp()
+
+        assert ("stop", None) in session.calls
+
+    def test_the_default_of_a_vm_provider_has_nothing_to_prepare(self) -> None:
+        from pysandboxes.remote.vm_sse_daemon import VMSSEDaemon
+
+        assert VMSSEDaemon.prepare_runtime_dns(self._daemon(), EmptyRules, "t") == 0

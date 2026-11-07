@@ -33,6 +33,15 @@ class NetnsIptablesEnforcer:
         self._run = run
 
     @classmethod
+    def via_guest(cls, port: int, token: str) -> "NetnsIptablesEnforcer":
+        """Enforcer of a VM guest: the commands go to the thread the guest runs for them, through a forwarded port."""
+        from .guest_learned import send
+
+        enforcer = cls(0, "", "", lambda argv: send(port, token, argv))
+        enforcer._prefix = []
+        return enforcer
+
+    @classmethod
     def via_firejail(
         cls, pid: int, firejail: str, iptables: str, run: Callable[[list[str]], int] = _run
     ) -> "NetnsIptablesEnforcer":

@@ -328,10 +328,11 @@ _IPTABLES_RESTORE_PATHS = (
 )
 
 
-def _apply_netfilter(netfilter_rules: tuple[str, ...]) -> None:
+def _apply_netfilter(netfilter_rules: tuple[str, ...]) -> str:
     """Apply the iptables rules in the QEMU guest, where the child is root.
 
     Fails closed: the profile's socket rules depend on this filter, so the child stops when it cannot be applied.
+    Returns the ``iptables`` of the backend that loaded it, the one that sees the rules.
     """
     # Bring up loopback when in a new network namespace (required before iptables)
     for ip_cmd in ("/usr/sbin/ip", "/sbin/ip", "ip"):
@@ -364,7 +365,7 @@ def _apply_netfilter(netfilter_rules: tuple[str, ...]) -> None:
             failure = f"{restore}: {e}"
             continue
         if r.returncode == 0:
-            return
+            return restore.replace("-restore", "")
         failure = f"{restore} ({r.returncode}): {r.stderr.decode(errors='replace').strip()}"
     raise RuntimeError(f"iptables-restore failed, {failure}")
 
@@ -432,7 +433,12 @@ def main() -> int:
     # Only the QEMU guest applies its own filter. bwrap gets no rule: the host loads its filter and waits for
     # slirp4netns before handing the child its config.
     if netfilter_rules:
-        _apply_netfilter(netfilter_rules)
+        iptables = _apply_netfilter(netfilter_rules)
+        if getattr(process_config, "learned_control_port", 0):
+            from .guest_learned import start_helper
+
+            # Before the guards: afterwards no program of this process may run iptables.
+            start_helper(process_config.learned_control_port, process_config.token, iptables)
 
     _qemu_show_boot_console_guest_trace(process_config, "main: after netfilter / wait_network")
 

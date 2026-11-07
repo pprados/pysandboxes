@@ -166,7 +166,7 @@ class RuntimeDnsSession:
             raise SandBoxError(
                 "net-resolve=runtime under firejail needs root: only root may join the network namespace of a jail."
             )
-        for tool in (self._join, "iptables"):
+        for tool in (() if self._join == "guest" else (self._join, "iptables")):
             if not which_command(tool):
                 raise SandBoxError(f"net-resolve=runtime needs {tool} on the host.")
         servers = [ip for ip in get_upstream_dns() if isinstance(ip, IPv4Address)]
@@ -174,6 +174,11 @@ class RuntimeDnsSession:
             raise SandBoxError("net-resolve=runtime found no IPv4 resolver on the host to forward the names to.")
         self._dns = RuntimeDns(all_rules.name_rules, servers, host=bind_host)
         return self._dns.start()
+
+    def attach_guest(self, port: int, token: str) -> None:
+        """Let the resolver open addresses in a VM guest, through the control port the guest serves."""
+        if self._dns is not None:
+            self._dns.attach(NetnsIptablesEnforcer.via_guest(port, token))
 
     def attach(self, pid: int) -> None:
         """Let the resolver open addresses in the network namespace held by ``pid``, once that namespace exists."""
