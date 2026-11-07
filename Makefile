@@ -417,8 +417,8 @@ sample-tests-matrix:
 
 # VM providers cost a full guest boot per sandbox. Keep this release/nightly lane separate from the fast matrix.
 SAMPLE_VM_PROVIDERS = qemu qemu-microvm
-# CrewAI needs more shares than the microvm's six 9p slots permit without dropping a guest-missing path.
-SAMPLE_QEMU_MICROVM_SAMPLES = $(filter-out crewai,$(SAMPLES))
+# CrewAI needs one share more than the microvm's six 9p slots: the guest image has no /etc/pki, so it is made empty.
+SAMPLE_QEMU_MICROVM_EMPTY_PATHS = /etc/pki
 SAMPLE_QEMU_MICROVM_OPTIONAL_PATHS = /etc/ssl,/etc/ca-certificates,/usr/share/ca-certificates
 SAMPLE_QEMU_OPTIONAL_PATHS = /etc/ssl,/etc/pki,/etc/ca-certificates,/usr/share/ca-certificates
 sample-tests-vm:
@@ -426,8 +426,9 @@ sample-tests-vm:
 	for provider in $(SAMPLE_VM_PROVIDERS); do \
 		echo "=== samples on Python $${UV_PYTHON:-$$(uv run python -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")')} under $$provider"; \
 		if [ "$$provider" = qemu-microvm ]; then \
-			QEMU_MICROVM_OPTIONAL_PATHS=$(SAMPLE_QEMU_MICROVM_OPTIONAL_PATHS) OS_SANDBOX=$$provider \
-				$(MAKE) sample-tests SAMPLES="$(SAMPLE_QEMU_MICROVM_SAMPLES)" || status=1; \
+			QEMU_MICROVM_OPTIONAL_PATHS=$(SAMPLE_QEMU_MICROVM_OPTIONAL_PATHS) \
+			QEMU_MICROVM_EMPTY_PATHS=$(SAMPLE_QEMU_MICROVM_EMPTY_PATHS) OS_SANDBOX=$$provider \
+				$(MAKE) sample-tests || status=1; \
 		else \
 			QEMU_MICROVM_OPTIONAL_PATHS=$(SAMPLE_QEMU_OPTIONAL_PATHS) OS_SANDBOX=$$provider \
 				$(MAKE) sample-tests || status=1; \
@@ -440,8 +441,9 @@ sample-tests-vm-matrix:
 	for py in $(SAMPLE_PYTHONS); do for provider in $(SAMPLE_VM_PROVIDERS); do \
 		echo "=== samples on Python $$py under $$provider"; \
 		if [ "$$provider" = qemu-microvm ]; then \
-			UV_PYTHON=$$py QEMU_MICROVM_OPTIONAL_PATHS=$(SAMPLE_QEMU_MICROVM_OPTIONAL_PATHS) OS_SANDBOX=$$provider \
-				$(MAKE) sample-tests SAMPLES="$(SAMPLE_QEMU_MICROVM_SAMPLES)" || status=1; \
+			UV_PYTHON=$$py QEMU_MICROVM_OPTIONAL_PATHS=$(SAMPLE_QEMU_MICROVM_OPTIONAL_PATHS) \
+			QEMU_MICROVM_EMPTY_PATHS=$(SAMPLE_QEMU_MICROVM_EMPTY_PATHS) OS_SANDBOX=$$provider \
+				$(MAKE) sample-tests || status=1; \
 		else \
 			UV_PYTHON=$$py QEMU_MICROVM_OPTIONAL_PATHS=$(SAMPLE_QEMU_OPTIONAL_PATHS) OS_SANDBOX=$$provider \
 				$(MAKE) sample-tests || status=1; \

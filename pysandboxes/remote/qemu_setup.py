@@ -196,6 +196,10 @@ def _bootstrap_script_content(
         lines.append('    [ -e "$path" ] || _pysb_fatal "optional 9p path is absent from the guest image: $path"')
         lines.append("    continue")
         lines.append("  fi")
+        lines.append('  if [ "$tag" = "__pysb_empty__" ]; then')
+        lines.append('    mkdir -p "$path" || _pysb_fatal "cannot create empty guest path: $path"')
+        lines.append("    continue")
+        lines.append("  fi")
         lines.append('  mkdir -p "$path"')
         lines.append('  echo "[pysandbox-9p] $tag -> $path" >&2')
         lines.append(

@@ -60,15 +60,11 @@ def test_image_build_uses_uv_python_version(tmp_path: Path, make_environment: di
     assert "-t python-sb:3.13" in command
 
 
-def test_qemu_microvm_sample_targets_exclude_crewai_only_for_microvm(
+def test_qemu_microvm_sample_targets_run_every_sample_with_a_guest_pki_made_empty(
     tmp_path: Path, make_environment: dict[str, str]
 ) -> None:
-    microvm = _make_variable("SAMPLE_QEMU_MICROVM_SAMPLES", tmp_path, make_environment).split()
-    qemu = _make_variable("SAMPLES", tmp_path, make_environment).split()
-
-    assert "crewai" not in microvm
-    assert "autogen" in microvm
-    assert "crewai" in qemu
+    assert _make_variable("SAMPLE_QEMU_MICROVM_EMPTY_PATHS", tmp_path, make_environment) == "/etc/pki"
+    assert "crewai" in _make_variable("SAMPLES", tmp_path, make_environment).split()
 
 
 def test_qemu_microvm_sample_targets_do_not_drop_guest_missing_pki(

@@ -8,8 +8,8 @@ import pytest
 
 from pysandboxes.all_rules import EmptyRules
 from pysandboxes.immutable_dict import ImmutableDict
-from pysandboxes.remote.daemon_parameters import DaemonParameters
 from pysandboxes.remote import qemu_sse_daemon as daemon
+from pysandboxes.remote.daemon_parameters import DaemonParameters
 
 
 def test_compaction_only_removes_equivalent_children() -> None:
@@ -46,6 +46,17 @@ def test_bootstrap_requires_guest_native_fallback_paths() -> None:
 
     assert '[ "$tag" = "__pysb_native__" ]' in script
     assert '[ -e "$path" ] || _pysb_fatal "optional 9p path is absent from the guest image: $path"' in script
+
+
+def test_bootstrap_creates_the_listed_empty_paths_instead_of_requiring_them() -> None:
+    from pysandboxes.remote.qemu_setup import _bootstrap_script_content
+
+    script = _bootstrap_script_content(
+        [("__pysb_empty__", "/etc/pki")], "/run", "3.14", python_paths=["/runtime/site-packages"]
+    )
+
+    assert '[ "$tag" = "__pysb_empty__" ]' in script
+    assert 'mkdir -p "$path" || _pysb_fatal "cannot create empty guest path: $path"' in script
 
 
 def test_microvm_config_uses_readonly_iso_without_config_share(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
@@ -99,6 +110,60 @@ def test_microvm_optional_paths_are_selected_before_cloud_init(
     assert cloud_init_mounts == [("project", "/project"), ("__pysb_native__", "/etc/ssl")]
 
 
+@pytest.mark.parametrize("source", ["profile", "environment"])
+def test_microvm_empty_paths_are_dropped_and_created_empty_in_the_guest(
+    source: str, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    mounts = [("project", tmp_path / "project", "/project"), ("pki", Path("/etc/pki"), "/etc/pki")]
+    cloud_init_mounts: list[tuple[str, str]] = []
+    monkeypatch.setattr(daemon, "ensure_image", lambda _: None)
+    monkeypatch.setattr(daemon, "_file_rules_mounts", lambda *args, **kwargs: (mounts, [(a, c) for a, _, c in mounts]))
+    monkeypatch.setattr(daemon, "_qemu_binary", lambda: "qemu")
+    monkeypatch.setattr(daemon, "qemu_accel_args", lambda _: [])
+    monkeypatch.setattr(daemon, "microvm_mmio_capacity", lambda *_: 3)
+
+    def prepare_guest_env(*args: object, mounts: list[tuple[str, str]], **kwargs: object) -> Path:
+        cloud_init_mounts.extend(mounts)
+        return tmp_path / "seed.iso"
+
+    monkeypatch.setattr(daemon, "prepare_guest_env", prepare_guest_env)
+    params = {"microvm_empty_paths": "/etc/pki"} if source == "profile" else {}
+    if source == "environment":
+        monkeypatch.setenv("QEMU_MICROVM_EMPTY_PATHS", "/etc/pki,/etc/not-mounted")
+    rules = EmptyRules._replace(os_sandbox_params=ImmutableDict(params))
+    process_config = DaemonParameters(rules, 20, "", False, "token", 1234, "")
+
+    assets = daemon._prepare_qemu_launch(rules, tmp_path, process_config, tmp_path / "pipe", microvm=True)
+
+    assert assets.mount_specs == [mounts[0]]
+    assert cloud_init_mounts == [("project", "/project"), ("__pysb_empty__", "/etc/pki")]
+
+
+def test_a_path_both_optional_and_empty_must_still_exist_in_the_guest(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    mounts = [("project", tmp_path / "project", "/project"), ("pki", Path("/etc/pki"), "/etc/pki")]
+    cloud_init_mounts: list[tuple[str, str]] = []
+    monkeypatch.setattr(daemon, "ensure_image", lambda _: None)
+    monkeypatch.setattr(daemon, "_file_rules_mounts", lambda *args, **kwargs: (mounts, [(a, c) for a, _, c in mounts]))
+    monkeypatch.setattr(daemon, "_qemu_binary", lambda: "qemu")
+    monkeypatch.setattr(daemon, "qemu_accel_args", lambda _: [])
+    monkeypatch.setattr(daemon, "microvm_mmio_capacity", lambda *_: 3)
+
+    def prepare_guest_env(*args: object, mounts: list[tuple[str, str]], **kwargs: object) -> Path:
+        cloud_init_mounts.extend(mounts)
+        return tmp_path / "seed.iso"
+
+    monkeypatch.setattr(daemon, "prepare_guest_env", prepare_guest_env)
+    params = {"microvm_optional_paths": "/etc/pki", "microvm_empty_paths": "/etc/pki"}
+    rules = EmptyRules._replace(os_sandbox_params=ImmutableDict(params))
+    process_config = DaemonParameters(rules, 20, "", False, "token", 1234, "")
+
+    daemon._prepare_qemu_launch(rules, tmp_path, process_config, tmp_path / "pipe", microvm=True)
+
+    assert cloud_init_mounts == [("project", "/project"), ("__pysb_native__", "/etc/pki")]
+
+
 def test_execution_mount_is_readonly_but_explicit_write_grant_is_not(monkeypatch: pytest.MonkeyPatch) -> None:
     from pysandboxes.guard_files import FSExposeRule
     from pysandboxes.sb_types import ConfigLine
@@ -123,6 +188,7 @@ def test_microvm_halts_via_reboot_exit_without_acpi() -> None:
 def test_shared_profile_fits_exactly_eight_transports(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     import socket
     import sys
+
     from pysandboxes import guard_socket
     from pysandboxes.python_sb import _load_rules
 
@@ -151,6 +217,7 @@ def test_shared_profile_fits_exactly_eight_transports(monkeypatch: pytest.Monkey
 
 def test_native_file_contract_uses_eight_transports(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     from types import SimpleNamespace
+
     from pysandboxes.python_sb import _load_rules
     from tests.integration_tests import test_os_file_confinement as files
 
@@ -168,6 +235,7 @@ def test_native_file_contract_uses_eight_transports(monkeypatch: pytest.MonkeyPa
 
 def test_guard_fixture_fits_eight_transports(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     from types import SimpleNamespace
+
     from pysandboxes.python_sb import _load_rules
     from tests.integration_tests import test_guards_with_providers as guards
 
@@ -208,6 +276,7 @@ def test_equal_depth_explicit_modes_follow_mount_order() -> None:
 
 def test_microvm_prepares_guest_only_cwd_with_safe_shell_quoting(tmp_path: Path) -> None:
     import subprocess
+
     from pysandboxes.remote.qemu_setup import _bootstrap_script_content
 
     cwd = tmp_path / "hidden '$(touch injected) directory"
@@ -232,6 +301,7 @@ def test_hidden_microvm_cwd_keeps_explicit_pythonpath_without_implicit_import(
 ) -> None:
     import os
     from unittest.mock import Mock
+
     from tests.integration_tests import test_guards_with_providers as guards
 
     hidden = tmp_path / "hidden"

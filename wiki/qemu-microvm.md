@@ -53,9 +53,14 @@ still exceeds capacity fails closed before user code runs.
 It is useful for sample suites that share profiles across providers. Candidates that are not mounted by the current
 profile are ignored; any candidate actually omitted still must exist in the guest image.
 
-The VM sample targets omit CrewAI for `qemu-microvm`: its profile needs ten shares, while the provider has six 9p slots.
-Only three excess shares can safely fall back to paths present in the Ubuntu guest. The target still runs CrewAI for
-the regular `qemu` provider.
+`qemu.microvm_empty_paths=/etc/pki` lists guest mount paths that are dropped like the optional ones, but that the
+guest does not need to have: it creates them empty. Use it only for a path the guest image lacks and whose content the
+program does not need there (the Ubuntu guest keeps its certificates in `/etc/ssl`, not in `/etc/pki`). A path listed in
+both settings stays optional and must exist. `QEMU_MICROVM_EMPTY_PATHS` supplies the defaults, as for the optional
+paths.
+
+The CrewAI sample profile needs ten shares, while the provider has six 9p slots. The VM sample targets give it three
+optional CA paths and an empty `/etc/pki`, which brings it to six.
 
 ## Run it
 

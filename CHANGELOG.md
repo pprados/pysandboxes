@@ -28,6 +28,7 @@
 - The channel between the host and the sandbox now runs over a Unix socket the host binds and hands down, instead of a local TCP port, with the `subprocess`, `landlock`, `bwrap`, `firejail`, `unshare`, `qemu` and `sandbox-exec` providers on Linux and macOS; it falls back to TCP when that is not possible. `remote-endpoint=tcp|unix` forces one or the other.
 - Add the Linux x86_64 QEMU microvm provider (`os-sandbox=qemu-microvm`) with direct kernel boot and a dedicated image.
 - Allow QEMU microvm profiles to opt selected guest paths into host-share omission when MMIO capacity is exceeded.
+- Let QEMU microvm profiles list guest paths (`qemu.microvm_empty_paths`) that the guest creates empty when the host share is dropped for capacity, which lets the CrewAI sample run under `qemu-microvm`.
 - Complete the Agno sample's standard-library import whitelist for its HTTP client tests.
 
 ## [0.10.0] - 2026-11-05

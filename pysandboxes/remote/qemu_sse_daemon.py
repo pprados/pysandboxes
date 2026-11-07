@@ -1043,6 +1043,14 @@ def _compact_microvm_mounts(
     return [mount for mount in mounts if mount in kept]
 
 
+def _microvm_path_list(all_rules: AllRules, key: str, environment: str, mounted: set[str]) -> list[str]:
+    """Read a comma list from the profile, else from the environment, keeping only mounted paths in the latter."""
+    value = str(all_rules.os_sandbox_params.get(key, "")).strip()
+    explicit = bool(value)
+    paths = [path.strip() for path in (value or os.environ.get(environment, "")).split(",") if path.strip()]
+    return paths if explicit else [path for path in paths if path in mounted]
+
+
 def _select_microvm_mounts(
     mounts: list[tuple[str, Path, str]], optional_paths: list[str], capacity: int
 ) -> tuple[list[tuple[str, Path, str]], list[str]]:
@@ -1100,22 +1108,24 @@ def _prepare_qemu_launch(
         all_rules, temp, pipe_path, config_dir=None if microvm else config_dir, stage_root=stage_root, microvm=microvm
     )
     if microvm:
-        optional_value = str(all_rules.os_sandbox_params.get("microvm_optional_paths", "")).strip()
-        if not optional_value:
-            optional_value = os.environ.get("QEMU_MICROVM_OPTIONAL_PATHS", "")
-        optional_paths = [path.strip() for path in optional_value.split(",") if path.strip()]
-        if optional_paths:
+        mounted = {guest for _, _, guest in mount_specs}
+        optional_paths = _microvm_path_list(all_rules, "microvm_optional_paths", "QEMU_MICROVM_OPTIONAL_PATHS", mounted)
+        empty_paths = [
+            path
+            for path in _microvm_path_list(all_rules, "microvm_empty_paths", "QEMU_MICROVM_EMPTY_PATHS", mounted)
+            if path not in optional_paths
+        ]
+        if optional_paths or empty_paths:
             params = all_rules.os_sandbox_params
             capacity = microvm_mmio_capacity(_qemu_binary(), qemu_accel_args(params))
-            if not all_rules.os_sandbox_params.get("microvm_optional_paths"):
-                mount_paths = {guest for _, _, guest in mount_specs}
-                optional_paths = [path for path in optional_paths if path in mount_paths]
             try:
-                mount_specs, native_paths = _select_microvm_mounts(mount_specs, optional_paths, capacity)
+                mount_specs, native_paths = _select_microvm_mounts(mount_specs, optional_paths + empty_paths, capacity)
             except ValueError as error:
                 raise SandBoxError(str(error)) from error
             mount_list = [(tag, guest) for tag, _, guest in mount_specs]
-            mount_list.extend(("__pysb_native__", guest) for guest in native_paths)
+            mount_list.extend(
+                ("__pysb_empty__" if guest in empty_paths else "__pysb_native__", guest) for guest in native_paths
+            )
     python_version = f"{sys.version_info.major}.{sys.version_info.minor}"
     config_guest_path = f"{GUEST_CONFIG_MOUNT}/config.pkl" if config_dir else None
     if microvm and config_dir:
