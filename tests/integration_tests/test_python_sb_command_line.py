@@ -109,7 +109,7 @@ def test_a_vm_preserves_long_stdin_control_bytes_and_unterminated_eof(
         ["-c", "import sys; print(sys.stdin.buffer.read().hex())"],
         tmp_path,
         stdin=payload,
-        env={"QEMU_MICROVM_OPTIONAL_PATHS": "/etc/ssl,/etc/pki,/etc/ca-certificates,/usr/share/ca-certificates"},
+        env={"QEMU_MICROVM_OPTIONAL_PATHS": "/etc/ssl,/etc/ca-certificates,/usr/share/ca-certificates"},
     )
 
     assert done.returncode == 0, done.stderr
