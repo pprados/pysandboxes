@@ -10,9 +10,13 @@ from pathlib import Path
 
 import pytest
 
+from pysandboxes.remote.parameters import TIMEOUT_FOR_START_DAEMON_QEMU_TCG
 from pysandboxes.remote.qemu_image import is_kvm_available
 
 QEMU = "qemu-system-x86_64"
+# The CI runs this probe emulated (no PYSANDBOXES_MICROVM_ACCEL): a hosted runner needs more than 180s to boot the
+# guest and reach the network, so the limit follows the one the product gives an emulated guest, plus the HTTPS request.
+GUEST_PROBE_TIMEOUT = TIMEOUT_FOR_START_DAEMON_QEMU_TCG + 60
 
 
 def _reports_a_full_bus(stderr: str) -> bool:
@@ -279,7 +283,7 @@ runcmd:
         stdin=subprocess.DEVNULL,
         text=True,
         capture_output=True,
-        timeout=180,
+        timeout=GUEST_PROBE_TIMEOUT,
         check=False,
     )
 
