@@ -127,11 +127,13 @@ jobs:
         os-sandbox: [qemu-microvm]
     env:
       UV_PYTHON: ${{ matrix.python-version }}
+      UV_PYTHON_PREFERENCE: only-managed
       OS_SANDBOX: ${{ matrix.os-sandbox }}
       PYSANDBOXES_FAIL_ON_SKIP: "1"
       PYSANDBOXES_QEMU_TCG: "1"
       QEMU_USE_KVM: "true"
-      QEMU_MICROVM_OPTIONAL_PATHS: /etc/ssl,/etc/pki,/etc/ca-certificates,/usr/share/ca-certificates
+      QEMU_MICROVM_OPTIONAL_PATHS: /etc/ssl,/etc/ca-certificates,/usr/share/ca-certificates
+      QEMU_MICROVM_EMPTY_PATHS: /etc/pki
     steps:
     - uses: actions/checkout@v5
       with:
@@ -145,10 +147,6 @@ jobs:
         test -c /dev/kvm
     - name: Install build tools and QEMU
       run: sudo apt-get update && sudo apt-get install -y make build-essential qemu-system-x86 qemu-utils genisoimage 7zip
-    - name: Set up Python ${{ matrix.python-version }}
-      uses: actions/setup-python@v6
-      with:
-        python-version: ${{ matrix.python-version }}
     - name: Install Python development headers
       run: sudo apt-get install -y python3-dev
     - name: Install uv
