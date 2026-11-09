@@ -15,6 +15,11 @@ from pysandboxes.remote.qemu_image import is_kvm_available
 QEMU = "qemu-system-x86_64"
 
 
+def _reports_a_full_bus(stderr: str) -> bool:
+    """Newer QEMU says the bus is full; QEMU 8.2 says it finds no virtio-bus left for the device."""
+    return "full" in stderr or "No 'virtio-bus' bus found" in stderr
+
+
 @pytest.mark.parametrize(
     "accel_args",
     [pytest.param([], id="tcg")] + ([pytest.param(["-enable-kvm"], id="kvm")] if is_kvm_available() else []),
@@ -32,7 +37,7 @@ def test_real_mmio_capacity_boundaries(accel_args: list[str]) -> None:
             assert result.returncode == 0, result.stderr
         else:
             assert result.returncode != 0
-            assert "full" in result.stderr
+            assert _reports_a_full_bus(result.stderr), result.stderr
 
 
 def _boot_artifacts() -> tuple[Path, Path, Path]:
@@ -135,7 +140,7 @@ def test_microvm_has_a_finite_mmio_device_budget() -> None:
     result = _run_stopped_machine(*devices)
 
     assert result.returncode != 0
-    assert "full" in result.stderr
+    assert _reports_a_full_bus(result.stderr), result.stderr
 
 
 @pytest.mark.slow
