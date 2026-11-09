@@ -106,7 +106,8 @@ The container must run as a user that can open `/dev/kvm`: smolvm lowers the pri
 then loses the device (`KvmOpen(Error(13))`, even with `--privileged`), so `--user` and `--group-add` are required. The
 guest archive is world-readable and `HOME=/tmp` for the same reason: a container user has no other place to write.
 Measured: guest kernel 6.18.60 against the host's 7.0, `expose-ro`, `expose-rw` (the write reaches the host), `ignore=`
-and the address filter all hold. Podman and Kubernetes are not measured.
+and the address filter all hold. The container suite (`make container-tests`) runs the four `smolvm` rows under Docker as
+the user of the caller with `/dev/kvm`; Podman and Kubernetes are not measured, and their rows are skipped.
 
 Tests: `pytest tests/integration_tests/remote/test_smolvm.py` and the `smolvm` row of
 `test_usage_with_providers.py` and `test_guards_with_providers.py`.

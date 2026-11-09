@@ -79,6 +79,7 @@ all_os_sandbox_provider: list[str] = [
     "qemu",
     "qemu-microvm",
     "gvisor",
+    "smolvm",
 ]
 
 # Providers that create their own namespaces and mounts. The default container confinement refuses them, but they
@@ -473,7 +474,10 @@ def _run_container_runtime(
 
     privileged_flag = ["--privileged"] if privileged else reduced_privilege_flags[runtime].get(os_sandbox, [])
     # Nested QEMU needs host KVM in the container; otherwise TCG exceeds typical timeouts.
-    kvm_flags = _qemu_kvm_run_extra_flags() if os_sandbox.lower() in ("qemu", "qemu-microvm") else []
+    kvm_flags = _qemu_kvm_run_extra_flags() if os_sandbox.lower() in ("qemu", "qemu-microvm", "smolvm") else []
+    # smolvm lowers the privileges of a root caller and its VMM then loses /dev/kvm: the container runs as the user.
+    if os_sandbox.lower() == "smolvm":
+        kvm_flags += ["--user", f"{os.getuid()}:{os.getgid()}"]
     run_timeout = _container_run_timeout(os_sandbox, kvm_flags)
     # Use host/platform DNS so config parsing can resolve hostname
     dns_servers = _host_dns_servers()
@@ -629,6 +633,8 @@ def test_container_runtime(runtime: str, os_sandbox: str, py_sandbox: bool, priv
 
     if os_sandbox == "landlock" and not landlock_user_available():
         pytest.skip("Landlock requires filesystem support and network ABI v4 (Linux 6.7+) for default TCP deny")
+    if os_sandbox == "smolvm" and runtime != "docker":
+        pytest.skip("smolvm is measured with Docker only")
 
     result = _run_container_runtime(runtime, os_sandbox, py_sandbox, privileged)
     assert result.returncode == 0, (
@@ -1057,6 +1063,9 @@ def test_container_kubernetes(os_sandbox: str, py_sandbox: bool, privileged: boo
         )
     except (subprocess.CalledProcessError, FileNotFoundError):
         pytest.skip("minikube not available")
+
+    if os_sandbox == "smolvm":
+        pytest.skip("smolvm is measured with Docker only")
 
     rc = _run_kubernetes_test(os_sandbox, py_sandbox, privileged)
     assert rc == 0, f"Kubernetes pod test exited with code {rc}"
