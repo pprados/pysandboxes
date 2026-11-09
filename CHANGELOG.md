@@ -31,6 +31,10 @@
 - Let QEMU microvm profiles list guest paths (`qemu.microvm_empty_paths`) that the guest creates empty when the host share is dropped for capacity, which lets the CrewAI sample run under `qemu-microvm`.
 - Complete the Agno sample's standard-library import whitelist for its HTTP client tests.
 
+### Security
+
+- Raise `oauthlib` in the CrewAI sample to 4.0.1, which fixes a published advisory.
+
 ## [0.10.0] - 2026-11-05
 
 ### Added
