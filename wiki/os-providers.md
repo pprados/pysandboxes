@@ -24,7 +24,7 @@ Start here; the matrix below gives the detail behind each line.
 | Smaller QEMU machine, x86_64 Linux, with at most eight virtio-mmio transports | [`qemu-microvm`](qemu-microvm.md) |
 | Compiled code or kernel exploits, user-space kernel, starts in about a second | [`gvisor`](gvisor.md) |
 | Resource limits and seccomp | [`firejail`](firejail.md) |
-| Inside Docker or Podman | [`landlock`](landlock.md), [`qemu`](qemu.md) or [`qemu-microvm`](qemu-microvm.md) unprivileged; [`unshare`](unshare.md), [`bwrap`](bwrap.md) or [`gvisor`](gvisor.md) with `--privileged` |
+| Inside Docker, Podman or Kubernetes | [`landlock`](landlock.md), [`qemu`](qemu.md) or [`qemu-microvm`](qemu-microvm.md) unprivileged; [`unshare`](unshare.md) or [`bwrap`](bwrap.md) with `--privileged`; [`gvisor`](gvisor.md) with `--privileged` or its lowered confinement (see below) |
 | Files and ports on macOS (Seatbelt, no host filtering) | [`sandbox-exec`](sandbox-exec.md) |
 | Files and network on Windows, without administrator rights (AppContainer token, no host or port filtering) | [`appcontainer`](appcontainer.md) |
 | Process separation only, no OS boundary (also on macOS, and the fallback on Windows) | [`subprocess`](subprocess.md) |
@@ -238,10 +238,17 @@ A container adds a second boundary around the provider and takes nothing away fr
   - **Cost of TCG**: the guest answers after about 125s, against about 22s for a whole run under KVM, and slower on a
     loaded host. The daemon's start deadline follows the acceleration in use, so nothing is needed in the profile:
     `qemu.start_timeout` defaults to 90s with KVM and 300s emulated (see [qemu.md](qemu.md)).
-  - **The 120s** is not a product limit: it is the container test suite's own run timeout (`CONTAINER_RUN_TIMEOUT`,
-    default 120), which an emulated boot can exceed. Raise it for emulated rows, or pass `/dev/kvm`.
-- `bwrap`, `unshare` and `gvisor` create namespaces of their own, which the default container confinement refuses:
+  - **Container tests**: a Docker or Podman run may take 120s, or 900s for a `qemu` or `qemu-microvm` row that is
+    given no `/dev/kvm` (the same 900s as the Kubernetes exec, `K8S_QEMU_EXEC_TIMEOUT`). `CONTAINER_RUN_TIMEOUT`
+    overrides both. These are the test suite's limits, not the product's.
+- `bwrap` and `unshare` create namespaces of their own, which the default container confinement refuses:
   lower it as each provider page describes, or use `--privileged`.
+- `gvisor` runs in Docker, Podman and Kubernetes. It adapts to where it runs by choosing how `runsc` hooks the guest's
+  system calls (`gvisor.platform`): the default `systrap` uses a seccomp filter and needs neither KVM nor a VM, so it
+  works inside a container. It does need `/dev/net/tun` and a lowered confinement: Docker `--privileged`, or
+  `--device /dev/net/tun` with `seccomp` and `apparmor` unconfined; rootless Podman `--device /dev/net/tun` and
+  `--cap-add NET_ADMIN`; a Kubernetes pod with `SYS_ADMIN` and `NET_ADMIN` and `Unconfined` seccomp and AppArmor
+  profiles (see [gvisor.md](gvisor.md)).
 - `firejail` does not run in a container, even with `--privileged`.
 - A container does not replace the provider: without one, the sandboxed code is separated from the container by the
   Python layer alone.
