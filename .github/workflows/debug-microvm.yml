@@ -43,4 +43,4 @@ jobs:
         cd samples/agno-demo
         printf '\nqemu.show_boot_console=true\nqemu.start_timeout=300\n' | tee -a .py-sandboxes .py-sandboxes-complete >/dev/null
         make init >/dev/null 2>&1
-        timeout 1200 make tests 2>&1 | rg -v 'PASSED|^\s*$' | tail -250 | cut -c1-240
+        timeout 1200 make tests 2>&1 | grep -Ev 'PASSED|^\s*$' | tail -250 | cut -c1-240
