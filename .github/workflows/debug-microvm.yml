@@ -1,6 +1,8 @@
 name: Debug microvm
 on:
-  workflow_dispatch:
+  push:
+    branches: [worktree-fix-release-ci]
+    paths: [.github/workflows/debug-microvm.yml]
 
 permissions:
   contents: read
