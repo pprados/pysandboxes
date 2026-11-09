@@ -382,8 +382,19 @@ def _report_container_output(out: _PtyStream, err: _PtyStream, runtime: str, os_
 BUILD_IMAGE_TIMEOUT = 600  # seconds
 
 # Timeout for the container run (inner python-sb + integration tests). Default 2 minutes.
-# Override with CONTAINER_RUN_TIMEOUT (seconds). Nested QEMU without KVM (TCG) may need more; see wiki/qemu.md.
-CONTAINER_RUN_TIMEOUT = int(os.environ.get("CONTAINER_RUN_TIMEOUT", "120"))
+# A nested QEMU without KVM (TCG) boots in about 125s and the daemon waits up to 300s for it (wiki/qemu.md), so
+# an emulated row gets the same 900s as the Kubernetes exec; every other run, KVM included, stays at 120s.
+CONTAINER_RUN_TIMEOUT_DEFAULT = 120
+CONTAINER_RUN_TIMEOUT_TCG = 900
+
+
+def _container_run_timeout(os_sandbox: str, kvm_flags: list[str]) -> int:
+    """Seconds one docker or podman run may take; ``CONTAINER_RUN_TIMEOUT`` overrides every row."""
+    if "CONTAINER_RUN_TIMEOUT" in os.environ:
+        return int(os.environ["CONTAINER_RUN_TIMEOUT"])
+    if os_sandbox.lower() in ("qemu", "qemu-microvm") and not kvm_flags:
+        return CONTAINER_RUN_TIMEOUT_TCG
+    return CONTAINER_RUN_TIMEOUT_DEFAULT
 
 
 def _qemu_kvm_run_extra_flags() -> list[str]:
@@ -392,9 +403,7 @@ def _qemu_kvm_run_extra_flags() -> list[str]:
     kvm = Path("/dev/kvm")
     if not kvm.exists():
         logger.warning(
-            "container-tests (qemu): host has no /dev/kvm; nested QEMU will use TCG "
-            "(often exceeds %ss). Pass KVM or raise CONTAINER_RUN_TIMEOUT.",
-            CONTAINER_RUN_TIMEOUT,
+            "container-tests (qemu): host has no /dev/kvm; nested QEMU will use TCG (slow boot, longer run timeout)."
         )
         return extra
     extra.extend(["--device", "/dev/kvm"])
@@ -465,6 +474,7 @@ def _run_container_runtime(
     privileged_flag = ["--privileged"] if privileged else reduced_privilege_flags[runtime].get(os_sandbox, [])
     # Nested QEMU needs host KVM in the container; otherwise TCG exceeds typical timeouts.
     kvm_flags = _qemu_kvm_run_extra_flags() if os_sandbox.lower() in ("qemu", "qemu-microvm") else []
+    run_timeout = _container_run_timeout(os_sandbox, kvm_flags)
     # Use host/platform DNS so config parsing can resolve hostname
     dns_servers = _host_dns_servers()
     dns_flags = [arg for s in dns_servers for arg in ("--dns", s)]
@@ -505,7 +515,7 @@ def _run_container_runtime(
         runtime,
         image_name,
         os_sandbox,
-        CONTAINER_RUN_TIMEOUT,
+        run_timeout,
     )
 
     # Do not use capture_output=True: the container produces a lot of log output (DEBUG).
@@ -528,7 +538,7 @@ def _run_container_runtime(
                 runtime,
                 os_sandbox,
                 elapsed,
-                CONTAINER_RUN_TIMEOUT,
+                run_timeout,
             )
 
     hb = threading.Thread(target=_heartbeat, name="container-test-heartbeat", daemon=True)
@@ -548,7 +558,7 @@ def _run_container_runtime(
             env=os.environ.copy(),
             stdout=out.slave_fd,
             stderr=err.slave_fd,
-            timeout=CONTAINER_RUN_TIMEOUT,
+            timeout=run_timeout,
         )
         _terminal_newline_before_log()
         logger.debug(
@@ -565,7 +575,7 @@ def _run_container_runtime(
         logger.error(
             "container-tests: %s timed out after %ss (os_sandbox=%s)",
             runtime,
-            CONTAINER_RUN_TIMEOUT,
+            run_timeout,
             os_sandbox,
         )
         # The container is what knows why it hung; without this the report is the

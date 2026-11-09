@@ -238,8 +238,9 @@ A container adds a second boundary around the provider and takes nothing away fr
   - **Cost of TCG**: the guest answers after about 125s, against about 22s for a whole run under KVM, and slower on a
     loaded host. The daemon's start deadline follows the acceleration in use, so nothing is needed in the profile:
     `qemu.start_timeout` defaults to 90s with KVM and 300s emulated (see [qemu.md](qemu.md)).
-  - **The 120s** is not a product limit: it is the container test suite's own run timeout (`CONTAINER_RUN_TIMEOUT`,
-    default 120), which an emulated boot can exceed. Raise it for emulated rows, or pass `/dev/kvm`.
+  - **Container tests**: a Docker or Podman run may take 120s, or 900s for a `qemu` or `qemu-microvm` row that is
+    given no `/dev/kvm` (the same 900s as the Kubernetes exec, `K8S_QEMU_EXEC_TIMEOUT`). `CONTAINER_RUN_TIMEOUT`
+    overrides both. These are the test suite's limits, not the product's.
 - `bwrap`, `unshare` and `gvisor` create namespaces of their own, which the default container confinement refuses:
   lower it as each provider page describes, or use `--privileged`.
 - `firejail` does not run in a container, even with `--privileged`.
