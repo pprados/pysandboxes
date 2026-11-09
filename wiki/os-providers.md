@@ -228,6 +228,18 @@ Three consequences:
 A container adds a second boundary around the provider and takes nothing away from it.
 
 - `landlock`, `qemu` and `qemu-microvm` run without extra privilege; mount `/dev/kvm` to a container when acceleration is available.
+- `qemu` and `qemu-microvm` use KVM only when the profile allows it (`qemu.use_kvm`, true by default) **and** the
+  process can read `/dev/kvm`. Otherwise QEMU runs fully emulated (TCG), with no error and no profile change:
+  - **KVM**: Docker and Podman, with `--device /dev/kvm --group-add <gid of /dev/kvm>`, privileged or not; a Kubernetes
+    pod that mounts the device (`hostPath`, `CharDevice`). The project's Kubernetes tests mount it only in the
+    privileged row; an unprivileged pod with the device is not tested.
+  - **TCG**: a container started without the device, an ordinary Kubernetes pod, a host without `/dev/kvm`, or
+    `qemu.use_kvm=false`.
+  - **Cost of TCG**: the guest answers after about 125s, against about 22s for a whole run under KVM, and slower on a
+    loaded host. The daemon's start deadline follows the acceleration in use, so nothing is needed in the profile:
+    `qemu.start_timeout` defaults to 90s with KVM and 300s emulated (see [qemu.md](qemu.md)).
+  - **The 120s** is not a product limit: it is the container test suite's own run timeout (`CONTAINER_RUN_TIMEOUT`,
+    default 120), which an emulated boot can exceed. Raise it for emulated rows, or pass `/dev/kvm`.
 - `bwrap`, `unshare` and `gvisor` create namespaces of their own, which the default container confinement refuses:
   lower it as each provider page describes, or use `--privileged`.
 - `firejail` does not run in a container, even with `--privileged`.
