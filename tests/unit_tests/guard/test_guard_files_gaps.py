@@ -2,6 +2,7 @@
 # License: Apache V2
 """`guard_files`: the contextvar scopes, the parsing of `expose-*` lines and the default rules it adds."""
 
+import errno
 import os
 from pathlib import Path
 from typing import Any, Iterator, cast
@@ -9,8 +10,8 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from pysandboxes import guard_files
-from pysandboxes.guard_files import FSExposeRule, parse_rules
+from pysandboxes import RulePermissionError, guard_files
+from pysandboxes.guard_files import FSExposeRule, _apply_dest_to_src_rules, parse_rules
 from pysandboxes.sb_types import ConfigLine
 
 
@@ -146,6 +147,59 @@ def _expose(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> Path:
 @pytest.fixture
 def exposed(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     return _expose(monkeypatch, tmp_path)
+
+
+class TestUnresolvableLinks:
+    """A link the system cannot resolve keeps its absolute path: it must not widen what the rules allow."""
+
+    @staticmethod
+    def _loop(monkeypatch: pytest.MonkeyPatch) -> None:
+        def loop(path: str) -> str:
+            raise OSError(errno.ELOOP, "Too many levels of symbolic links", path)
+
+        monkeypatch.setattr(guard_files, "_os_path_realpath", loop)
+
+    def test_a_path_outside_the_exposed_directory_is_still_refused(
+        self, exposed: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        self._loop(monkeypatch)
+
+        remapped, _ = _apply_dest_to_src_rules(str(exposed.parent / "outside" / "secret"), write=False)
+
+        assert remapped is None
+
+    def test_climbing_out_after_a_link_that_cannot_be_resolved_is_still_refused(
+        self, exposed: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        self._loop(monkeypatch)
+
+        remapped, _ = _apply_dest_to_src_rules(str(exposed / "loop" / ".." / ".." / "outside" / "secret"), write=False)
+
+        assert remapped is None
+
+    def test_a_write_to_a_read_only_exposure_is_still_refused(
+        self, exposed: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        self._loop(monkeypatch)
+
+        with pytest.raises(RulePermissionError):
+            _apply_dest_to_src_rules(str(exposed / "loop" / "x"), write=True)
+
+    def test_a_real_link_loop_gives_no_access_to_anything(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        inside = tmp_path / "inside"
+        outside = tmp_path / "outside"
+        inside.mkdir()
+        outside.mkdir()
+        (outside / "secret").write_text("secret")
+        (inside / "a").symlink_to(inside / "b")
+        (inside / "b").symlink_to(inside / "a")
+        _expose(monkeypatch, inside)
+
+        for spelling in (inside / "a" / "secret", inside / "a" / ".." / ".." / "outside" / "secret"):
+            with pytest.raises(OSError):
+                os.close(os.open(str(spelling), os.O_RDONLY))
 
 
 class TestDirectoryDescriptors:

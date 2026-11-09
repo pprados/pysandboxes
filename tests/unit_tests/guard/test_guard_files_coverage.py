@@ -147,6 +147,20 @@ def test_a_link_the_system_cannot_resolve_keeps_its_absolute_path(monkeypatch: p
     assert guard_files._canonicalizing.get() is False
 
 
+@pytest.mark.parametrize("code", [errno.EACCES, errno.ENOENT, errno.ENAMETOOLONG, errno.EIO])
+def test_only_a_link_loop_is_absorbed_by_the_canonical_path(code: int, monkeypatch: pytest.MonkeyPatch) -> None:
+    def failing(path: str) -> str:
+        raise OSError(code, "refused", path)
+
+    monkeypatch.setattr(guard_files, "_os_path_realpath", failing)
+
+    with pytest.raises(OSError) as raised:
+        guard_files._safe_realpath("/exposed/x")
+
+    assert raised.value.errno == code
+    assert guard_files._canonicalizing.get() is False
+
+
 @pytest.mark.skipif(sys.platform == "win32", reason="the remapped directory is a POSIX path")
 def test_getcwd_reports_the_remapped_directory_except_inside_realpath(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(guard_files, "_apply_src_to_dest_rules", lambda path: ("/virtual/", None))
