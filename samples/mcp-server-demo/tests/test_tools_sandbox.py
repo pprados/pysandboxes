@@ -21,7 +21,7 @@ import os
 import subprocess
 import sys
 from pathlib import Path
-from typing import AsyncIterator, Awaitable, Callable
+from typing import AsyncIterator, Awaitable, Callable, TypedDict
 
 import pytest
 import pytest_asyncio
@@ -45,7 +45,13 @@ ALLOWED_URL = "https://www.google.com/"
 DENIED_URL = "https://example.com/"
 
 
-def armed_kwargs() -> dict[str, object]:
+class ArmedKwargs(TypedDict):
+    sandboxes_config: Path
+    py_sandbox: str
+    os_sandbox: str
+
+
+def armed_kwargs() -> ArmedKwargs:
     """A fully armed sandbox: Python layer plus OS provider."""
     return {
         "sandboxes_config": CONFIG,
@@ -116,7 +122,6 @@ class TestArmed:
 
         assert page.strip(), "the allowed host returned nothing"
 
-
     async def test_scenario_b1_a_host_outside_the_rules_is_refused(self) -> None:
         """A host absent from net=ALLOW is refused, and the refusal is attributable.
 
@@ -130,10 +135,8 @@ class TestArmed:
         assert denials, f"no denial reported, only {caught.value!r}"
         assert any("DENIED" in denial for denial in denials), denials
 
-
     async def test_the_expression_tool_still_computes(self) -> None:
         assert await _evaluate_expression("2*(3+4)") == 14
-
 
     async def test_scenario_c_the_malicious_expression_is_confined(self) -> None:
         """The escape of scenario A reaches Popen and is refused there.

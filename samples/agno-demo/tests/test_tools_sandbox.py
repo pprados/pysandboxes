@@ -22,7 +22,7 @@ import subprocess
 import sys
 import time
 from pathlib import Path
-from typing import Callable, Iterator
+from typing import Callable, Iterator, TypedDict
 
 import pytest
 from pysandboxes import sandbox_denials, sandboxes
@@ -58,7 +58,13 @@ POPEN_ESCAPE = (
 )
 
 
-def armed_kwargs() -> dict[str, object]:
+class ArmedKwargs(TypedDict):
+    sandboxes_config: Path
+    py_sandbox: str
+    os_sandbox: str
+
+
+def armed_kwargs() -> ArmedKwargs:
     return {"sandboxes_config": CONFIG, "py_sandbox": "true", "os_sandbox": os.environ.get("OS_SANDBOX", "subprocess")}
 
 

@@ -22,7 +22,7 @@ import subprocess
 import sys
 import time
 from pathlib import Path
-from typing import Callable, Iterator
+from typing import Callable, Iterator, TypedDict
 
 import pytest
 from pysandboxes import sandbox_denials, sandboxes
@@ -53,7 +53,13 @@ POPEN_ESCAPE = (
 )
 
 
-def armed_kwargs() -> dict[str, object]:
+class ArmedKwargs(TypedDict):
+    sandboxes_config: Path
+    py_sandbox: str
+    os_sandbox: str
+
+
+def armed_kwargs() -> ArmedKwargs:
     return {"sandboxes_config": CONFIG, "py_sandbox": "true", "os_sandbox": os.environ.get("OS_SANDBOX", "subprocess")}
 
 
@@ -109,7 +115,6 @@ class TestArmed:
 
         assert page.strip(), "the allowed host returned nothing"
 
-
     def test_scenario_b1_a_host_outside_the_rules_is_refused(self) -> None:
         """The refusal is attributable, which asserting on the message would not be."""
         with pytest.raises(Exception) as caught:
@@ -119,10 +124,8 @@ class TestArmed:
         assert denials, f"no denial reported, only {caught.value!r}"
         assert any("DENIED" in denial for denial in denials), denials
 
-
     def test_the_expression_tool_still_computes(self) -> None:
         assert _evaluate_expression("2*(3+4)") == 14
-
 
     def test_scenario_c_the_malicious_expression_is_confined(self) -> None:
         """The escape of scenario A is refused by the eval layer, before Popen.
@@ -141,7 +144,6 @@ class TestArmed:
         # backstop for a profile that grants python-api=ALLOW:dynamic-code.
         assert any("EvalSyntaxRejected" in denial for denial in denials), denials
         assert any("eval-syntax=comprehension" in denial for denial in denials), denials
-
 
     def test_the_wrappers_report_the_rule_to_the_model(self) -> None:
         """A model gets text, so the refusal has to be legible in it.
