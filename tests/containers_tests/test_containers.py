@@ -53,7 +53,7 @@ OS_SANDBOX = os.environ.get("OS_SANDBOX", "unshare")
 
 
 # One image per OS provider; names are python-sb-<provider>
-# (e.g. python-sb-unshare, python-sb-qemu), :latest tag.
+# (e.g. python-sb-unshare, python-sb-qemu-microvm), :latest tag.
 def _image_for_os_provider(os_sandbox: str) -> str:
     """Return the container image name for the given OS_SANDBOX provider (e.g. unshare -> python-sb-unshare:latest)."""
     provider = (os_sandbox or "base").lower()
@@ -77,6 +77,7 @@ all_os_sandbox_provider: list[str] = [
     "unshare",
     "bwrap",
     "qemu",
+    "qemu-microvm",
     "gvisor",
 ]
 
@@ -99,7 +100,16 @@ reduced_privilege_flags: dict[str, dict[str, list[str]]] = {
 # Set in the environment of the row: unshare runs without a /proc, as a container cannot unmask the paths it needs.
 reduced_privilege_env: dict[str, str] = {"unshare": "UNSHARE_PROC=none"}
 # Set in every row: the filtered network of bwrap is unverified in a container, which keeps the network of the host.
-always_env: dict[str, str] = {"bwrap": "BWRAP_UNSHARE_NET=no"}
+always_env: dict[str, str] = {
+    "bwrap": "BWRAP_UNSHARE_NET=no",
+    # This image's direct runtime shares fit eight MMIO transports; staging its
+    # linker closure adds three shares. Exercise direct 9p here (including its
+    # overlay/mmap compatibility), with only CA data opting into guest-native paths.
+    "qemu-microvm": (
+        "QEMU_VIRTFS=off "
+        "QEMU_MICROVM_OPTIONAL_PATHS=/etc/ssl,/etc/pki,/etc/ca-certificates,/usr/share/ca-certificates"
+    ),
+}
 
 
 # os_sandbox,py_sandbox,privileged (pytest.param tuples for parametrize)
@@ -131,7 +141,7 @@ all_os_sandbox: list = _all_os_sandbox_params()
 
 
 def _k8s_exec_timeout_seconds(os_sandbox: str) -> int:
-    if os_sandbox.lower() == "qemu":
+    if os_sandbox.lower() in ("qemu", "qemu-microvm"):
         return int(os.environ.get("K8S_QEMU_EXEC_TIMEOUT", "900"))
     return int(os.environ.get("TIMEOUT", "600"))
 
@@ -454,15 +464,15 @@ def _run_container_runtime(
 
     privileged_flag = ["--privileged"] if privileged else reduced_privilege_flags[runtime].get(os_sandbox, [])
     # Nested QEMU needs host KVM in the container; otherwise TCG exceeds typical timeouts.
-    kvm_flags = _qemu_kvm_run_extra_flags() if os_sandbox.lower() == "qemu" else []
+    kvm_flags = _qemu_kvm_run_extra_flags() if os_sandbox.lower() in ("qemu", "qemu-microvm") else []
     # Use host/platform DNS so config parsing can resolve hostname
     dns_servers = _host_dns_servers()
     dns_flags = [arg for s in dns_servers for arg in ("--dns", s)]
     # Resolve profile hostname on the host and inject so container does not need DNS at config load
     add_host_flags = _add_host_flags()
-    # bwrap: host net for slirp/iptables. qemu: host net avoids double-NAT (Podman bridge + QEMU user)
+    # bwrap: host net for slirp/iptables. QEMU: host net avoids double-NAT (Podman bridge + QEMU user)
     # which can stall nested tst_usage for a long time.
-    network_mode = "host" if os_sandbox in ("bwrap", "qemu") else "bridge"
+    network_mode = "host" if os_sandbox in ("bwrap", "qemu", "qemu-microvm") else "bridge"
     cmd = [
         runtime,
         "run",
@@ -476,6 +486,9 @@ def _run_container_runtime(
         *add_host_flags,
         "-v",
         volume_mount,
+        # Guest-created mapped-xattr files otherwise persist as root-owned host
+        # scratch, breaking the next rootless Podman row. Match Kubernetes emptyDir.
+        *(["--tmpfs", "/app/tmp:rw,mode=1777"] if os_sandbox == "qemu-microvm" else []),
         "-w",
         "/app",
         image_name,
@@ -655,6 +668,21 @@ def _kube_manifest_text(image_name: str, privileged: bool, os_sandbox: str = "")
     if not privileged:
         text, count = _SECURITY_CONTEXT_RE.subn(reduced_privilege_security_context.get(os_sandbox, ""), text)
         assert count == 1, f"no securityContext block to remove in {KUBE_MANIFEST}"
+    if os_sandbox == "qemu-microvm":
+        # KVM is explicit only for the already privileged row; the ordinary pod
+        # keeps its confinement and deliberately exercises TCG without a device.
+        text = text.replace(
+            "      env:\n",
+            f'      env:\n        - name: QEMU_USE_KVM\n          value: "{str(privileged).lower()}"\n',
+            1,
+        )
+        if privileged:
+            text = text.replace(
+                "      volumeMounts:\n",
+                "      volumeMounts:\n        - name: dev-kvm\n          mountPath: /dev/kvm\n",
+                1,
+            )
+            text += "    - name: dev-kvm\n      hostPath:\n        path: /dev/kvm\n        type: CharDevice\n"
     return text
 
 
@@ -905,8 +933,19 @@ def _run_kubernetes_test(os_sandbox: str, py_sandbox: bool, privileged: bool) ->
                 os_sandbox_env = os_sandbox.lower() if os_sandbox != "none" else os_sandbox
                 py_sandbox_args = f"--py-sandbox={py_sandbox}"
                 exec_timeout = _k8s_exec_timeout_seconds(os_sandbox)
+                accel_check = ""
+                if os_sandbox == "qemu-microvm":
+                    expected = ["-enable-kvm"] if privileged else []
+                    probe = (
+                        "import os; from pysandboxes.remote.qemu_image import qemu_accel_args; "
+                        "args = qemu_accel_args({'use_kvm': os.environ['QEMU_USE_KVM']}); "
+                        f"assert args == {expected!r}, ('unexpected MicroVM acceleration', args); "
+                        "print('MicroVM acceleration:', 'KVM' if args else 'TCG', flush=True)"
+                    )
+                    accel_check = f"python -c {shlex.quote(probe)} && "
                 exec_cmd = (
                     "pip install --no-cache-dir -e . && "
+                    f"{accel_check}"
                     f"PYTHONUNBUFFERED=1 TERM={term} OS_SANDBOX={os_sandbox_env} {_row_env(os_sandbox, privileged)}"
                     f"python-sb {py_sandbox_args} {PYTHON_SB_ARGS} -m tests.integration_tests.tst_usage"
                 )

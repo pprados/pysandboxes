@@ -1,6 +1,6 @@
 # Images on Docker Hub
 
-Each release publishes six images to Docker Hub, built from the wheel published on the same run (see
+Each release publishes seven images to Docker Hub, built from the wheel published on the same run (see
 [Releasing](release.md)). Use them to run `python-sb` in a container without building anything locally.
 
 | Image | Provider it carries | Contents |
@@ -10,6 +10,7 @@ Each release publishes six images to Docker Hub, built from the wheel published 
 | `docker.io/pprados/python-sb-unshare` | `unshare` | the base image plus `iptables`, `iproute2` and `slirp4netns` |
 | `docker.io/pprados/python-sb-bwrap` | `bwrap` | the base image plus `bubblewrap`, `slirp4netns` and `iptables` |
 | `docker.io/pprados/python-sb-qemu` | `qemu` | the base image plus QEMU, `genisoimage` and the guest VM image |
+| `docker.io/pprados/python-sb-qemu-microvm` | `qemu-microvm` | the QEMU image plus matched direct-boot kernel and initrd artifacts |
 | `docker.io/pprados/python-sb-gvisor` | `gvisor` | the base image plus `runsc` with its sidecar directory, `iptables`, `iproute2` and `slirp4netns` |
 
 Each image holds every tool its provider invokes, which is the hard part to get right by hand: without `iptables`,
@@ -92,6 +93,11 @@ docker run -it --rm --privileged -v "$(pwd)":/app -w /app \
 docker run -it --rm --device /dev/kvm -v "$(pwd)":/app -w /app \
   docker.io/pprados/python-sb-qemu:sb$VERSION \
   sh -c 'OS_SANDBOX=qemu python-sb my_script.py'
+
+# qemu-microvm: Linux x86_64 only; KVM is recommended
+docker run -it --rm --device /dev/kvm -v "$(pwd)":/app -w /app \
+  docker.io/pprados/python-sb-qemu-microvm:sb$VERSION \
+  sh -c 'OS_SANDBOX=qemu-microvm python-sb my_script.py'
 ```
 
 The same commands work with `podman` in place of `docker`. The provider pages detail each option:

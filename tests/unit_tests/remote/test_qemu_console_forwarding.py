@@ -5,6 +5,9 @@
 import asyncio
 import io
 import logging
+import os
+import subprocess
+import sys
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
@@ -303,7 +306,70 @@ class TestDrainTasks:
         assert sorted(tee.getvalue().split()) == ["a", "b"]
 
 
+class TestGuestStdin:
+    @pytest.mark.parametrize("payload", [b"", b"no-final-newline", b"x" * 8192 + b"\x00\x03\x04\xff\n"])
+    def test_framed_input_preserves_bytes_and_delivers_real_eof(self, payload: bytes) -> None:
+        frames = len(payload).to_bytes(4, "big") + payload + bytes(4)
+        result = subprocess.run(
+            [
+                sys.executable,
+                "-c",
+                "from pysandboxes.remote.qemu_guest_console_io import prepare_qemu_guest_stdin; "
+                "import sys; prepare_qemu_guest_stdin(); sys.stdout.buffer.write(sys.stdin.buffer.read())",
+            ],
+            input=frames,
+            capture_output=True,
+            timeout=10,
+            check=True,
+        )
+
+        assert result.stdout == payload
+
+
 class TestWaitAndFilter:
+    async def test_a_stdin_failure_stops_the_guest_and_is_reported(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        stopped = asyncio.Event()
+
+        async def fail(*_: Any) -> None:
+            raise OSError("stdin forwarding failed")
+
+        async def wait() -> int:
+            await stopped.wait()
+            return 1
+
+        process = SimpleNamespace(
+            stdout=_stream(f"{START}\n".encode()), stderr=_stream(), stdin=object(), wait=wait, terminate=stopped.set
+        )
+        monkeypatch.setattr(console, "_qemu_forward_stdin", fail)
+
+        with pytest.raises(OSError, match="stdin forwarding failed"):
+            await asyncio.wait_for(
+                console.qemu_wait_and_filter_console(process, forward_stdin=True), timeout=1  # type: ignore[arg-type]
+            )
+
+        assert stopped.is_set()
+
+    async def test_stdin_waits_for_guest_readiness_and_sends_framed_eof(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        read_fd, write_fd = os.pipe()
+        chunks: list[bytes] = []
+
+        async def drain() -> None:
+            pass
+
+        writer = SimpleNamespace(write=chunks.append, drain=drain)
+        ready = asyncio.Event()
+        with os.fdopen(read_fd, "rb", buffering=0) as source:
+            monkeypatch.setattr(console.sys, "stdin", source)
+            os.write(write_fd, b"initialize\n")
+            os.close(write_fd)
+            task = asyncio.create_task(console._qemu_forward_stdin(writer, ready))  # type: ignore[arg-type]
+            await asyncio.sleep(0)
+            assert chunks == []
+            ready.set()
+            await task
+
+        assert b"".join(chunks) == (11).to_bytes(4, "big") + b"initialize\n" + bytes(4)
+
     async def test_it_returns_the_exit_code_after_forwarding_the_console(
         self, capsys: pytest.CaptureFixture[str]
     ) -> None:

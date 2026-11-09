@@ -20,7 +20,7 @@ in_image() {
     "$engine" run --rm "$image:$tag" "$@"
 }
 
-for image in python-sb python-sb-landlock python-sb-unshare python-sb-bwrap python-sb-qemu python-sb-gvisor; do
+for image in python-sb python-sb-landlock python-sb-unshare python-sb-bwrap python-sb-qemu python-sb-qemu-microvm python-sb-gvisor; do
     held=$(in_image "$image" python -c "import importlib.metadata as m; print(m.version('pysandboxes'))")
     if [[ $held != "$version" ]]; then
         echo "::error::$image:$tag holds pysandboxes $held, expected $version"
@@ -40,6 +40,9 @@ in_image python-sb-bwrap nsenter --version
 in_image python-sb-qemu qemu-system-x86_64 --version
 in_image python-sb-qemu genisoimage --version
 in_image python-sb-qemu iptables-restore --version
+in_image python-sb-qemu-microvm qemu-system-x86_64 --version
+in_image python-sb-qemu-microvm genisoimage --version
+in_image python-sb-qemu-microvm iptables-restore --version
 # runsc starts from a sidecar directory that has to sit next to it: the binary alone fails at the first guest.
 in_image python-sb-gvisor runsc --version
 in_image python-sb-gvisor ls /usr/bin/gvisor-bin/gvisor_sentry
@@ -49,6 +52,8 @@ in_image python-sb-gvisor ip -V
 in_image python-sb-gvisor slirp4netns --version
 # shellcheck disable=SC2016  # expanded inside the image, where the variable is set
 in_image python-sb-qemu sh -c 'ls "$PYSANDBOXES_VM_IMAGES_DIR"/* >/dev/null'
+in_image python-sb-qemu-microvm sh -c 'ls "$PYSANDBOXES_VM_IMAGES_DIR"/* >/dev/null'
+in_image python-sb-qemu-microvm python -c 'from pysandboxes.remote.qemu_image import get_default_image_path; from pysandboxes.remote.qemu_microvm_boot import ensure_microvm_boot_artifacts; ensure_microvm_boot_artifacts(get_default_image_path(), {})'
 if [[ -c $kvm ]]; then
     probe='printf "os-sandbox=qemu\nnet=ALLOW|TCP|localhost|9999|IN\n" > /tmp/probe.py-sandboxes
 python-sb --pysandboxes-config=/tmp/probe.py-sandboxes -c "print(\"guest-ok\")"'
@@ -61,4 +66,16 @@ python-sb --pysandboxes-config=/tmp/probe.py-sandboxes -c "print(\"guest-ok\")"'
 else
     echo "::warning::no $kvm: the qemu guest of python-sb-qemu:$tag is not run"
 fi
-echo "The six images hold pysandboxes $version"
+if [[ -c $kvm ]]; then
+    probe='printf "os-sandbox=qemu-microvm\\nnet=ALLOW|TCP|localhost|9999|IN\\n" > /tmp/probe.py-sandboxes
+python-sb --pysandboxes-config=/tmp/probe.py-sandboxes -c "print(\"guest-ok\")"'
+    guest=$("$engine" run --rm --privileged --device "$kvm" --group-add "$(stat -c %g "$kvm")" --network host \
+        "python-sb-qemu-microvm:$tag" sh -c "$probe" 2>&1 || true)
+    if [[ $guest != *guest-ok* ]]; then
+        echo "::error::the microvm guest of python-sb-qemu-microvm:$tag cannot apply its network rules: $guest"
+        exit 1
+    fi
+else
+    echo "::warning::no $kvm: the microvm guest of python-sb-qemu-microvm:$tag is not run"
+fi
+echo "The seven images hold pysandboxes $version"

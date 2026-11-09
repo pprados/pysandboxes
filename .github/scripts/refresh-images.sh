@@ -5,7 +5,7 @@
 # Run daily by images-refresh.yml. Usage: refresh-images.sh <python minor>...
 # Prints, for $GITHUB_OUTPUT, the latest final release tag (tag=vX.Y.Z) and the JSON list of the Python minors whose
 # newest patch has no image of that release yet (minors=[...]). No final release yet: minors=[]. The image probed is
-# python-sb-qemu, the last one images.yml pushes, so that a push that stopped half-way is done again.
+# python-sb-qemu-microvm, the last one images.yml pushes, so that a push that stopped half-way is done again.
 set -euo pipefail
 
 engine=${CONTAINER_CMD:-docker}
@@ -21,7 +21,7 @@ fi
 missing=()
 for minor in "$@"; do
     patch=$("$here/python-patch.sh" "$minor")
-    image="docker.io/pprados/python-sb-qemu:$patch-sb${tag#v}"
+    image="docker.io/pprados/python-sb-qemu-microvm:$patch-sb${tag#v}"
     if "$engine" manifest inspect "$image" >/dev/null 2>&1; then
         echo "$image: present" >&2
     else

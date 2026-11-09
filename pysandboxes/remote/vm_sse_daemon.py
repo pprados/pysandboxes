@@ -77,12 +77,14 @@ class VMSSEDaemon(BaseSubProcessDaemon, ABC):
         *,
         forward_all: bool = False,
         tee_file: TextIO | None = None,
+        forward_stdin: bool = False,
     ) -> int:
         """Drain VM stdout/stderr with sentinel filtering; wait for process exit."""
         return await qemu_wait_and_filter_console(
             process,
             forward_all=forward_all,
             tee_file=tee_file,
+            forward_stdin=forward_stdin,
         )
 
     def read_guest_exitcode(self, exitcode_file: Path) -> int | None:

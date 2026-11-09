@@ -9,7 +9,7 @@ ENV PYSANDBOXES_VM_IMAGES_DIR=/var/lib/pysandboxes/vm-images
 ARG QEMU_PKG=qemu-system-x86
 RUN set -eux \
     && apt-get update \
-    && apt-get install -y --no-install-recommends "$QEMU_PKG" qemu-utils genisoimage iptables \
+    && apt-get install -y --no-install-recommends "$QEMU_PKG" qemu-utils genisoimage iptables 7zip \
     && mkdir -p "${PYSANDBOXES_VM_IMAGES_DIR}" \
     && python -m pysandboxes.remote.qemu_fetch_image \
     && apt-get autoremove -y \

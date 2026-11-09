@@ -42,7 +42,7 @@ Planned work, in no committed order:
     - [X] ~~lxc~~ (rejected: not a VM, and redundant with bwrap and unshare, which use the same kernel namespaces; measured on LXC 6.0.6, it enforces files and TCP/UDP rules and cgroup limits, but starts in about 0.25 s against 4 ms for bwrap and 1.5 ms for unshare, and needs newgidmap, slirp4netns and setpriv to match them)
     - [X] ~~vagrant~~ (rejected: developer environment orchestrator on top of third-party hypervisors, not a runtime sandbox; multi-second startup latency and heavy dependencies)
   - [ ] micro-VM
-    - [ ] [QEMU-microvm](https://www.qemu.org/docs/master/system/i386/microvm.html) (fast QEMU machine type, boots in ~100ms without PCI/ACPI overhead)
+    - [X] [QEMU-microvm](qemu-microvm.md) (Linux x86_64; eight virtio-mmio transports)
     - [ ] [Smolvm](https://korben.info/smolvm-microvm-portable-rust.html)
     - [ ] [libkrun](https://github.com/containers/libkrun) (lightweight VMM library designed for process isolation with virtio-fs) - **Waiting release v2**
     - [ ] [Cloud Hypervisor](https://github.com/cloud-hypervisor/cloud-hypervisor) (Rust-based VMM with native virtio-fs and vsock)

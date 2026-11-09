@@ -16,6 +16,7 @@ IMAGES = [
     "python-sb-unshare",
     "python-sb-bwrap",
     "python-sb-qemu",
+    "python-sb-qemu-microvm",
     "python-sb-gvisor",
 ]
 
@@ -88,6 +89,8 @@ PROVIDER_TOOLS = [
     "python-sb-bwrap nsenter --version",
     "python-sb-qemu qemu-system-x86_64 --version",
     "python-sb-qemu genisoimage --version",
+    "python-sb-qemu-microvm qemu-system-x86_64 --version",
+    "python-sb-qemu-microvm genisoimage --version",
     "python-sb-gvisor runsc --version",
     "python-sb-gvisor ls /usr/bin/gvisor-bin/gvisor_sentry",
     "python-sb-gvisor unshare --version",
@@ -103,6 +106,8 @@ def test_each_provider_image_runs_every_tool_it_invokes(fake: Path) -> None:
     for call in PROVIDER_TOOLS:
         assert call in calls
     assert any(c.startswith("python-sb-qemu sh -c") and "PYSANDBOXES_VM_IMAGES_DIR" in c for c in calls)
+    assert any(c.startswith("python-sb-qemu-microvm sh -c") and "PYSANDBOXES_VM_IMAGES_DIR" in c for c in calls)
+    assert any(c.startswith("python-sb-qemu-microvm python -c") and "ensure_microvm_boot_artifacts" in c for c in calls)
 
 
 def test_an_image_holding_another_version_fails(fake: Path) -> None:
@@ -129,6 +134,14 @@ def test_the_qemu_guest_runs_a_program_behind_a_network_rule(fake: Path) -> None
     assert "net=ALLOW|TCP" in probe[0]
 
 
+def test_the_microvm_guest_runs_a_program_behind_a_network_rule(fake: Path) -> None:
+    _smoke(fake)
+    probe = [c for c in _calls(fake) if c.startswith("python-sb-qemu-microvm sh -c printf")]
+    assert len(probe) == 1
+    assert "os-sandbox=qemu-microvm" in probe[0]
+    assert "net=ALLOW|TCP" in probe[0]
+
+
 def test_a_guest_that_cannot_apply_its_network_rules_fails(fake: Path) -> None:
     (fake / "broken").write_text("guest\n")
     result = _smoke(fake)
@@ -141,3 +154,4 @@ def test_without_kvm_the_guest_is_not_run_and_the_smoke_test_warns(fake: Path) -
     assert result.returncode == 0
     assert "::warning::" in result.stdout
     assert not any(c.startswith("python-sb-qemu sh -c printf") for c in _calls(fake))
+    assert not any(c.startswith("python-sb-qemu-microvm sh -c printf") for c in _calls(fake))

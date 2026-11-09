@@ -26,7 +26,7 @@ from pysandboxes._os_sandbox import unsupported_platform_reason
 from pysandboxes.remote.bwrap_sse_daemon import BWrapSSEDaemon
 from pysandboxes.remote.landlock_daemon import _get_landlock_abi_version
 
-from ._env import provider_skip_reason
+from ._env import backend_of, provider_skip_reason, qemu_tcg_requested, row_profile_lines
 
 ROOT_DIR = Path(__file__).resolve().parent.parent.parent
 _GATEWAY = "10.0.2.2"
@@ -34,8 +34,17 @@ _GATEWAY = "10.0.2.2"
 # loopback this suite connects to. Its default deny is covered by tests/integration_tests/remote/test_appcontainer.py.
 _PROVIDERS = tuple(
     provider
-    for provider in ("bwrap", "unshare", "qemu", "landlock", "gvisor", "sandbox-exec")
-    if not unsupported_platform_reason(provider)
+    for provider in (
+        "bwrap",
+        "unshare",
+        "qemu",
+        "qemu-microvm",
+        *(("qemu-microvm-tcg",) if qemu_tcg_requested() else ()),
+        "landlock",
+        "gvisor",
+        "sandbox-exec",
+    )
+    if not unsupported_platform_reason(backend_of(provider))
 )
 _FIREJAIL_BRIDGE = os.environ.get("PYSANDBOXES_FIREJAIL_TEST_BRIDGE", "docker0")
 _LANDLOCK_DEFAULT_DENY_REASON = provider_skip_reason("landlock") or (
@@ -177,7 +186,8 @@ def _run(
         "".join(
             [
                 "py-sandbox=false\n",
-                f"os-sandbox={provider}\n",
+                f"os-sandbox={backend_of(provider)}\n",
+                row_profile_lines(provider),
                 firejail_net,
                 "python-import=*\n",
                 file_rules,

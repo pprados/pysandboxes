@@ -11,6 +11,7 @@ of the currently active daemon.
 import asyncio
 import importlib
 import logging
+import platform
 import sys
 import threading
 import uuid
@@ -39,12 +40,12 @@ _DARWIN = frozenset({"darwin"})
 _ANY_OS = frozenset({"linux", "darwin", "win32"})
 _WINDOWS = frozenset({"win32"})
 
-# (subpackage.module_name, class_name, platforms) relative to package ``pysandboxes``.
+# (subpackage.module_name, class_name, platforms[, machines]) relative to package ``pysandboxes``.
 # Loaded on first use so ``main_sandbox`` / QEMU guest do not import aiohttp, bwrap, etc. at startup.
 # ``platforms`` holds the ``sys.platform`` values a provider runs on. It is read without importing
 # the provider, whose module may not even import elsewhere (``fcntl`` does not exist on Windows).
 # A tag is an enablement claim: provider-specific CI must pass before release support is claimed.
-_PROVIDER_SPECS: dict[str, tuple[str, str, frozenset[str]]] = {
+_PROVIDER_SPECS: dict[str, tuple[str, str, frozenset[str]] | tuple[str, str, frozenset[str], frozenset[str]]] = {
     "_sse_server": ("remote.sse_server_daemon", "SSEServerDaemon", _ANY_OS),
     "none": ("remote.none_daemon", "NoneDaemon", _ANY_OS),
     "subprocess": ("remote.client_subprocess_sse_daemon", "SubProcessDaemon", _ANY_OS),
@@ -54,6 +55,7 @@ _PROVIDER_SPECS: dict[str, tuple[str, str, frozenset[str]]] = {
     "unshare": ("remote.unshare_sse_daemon", "UnshareSSEDaemon", _LINUX),
     "landlock": ("remote.landlock_daemon", "LandlockSSEDaemon", _LINUX),
     "qemu": ("remote.qemu_sse_daemon", "QemuSSEDaemon", _LINUX),
+    "qemu-microvm": ("remote.qemu_sse_daemon", "QemuMicrovmSSEDaemon", _LINUX, frozenset({"x86_64", "amd64"})),
     "gvisor": ("remote.gvisor_sse_daemon", "GVisorSSEDaemon", _LINUX),
     "sandbox-exec": ("remote.sandbox_exec_daemon", "SandboxExecSSEDaemon", _DARWIN),
 }
@@ -65,7 +67,7 @@ def _load_provider_class(key: str) -> type[BaseDaemon]:
     if key not in _PROVIDER_SPECS:
         raise KeyError(key)
     if key not in _provider_class_cache:
-        mod_path, cls_name, _ = _PROVIDER_SPECS[key]
+        mod_path, cls_name = _PROVIDER_SPECS[key][:2]
         # Name from internal registry, not user input
         mod = importlib.import_module(f".{mod_path}", package="pysandboxes")
         _provider_class_cache[key] = getattr(mod, cls_name)
@@ -93,9 +95,15 @@ class _LazyProvidersFactory(Mapping[str, type[BaseDaemon]]):
 providers_factory: Mapping[str, type[BaseDaemon]] = _LazyProvidersFactory()
 
 
+def _supports_host(
+    spec: tuple[str, str, frozenset[str]] | tuple[str, str, frozenset[str], frozenset[str]],
+) -> bool:
+    return sys.platform in spec[2] and (len(spec) == 3 or platform.machine().strip().lower() in spec[3])
+
+
 def platform_providers() -> list[str]:
     """Return the public providers tagged for the running platform."""
-    return [name for name, spec in _PROVIDER_SPECS.items() if not name.startswith("_") and sys.platform in spec[2]]
+    return [name for name, spec in _PROVIDER_SPECS.items() if not name.startswith("_") and _supports_host(spec)]
 
 
 def unsupported_platform_reason(name: str) -> str | None:
@@ -103,13 +111,17 @@ def unsupported_platform_reason(name: str) -> str | None:
 
     Reads the registry tag only: the provider module is not imported.
     """
-    if sys.platform in _PROVIDER_SPECS[name][2]:
+    spec = _PROVIDER_SPECS[name]
+    if _supports_host(spec):
         return None
+    host = sys.platform
+    if sys.platform in spec[2] and len(spec) == 4:
+        host += f"/{platform.machine().strip().lower()}"
     # `none` is never suggested: it disarms the Python guards as well, so it is no alternative.
     others = [provider for provider in platform_providers() if provider != "none"]  # pragma: no mutate
     if not others:
-        return f"os-sandbox {name!r} does not run on {sys.platform}, and no provider does yet"
-    return f"os-sandbox {name!r} does not run on {sys.platform}. Use one of: {', '.join(others)}"
+        return f"os-sandbox {name!r} does not run on {host}, and no provider does yet"
+    return f"os-sandbox {name!r} does not run on {host}. Use one of: {', '.join(others)}"
 
 
 def provider_unavailable_reason(name: str) -> str | None:
@@ -391,7 +403,7 @@ def start_daemon(
 
         start_timeout = (
             qemu_start_timeout(all_rules.os_sandbox_params)
-            if all_rules.os_sandbox == "qemu"
+            if all_rules.os_sandbox in ("qemu", "qemu-microvm")
             else float(TIMEOUT_FOR_START_DAEMON)
         )
         if all_rules.os_sandbox == "appcontainer":

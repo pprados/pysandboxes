@@ -21,9 +21,10 @@ import os
 import subprocess
 import sys
 from pathlib import Path
-from typing import Awaitable, Callable
+from typing import AsyncIterator, Awaitable, Callable, TypedDict
 
 import pytest
+import pytest_asyncio
 from pysandboxes import sandbox_denials, sandboxes
 
 from mcp_server.main import _evaluate_expression, _fetch_webpage
@@ -44,7 +45,13 @@ ALLOWED_URL = "https://www.google.com/"
 DENIED_URL = "https://example.com/"
 
 
-def armed_kwargs() -> dict[str, object]:
+class ArmedKwargs(TypedDict):
+    sandboxes_config: Path
+    py_sandbox: str
+    os_sandbox: str
+
+
+def armed_kwargs() -> ArmedKwargs:
     """A fully armed sandbox: Python layer plus OS provider."""
     return {
         "sandboxes_config": CONFIG,
@@ -94,57 +101,61 @@ async def _tolerating_network_errors(fetch: Callable[[], Awaitable[str]]) -> str
     return await fetch()
 
 
-@pytest.mark.asyncio
-async def test_scenario_b2_an_allowed_host_is_reached() -> None:
-    """The host listed in net=ALLOW answers, so the rule is a whitelist and not a wall."""
+@pytest_asyncio.fixture(scope="class", loop_scope="class")
+async def armed() -> AsyncIterator[None]:
     async with sandboxes(**armed_kwargs()):
+        yield
+
+
+@pytest.mark.asyncio(loop_scope="class")
+@pytest.mark.usefixtures("armed")
+class TestArmed:
+    """The armed scenarios share one sandbox, started once for the class and stopped before the next test.
+
+    Every call below is judged by the rules, not by what an earlier call left behind, and a refusal
+    is reported per exception. The class ends before the profile checks, so two sandboxes never run together.
+    """
+
+    async def test_scenario_b2_an_allowed_host_is_reached(self) -> None:
+        """The host listed in net=ALLOW answers, so the rule is a whitelist and not a wall."""
         page = await _tolerating_network_errors(lambda: _fetch_webpage(ALLOWED_URL))
 
-    assert page.strip(), "the allowed host returned nothing"
+        assert page.strip(), "the allowed host returned nothing"
 
+    async def test_scenario_b1_a_host_outside_the_rules_is_refused(self) -> None:
+        """A host absent from net=ALLOW is refused, and the refusal is attributable.
 
-@pytest.mark.asyncio
-async def test_scenario_b1_a_host_outside_the_rules_is_refused() -> None:
-    """A host absent from net=ALLOW is refused, and the refusal is attributable.
-
-    The assertion goes through sandbox_denials() rather than the message: httpx
-    reports "All connection attempts failed", which any outage produces too.
-    """
-    async with sandboxes(**armed_kwargs()):
+        The assertion goes through sandbox_denials() rather than the message: httpx
+        reports "All connection attempts failed", which any outage produces too.
+        """
         with pytest.raises(Exception) as caught:
             await _fetch_webpage(DENIED_URL)
 
-    denials = sandbox_denials(caught.value)
-    assert denials, f"no denial reported, only {caught.value!r}"
-    assert any("DENIED" in denial for denial in denials), denials
+        denials = sandbox_denials(caught.value)
+        assert denials, f"no denial reported, only {caught.value!r}"
+        assert any("DENIED" in denial for denial in denials), denials
 
-
-@pytest.mark.asyncio
-async def test_the_expression_tool_still_computes() -> None:
-    async with sandboxes(**armed_kwargs()):
+    async def test_the_expression_tool_still_computes(self) -> None:
         assert await _evaluate_expression("2*(3+4)") == 14
 
+    async def test_scenario_c_the_malicious_expression_is_confined(self) -> None:
+        """The escape of scenario A reaches Popen and is refused there.
 
-@pytest.mark.asyncio
-async def test_scenario_c_the_malicious_expression_is_confined() -> None:
-    """The escape of scenario A reaches Popen and is refused there.
-
-    The refusal comes from the API guard, not from the import guard:
-    python-import=subprocess cannot be removed, since anyio imports it at load
-    time and starlette/fastmcp depend on anyio.
-    """
-    async with sandboxes(**armed_kwargs()):
+        The refusal comes from the API guard, not from the import guard:
+        python-import=subprocess cannot be removed, since anyio imports it at load
+        time and starlette/fastmcp depend on anyio.
+        """
         with pytest.raises(Exception) as caught:
             await _evaluate_expression(POPEN_ESCAPE)
 
-    denials = sandbox_denials(caught.value)
-    assert denials, f"no denial reported, only {caught.value!r}"
-    # The eval layer refuses this before it can reach Popen: the profile
-    # declares eval-syntax=arith, compare, and the payload needs a
-    # comprehension, a subscript and four dunders. process-exec stays the
-    # backstop for a profile that grants python-api=ALLOW:dynamic-code.
-    assert any("EvalSyntaxRejected" in denial for denial in denials), denials
-    assert any("eval-syntax=comprehension" in denial for denial in denials), denials
+        denials = sandbox_denials(caught.value)
+        assert denials, f"no denial reported, only {caught.value!r}"
+        # The eval layer refuses this before it can reach Popen: the profile
+        # declares eval-syntax=arith, compare, and the payload needs a
+        # comprehension, a subscript and four dunders. process-exec stays the
+        # backstop for a profile that grants python-api=ALLOW:dynamic-code.
+        assert any("EvalSyntaxRejected" in denial for denial in denials), denials
+        assert any("eval-syntax=comprehension" in denial for denial in denials), denials
 
 
 @pytest.mark.parametrize("profile", [CONFIG, CONFIG_COMPLETE], ids=["partial", "complete"])

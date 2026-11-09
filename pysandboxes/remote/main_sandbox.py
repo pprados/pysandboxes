@@ -276,6 +276,7 @@ async def run_server(process_config: DaemonParameters, shared_socket: Any | None
         "bwrap",
         "gvisor",
         "qemu",
+        "qemu-microvm",
         "sandbox-exec",
     )
     if all_rules.use_py_sandbox:
@@ -504,6 +505,9 @@ def main() -> int:
         # by one, as a learned one does, then dies on the harness's imports.
         import pysandboxes.remote.python_in_sb as python_in_sb_module
         import pysandboxes.remote.qemu_guest_console_io  # noqa: F401
+
+        if python_main_args:
+            pysandboxes.remote.qemu_guest_console_io.prepare_qemu_guest_stdin()
 
         module_args = sandboxes_args if sandboxes_parsed._python_sb else list(python_main_args)
         module_specs = None

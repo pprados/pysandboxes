@@ -22,7 +22,7 @@ import re
 import stat
 import sys
 from collections import OrderedDict
-from errno import ENOENT
+from errno import ELOOP, ENOENT
 from os import scandir as _scandir
 from pathlib import Path as Path
 from types import ModuleType, TracebackType
@@ -184,6 +184,10 @@ def _safe_realpath(path: str) -> str:
     token = _canonicalizing.set(True)
     try:
         return _os_path_realpath(path)
+    except OSError as error:
+        if error.errno != ELOOP:
+            raise
+        return os.path.abspath(path)
     finally:
         _canonicalizing.reset(token)
 

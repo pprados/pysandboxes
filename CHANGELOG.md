@@ -9,11 +9,12 @@
 | ☐ 3.15   | ✅ firejail     |            | ✅ API     |
 |          | ✅ unshare       |            | ✅ Eval    |
 |          | ✅ qemu          |            | ☐ Source  |
+|          | ✅ qemu-microvm  |            |           |
 |          | ✅ sandbox-exec  |            | ☐ Regexp  |
 |          | ✅ Docker¹       |            | ☐ DoS     |
 |          | ✅ Podman¹       |            |           |
 |          | ✅ gVisor        |            |           |
-|          | ☐ micro-VM      |            |           |
+|          | ✅ micro-VM      |            |           |
 |          | ✅ appcontainer  |            |           |
 
 ¹ Docker and Podman are not providers of their own: a container runs the
@@ -24,10 +25,11 @@
 
 ### Added
 
-- The channel between the host and the sandbox now runs over a Unix socket the host binds and hands down, instead of a
-  local TCP port, with the `subprocess`, `landlock`, `bwrap`, `firejail`, `unshare`, `qemu` and `sandbox-exec`
-  providers on Linux and macOS; it falls back to TCP when that is not possible. `remote-endpoint=tcp|unix` forces one
-  or the other.
+- The channel between the host and the sandbox now runs over a Unix socket the host binds and hands down, instead of a local TCP port, with the `subprocess`, `landlock`, `bwrap`, `firejail`, `unshare`, `qemu` and `sandbox-exec` providers on Linux and macOS; it falls back to TCP when that is not possible. `remote-endpoint=tcp|unix` forces one or the other.
+- Add the Linux x86_64 QEMU microvm provider (`os-sandbox=qemu-microvm`) with direct kernel boot and a dedicated image.
+- Allow QEMU microvm profiles to opt selected guest paths into host-share omission when MMIO capacity is exceeded.
+- Let QEMU microvm profiles list guest paths (`qemu.microvm_empty_paths`) that the guest creates empty when the host share is dropped for capacity, which lets the CrewAI sample run under `qemu-microvm`.
+- Complete the Agno sample's standard-library import whitelist for its HTTP client tests.
 
 ## [0.10.0] - 2026-11-05
 
@@ -39,6 +41,7 @@
 - Remove the provider extras (`pysandboxes[bwrap]`, `[firejail]`, `[landlock]`, `[sandbox-exec]`, `[subprocess]`, `[unshare]` and `[all]`): they installed nothing, as a provider needs system tools, not Python packages.
 
 ### Fixed
+- Preserve standard input for MCP servers launched with `python-sb` in QEMU guests.
 - Restarting a bwrap or gVisor sandbox no longer leaves the previous network helper running.
 - Code that reads its standard input no longer fails under gVisor.
 - The gVisor guest no longer sees the host's devices and processes.
