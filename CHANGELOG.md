@@ -21,7 +21,7 @@
 `unshare` provider, with `--privileged` for Docker.
 
 
-## [0.0.0] - 202X-XX-XX
+## [0.11.0] - 2026-11-09
 
 ### Added
 
@@ -31,9 +31,16 @@
 - Let QEMU microvm profiles list guest paths (`qemu.microvm_empty_paths`) that the guest creates empty when the host share is dropped for capacity, which lets the CrewAI sample run under `qemu-microvm`.
 - Complete the Agno sample's standard-library import whitelist for its HTTP client tests.
 
+### Fixed
+
+- Paths reached through a symbolic link loop are now handled without granting any extra access.
+- Links the system cannot resolve keep their absolute path when access rules are checked.
+- QEMU guests now expose a CPU model recent enough for NumPy to load.
+
 ### Security
 
 - Raise `oauthlib` in the CrewAI sample to 4.0.1, which fixes a published advisory.
+- A QEMU guest now refuses to run when one of its mounts fails, instead of continuing with partial isolation.
 
 ## [0.10.0] - 2026-11-05
 
