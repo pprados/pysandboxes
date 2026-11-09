@@ -41,6 +41,9 @@ jobs:
         QEMU_USE_KVM: "true"
       run: |
         cd samples/agno-demo
-        printf '\nqemu.show_boot_console=true\nqemu.start_timeout=300\n' | tee -a .py-sandboxes .py-sandboxes-complete >/dev/null
+        printf '\nqemu.show_boot_console=true\nqemu.start_timeout=120\n' | tee -a .py-sandboxes .py-sandboxes-complete >/dev/null
         make init >/dev/null 2>&1
-        timeout 1200 make tests 2>&1 | grep -Ev 'PASSED|^\s*$' | tail -250 | cut -c1-240
+        nproc; free -m | head -2
+        .venv/bin/python -m pytest tests/test_tools_sandbox.py -x -s -k b2_an_allowed -p no:cacheprovider > "$RUNNER_TEMP/out.log" 2>&1 || true
+        wc -l "$RUNNER_TEMP/out.log"
+        grep -nE 'pysandbox|PYSANDBOX|\[ +[0-9.]+\]|Kernel|qemu|Mount|mount|9p|Failed|Error' "$RUNNER_TEMP/out.log" | head -150 | cut -c1-240
