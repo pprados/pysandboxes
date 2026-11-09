@@ -35,8 +35,12 @@ jobs:
       run: |
         uv run python -m pysandboxes.remote.qemu_fetch_image
         uv run python -c 'from pysandboxes.remote.qemu_image import get_default_image_path; from pysandboxes.remote.qemu_microvm_boot import ensure_microvm_boot_artifacts; ensure_microvm_boot_artifacts(get_default_image_path(), {})'
-    - name: Boot a microvm with the console shown
+    - name: Run the agno-demo sample with the console shown
+      env:
+        OS_SANDBOX: qemu-microvm
+        QEMU_USE_KVM: "true"
       run: |
-        printf 'os-sandbox=qemu-microvm\nqemu.show_boot_console=true\nqemu.start_timeout=120\npython-import=ALLOW:*\n' > "$RUNNER_TEMP/mv.profile"
-        qemu-system-x86_64 --version | head -1
-        timeout 200 uv run python -m pysandboxes.python_sb --pysandboxes-config="$RUNNER_TEMP/mv.profile" -c 'print("HELLO")' 2>&1 | tail -150
+        cd samples/agno-demo
+        printf '\nqemu.show_boot_console=true\nqemu.start_timeout=300\n' | tee -a .py-sandboxes .py-sandboxes-complete >/dev/null
+        make init >/dev/null 2>&1
+        timeout 1200 make tests 2>&1 | rg -v 'PASSED|^\s*$' | tail -250 | cut -c1-240
