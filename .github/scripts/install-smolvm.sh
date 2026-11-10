@@ -20,3 +20,19 @@ sudo ln -sf /opt/smolvm/smolvm /usr/local/bin/smolvm
 smolvm --version
 
 make -o uv.lock build-smolvm-guest
+
+# Fail here, with what is needed to understand it, rather than in every smolvm test: the runner's kernel and
+# filesystems differ from a workstation's, and a guest that cannot start says so only in the debug log of smolvm.
+guest=$(ls build/smolvm-guest-*.tar | head -n 1)
+log="${RUNNER_TEMP:-/tmp}/smolvm-check.log"
+{
+    echo "host: $(uname -sr), $(stat -f -c '%T' "$HOME") under HOME, $(stat -f -c '%T' /tmp) under /tmp"
+    ls -l /dev/kvm
+    lscpu | grep -i -e 'hypervisor' -e 'virtualization' || true
+} >&2
+if ! guest_kernel=$(RUST_LOG=debug smolvm machine run --image "$guest" -- uname -sr 2>"$log"); then
+    echo "::error::the smolvm guest does not start on this runner"
+    cat "$log" >&2
+    exit 1
+fi
+echo "guest: $guest_kernel"
