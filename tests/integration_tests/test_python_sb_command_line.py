@@ -6,6 +6,7 @@ Each case starts ``python -m pysandboxes.python_sb`` as the user does. QEMU boot
 that only prove the command line leave it out: ``test_guards_with_providers`` already runs it end to end.
 """
 
+import hashlib
 import os
 import subprocess
 import sys
@@ -71,7 +72,7 @@ def test_a_module_already_imported_by_the_framework_runs_with_m(tmp_path: Path) 
     assert "October 2026" in done.stdout
 
 
-@pytest.mark.parametrize("os_sandbox", [row for row in _ROWS if row.values[0] != "smolvm"])
+@pytest.mark.parametrize("os_sandbox", _ROWS)
 def test_a_script_read_from_stdin_runs_under_every_backend(os_sandbox: str, tmp_path: Path) -> None:
     _skip_unavailable(os_sandbox)
 
@@ -81,15 +82,21 @@ def test_a_script_read_from_stdin_runs_under_every_backend(os_sandbox: str, tmp_
     assert done.stdout.strip() == "from stdin"
 
 
-def test_a_script_read_from_stdin_is_refused_by_smolvm_not_run_empty(tmp_path: Path) -> None:
-    """The standard input of a smolvm guest carries its config: a script cannot come through it."""
-    _skip_unavailable("smolvm")
+@pytest.mark.parametrize("os_sandbox", _ROWS)
+def test_the_standard_input_of_the_caller_reaches_the_program_under_every_backend(
+    os_sandbox: str, tmp_path: Path
+) -> None:
+    """About a megabyte, sent whole: a relay that loses, truncates or reorders it fails the digest."""
+    _skip_unavailable(os_sandbox)
+    program = (
+        "import hashlib, sys; data = sys.stdin.read(); print(len(data), hashlib.sha256(data.encode()).hexdigest())"
+    )
+    payload = "".join(f"line {number}\n" for number in range(120_000))
 
-    done = _python_sb("smolvm", "python-import=*\n", ["-"], tmp_path, stdin="print('from stdin')\n")
+    done = _python_sb(os_sandbox, "python-import=*\n", ["-c", program], tmp_path, stdin=payload)
 
-    assert done.returncode != 0
-    assert "not supported" in done.stderr and "-c, -m or a file" in done.stderr
-    assert "from stdin" not in done.stdout
+    assert done.returncode == 0, done.stderr
+    assert done.stdout.split() == [str(len(payload)), hashlib.sha256(payload.encode()).hexdigest()]
 
 
 @pytest.mark.parametrize("os_sandbox", _ROWS)

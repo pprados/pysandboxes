@@ -43,10 +43,26 @@ _GUEST_PYTHON = "/usr/local/bin/python"
 _HOST_PATH = "/usr/local/bin:/usr/bin:/bin"
 # libkrun gives a micro-VM a handful of virtio-fs devices: 8 without a network, fewer with one.
 _MAX_SHARES = 6
-_STDIN_SCRIPT_REFUSED = (
-    "smolvm: a script read from the standard input is not supported, as the standard input of the guest carries "
-    "its config: pass the code with -c, -m or a file"
-)
+# Hands the guest its config, then the standard input of the caller, and dies with the launcher it was started by.
+_RELAY = """\
+import ctypes, os, signal, sys
+ctypes.CDLL(None).prctl(1, signal.SIGKILL)
+fifo, out, parent = sys.argv[1], sys.argv[2], int(sys.argv[3])
+if os.getppid() != parent:
+    sys.exit(0)
+target = os.open(out, os.O_WRONLY)
+def copy(source):
+    while chunk := os.read(source, 65536):
+        view = memoryview(chunk)
+        while view:
+            view = view[os.write(target, view):]
+try:
+    config = os.open(fifo, os.O_RDONLY)
+    copy(config)
+    copy(0)
+except BrokenPipeError:
+    pass
+"""
 # smolvm has no seccomp or landlock switch: the guest is hardened by dropping every capability, as the host user.
 _PROFILE_KEYS = frozenset({"image", "python", "cpus", "mem"})
 
@@ -197,15 +213,22 @@ class SmolvmSSEDaemon(BaseSubProcessDaemon):
         script = "\n".join(
             [
                 "umask 077",
-                'fifo=""; n=$#',
+                'fifo=""; relay=0; n=$#',
                 'while [ "$n" -gt 0 ]; do',
                 "  a=$1; shift; n=$((n-1))",
                 '  if [ "$a" = "--_named-pipe" ]; then fifo=$1; shift; n=$((n-1)); else set -- "$@" "$a"; fi',
+                '  if [ "$a" = "--_python-sb" ]; then relay=1; fi',
                 "done",
-                'if [ "${1-}" = "-" ]; then',
-                f"  echo {q(_STDIN_SCRIPT_REFUSED)} >&2; exit 2",
+                'if [ "$relay" = 1 ]; then',
+                "  exec 3<&0",
+                '  d=$(mktemp -d) && mkfifo "$d/in" || exit 1',
+                f'  {q(sys.executable)} -I -c {q(_RELAY)} "$fifo" "$d/in" $$ <&3 &',
+                '  exec 4< "$d/in"; rm -rf "$d"',
+                "  exec 0<&4 3<&- 4<&-",
+                "else",
+                '  exec 0< "$fifo"',
                 "fi",
-                "exec " + " ".join(q(arg) for arg in cmd) + ' "$@" --_named-pipe /dev/stdin < "$fifo"',
+                "exec " + " ".join(q(arg) for arg in cmd) + ' "$@" --_config-on-stdin',
             ]
         )
         host_env = {"PATH": _HOST_PATH, "HOME": os.environ.get("HOME", "/")}

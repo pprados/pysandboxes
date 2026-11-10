@@ -168,6 +168,46 @@ def firejail_bridge_listener() -> Iterator[tuple[str, str, int, int]]:
             thread.join()
 
 
+def _host_address() -> str | None:
+    """The address of the host that a guest with its own loopback can reach, or ``None`` without a route."""
+    probe = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    try:
+        probe.connect(("192.0.2.1", 9))
+        address = probe.getsockname()[0]
+    except OSError:
+        return None
+    finally:
+        probe.close()
+    return None if address.startswith("127.") else address
+
+
+@pytest.fixture
+def host_address_listener() -> Iterator[tuple[str, int]]:
+    """A listener on the address of the host: a smolvm guest reaches the host there, never on its own loopback."""
+    address = _host_address()
+    if address is None:
+        pytest.skip("the host has no address other than loopback")
+    server = socket.socket()
+    server.bind((address, 0))
+    server.listen()
+    stop = threading.Event()
+
+    def serve() -> None:
+        server.settimeout(0.2)
+        while not stop.is_set():
+            try:
+                server.accept()[0].close()
+            except OSError:
+                continue
+
+    thread = threading.Thread(target=serve, daemon=True)
+    thread.start()
+    yield address, server.getsockname()[1]
+    stop.set()
+    thread.join()
+    server.close()
+
+
 def _run(
     tmp_path: Path,
     provider: str,
@@ -279,4 +319,26 @@ if not unsupported_platform_reason("firejail"):
             target_host=host,
             firejail_bridge=bridge,
         )
+        assert "CONNECTED" in result
+
+
+if not unsupported_platform_reason("smolvm"):
+
+    @pytest.mark.parametrize("mode", ("python-sb", "daemon"))
+    @pytest.mark.skipif(bool(provider_skip_reason("smolvm")), reason=provider_skip_reason("smolvm") or "")
+    def test_smolvm_drops_an_address_outside_the_allow_rule(
+        tmp_path: Path, host_address_listener: tuple[str, int], mode: str
+    ) -> None:
+        address, port = host_address_listener
+        result = _run(tmp_path, "smolvm", mode, port, f"192.0.2.1|{port}", target_host=address)
+        assert "REFUSED" in result
+
+    @pytest.mark.parametrize("mode", ("python-sb", "daemon"))
+    @pytest.mark.skipif(bool(provider_skip_reason("smolvm")), reason=provider_skip_reason("smolvm") or "")
+    def test_smolvm_connects_to_the_address_the_rule_allows(
+        tmp_path: Path, host_address_listener: tuple[str, int], mode: str
+    ) -> None:
+        """Negative control: the refusal above comes from the filter, not from an unreachable listener."""
+        address, port = host_address_listener
+        result = _run(tmp_path, "smolvm", mode, port, f"{address}|{port}", target_host=address)
         assert "CONNECTED" in result

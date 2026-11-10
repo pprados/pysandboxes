@@ -39,33 +39,32 @@ class TestLaunchCommand:
     ) -> None:
         script = _launch_script(tmp_path, monkeypatch)
 
-        assert script.rstrip().endswith('--_named-pipe /dev/stdin < "$fifo"')
+        assert script.rstrip().endswith('"$@" --_config-on-stdin')
+        assert 'exec 0< "$fifo"' in script
         assert " -i " in script
         assert "cat " not in script, "the FIFO is not copied to a file"
 
-    def test_a_script_read_from_the_standard_input_is_refused_before_smolvm_starts(
+    def test_the_standard_input_of_python_sb_follows_the_config_and_a_daemon_keeps_its_own(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         script = _launch_script(tmp_path, monkeypatch)
-        (tmp_path / "pipe").write_text("config")
-        marker = tmp_path / "started"
-        (tmp_path / "bin" / "smolvm").write_text(f"#!/bin/sh\ntouch {marker}\n")
+        (tmp_path / "pipe").write_bytes(b"CONFIG")
+        record = tmp_path / "stdin-of-the-guest"
+        (tmp_path / "bin" / "smolvm").write_text(f"#!/bin/sh\ncat > {record}\n")
 
-        def run(*user_args: str) -> subprocess.CompletedProcess[str]:
-            return subprocess.run(
+        def run(*user_args: str, stdin: bytes) -> bytes:
+            done = subprocess.run(
                 ["sh", "-c", script, "smolvm-launcher", *user_args, "--_named-pipe", str(tmp_path / "pipe")],
+                input=stdin,
                 capture_output=True,
-                text=True,
                 env={"PATH": f"{tmp_path / 'bin'}:/usr/bin:/bin"},
+                timeout=30,
             )
+            assert done.returncode == 0, done.stderr
+            return record.read_bytes()
 
-        refused = run("-")
-        assert refused.returncode == 2 and "not supported" in refused.stderr
-        assert not marker.exists(), "the guest never started"
-
-        allowed = run("script.py", "-")
-        assert allowed.returncode == 0, allowed.stderr
-        assert marker.exists(), "a lone dash that is an argument of the script is not a script on stdin"
+        assert run("script.py", "--_python-sb", stdin=b"SCRIPT") == b"CONFIGSCRIPT"
+        assert run("script.py", stdin=b"SCRIPT") == b"CONFIG", "a daemon never takes the stdin of its application"
 
     def test_the_guest_runs_a_script_that_drops_its_capabilities_and_clears_its_environment(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch

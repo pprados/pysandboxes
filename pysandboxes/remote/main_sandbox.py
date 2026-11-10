@@ -28,6 +28,7 @@ from pathlib import Path
 from typing import Any, cast
 
 from ..config import DEBUG
+from .config_stream import load_config_from_fd
 from .daemon_parameters import DaemonParameters
 
 # Intentionally minimal module-level imports: the QEMU guest runs ``python -m
@@ -391,18 +392,24 @@ def main() -> int:
 
     parser.add_argument("--_named-pipe", help="_internal parameter")
     parser.add_argument("--_shared-socket", help="_internal parameter")
+    parser.add_argument("--_config-on-stdin", action="store_true", default=False, help="_internal parameter")
 
     # Parse the arguments provided by the user
     sandboxes_parsed, sandboxes_args = parser.parse_known_args()
     # -------------
     # Read all configuration from named-pipe (or config file for QEMU) until EOF
-    assert sandboxes_parsed._named_pipe, "Set parameter --_named-pipe <path>"
-    config_path = Path(sandboxes_parsed._named_pipe.strip())
-    pickle_data: bytes = config_path.read_bytes()
-    # Only the parent process feeds the named_pipe; no risk of malicious pickle
-    # injection.
-    # Payload written by the trusted parent
-    process_config: DaemonParameters = pickle.loads(memoryview(pickle_data))
+    process_config: DaemonParameters
+    if sandboxes_parsed._config_on_stdin:
+        # The config heads the standard input and what follows is the program's own (smolvm guest).
+        process_config = load_config_from_fd(0)
+    else:
+        assert sandboxes_parsed._named_pipe, "Set parameter --_named-pipe <path>"
+        config_path = Path(sandboxes_parsed._named_pipe.strip())
+        pickle_data: bytes = config_path.read_bytes()
+        # Only the parent process feeds the named_pipe; no risk of malicious pickle
+        # injection.
+        # Payload written by the trusted parent
+        process_config = pickle.loads(memoryview(pickle_data))
     if not process_config:
         raise RuntimeError("Impossible to read the config body from stdin")
     shared_socket = None

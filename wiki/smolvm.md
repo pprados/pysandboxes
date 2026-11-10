@@ -19,8 +19,11 @@ unless a rule exposes it.
   [libkrun](libkrun.md).
 - **Privileges**: the command runs as the user of the host, with an empty capability set and `no_new_privs`
   (`setpriv`): it cannot mount, remount or reach a share.
-- **Config**: it goes from the host FIFO to the standard input of the guest, read as `/dev/stdin`: it never touches
-  the disk, so nothing can alter it.
+- **Config**: it goes from the host FIFO to the standard input of the guest, ahead of anything else, and is read from
+  there (`--_config-on-stdin`): it never touches the disk, so nothing can alter it.
+- **Standard input**: under `python-sb`, the standard input of the caller follows the config on the same stream, so a
+  script given with `-` or read with `sys.stdin` works as in any other provider. A daemon (`sandboxes()`) never
+  relays it: the application keeps its own. The relay is a host process that dies with `smolvm`.
 - **Channel**: the guest listens on `/tmp/pysb.sock`; `--expose-socket` makes it reachable on a private Unix socket of
   the host. The guest needs no network for it. `remote-endpoint=tcp` is refused.
 - **Environment**: the command runs under `env -i` with the variables the rules grant: neither the host nor the image
@@ -84,8 +87,6 @@ one per writable directory) is refused with a message that says so, rather than 
   runs before that.
 - The guest runs as the user of the host: a file it must read has to be readable by that user, as the guest root has
   no capability to override it.
-- A script read from the standard input (`python-sb -`) is refused with exit 2: the standard input of the guest carries
-  its config, read until its end, so nothing of the caller's is left to read. Use `-c`, `-m` or a file.
 - Releases are checksummed, not signed: `Dockerfile-smolvm` pins the version and its SHA-256.
 - Needs `/dev/kvm`: in a container, the device and a user in its group. Linux only for now. macOS and Windows tags wait for a `cross-os.yml` run.
 
@@ -111,5 +112,6 @@ Measured: guest kernel 6.18.60 against the host's 7.0, `expose-ro`, `expose-rw` 
 and the address filter all hold. The container suite (`make container-tests`) runs the four `smolvm` rows under Docker as
 the user of the caller with `/dev/kvm`; Podman and Kubernetes are not measured, and their rows are skipped.
 
-Tests: `pytest tests/integration_tests/remote/test_smolvm.py` and the `smolvm` row of
+Tests: `pytest tests/integration_tests/remote/test_smolvm.py`, the `smolvm` cases of `test_os_netfilter.py` (the guest
+reaches the host on its address, never on loopback) and the `smolvm` row of
 `test_usage_with_providers.py` and `test_guards_with_providers.py`.
