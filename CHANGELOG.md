@@ -21,7 +21,7 @@
 `unshare` provider, with `--privileged` for Docker.
 
 
-## [0.0.0] - 202X-XX-XX
+## [0.11.0] - 2026-11-10
 
 ### Added
 
@@ -37,11 +37,16 @@
 - Links the system cannot resolve keep their absolute path when access rules are checked.
 - QEMU guests now expose a CPU model recent enough for NumPy to load.
 - With `remote-endpoint=auto`, the `qemu` and `qemu-microvm` providers now fall back to a local TCP port when the installed QEMU, such as 8.2, refuses a Unix socket forward, instead of leaving the guest unreachable; `remote-endpoint=unix` reports the cause.
+- The QEMU microvm provider now finds images whose boot files sit on a separate partition.
+- Several sandboxes starting at once no longer conflict while preparing the shared QEMU microvm boot files.
+- The QEMU microvm capacity check now uses the same acceleration as the real run, so its result matches what the guest gets.
+- The samples can now load the modules they need at run time under `qemu-microvm`.
 
 ### Security
 
 - Raise `oauthlib` in the CrewAI sample to 4.0.1, which fixes a published advisory.
 - A QEMU guest now refuses to run when one of its mounts fails, instead of continuing with partial isolation.
+- Code run under `qemu-microvm` is now held to the same isolation guarantees as the other providers.
 
 ## [0.10.0] - 2026-11-05
 
