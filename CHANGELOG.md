@@ -28,6 +28,10 @@
 
 - Add the smolvm provider (`os-sandbox=smolvm`): the sandboxed code runs in a hardware-isolated micro-VM with its own kernel, with file, network and environment rules enforced by the host side of smolvm, and a dedicated `python-sb-smolvm` image.
 
+### Fixed
+
+- Stop printing an `AssertionError` from the sandbox process when it shuts down, with every OS provider.
+
 ## [0.11.0] - 2026-11-10
 
 ### Added

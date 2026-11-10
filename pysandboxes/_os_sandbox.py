@@ -449,13 +449,14 @@ def is_daemon_started() -> bool:
 
 def _set_current_daemon(daemon: BaseDaemon) -> None:
     """
-    Sets the global current daemon instance.
+    Sets the global current daemon instance, and counts its start so that its shutdown balances.
 
     Args:
         daemon: The daemon instance to set as current.
     """
-    global _current_daemon
+    global _current_daemon, _startup_counter
     _current_daemon = daemon
+    _startup_counter += 1
 
 
 def shutdown_daemon(graceful_shutdown: bool = True) -> None:
