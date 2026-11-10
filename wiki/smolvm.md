@@ -19,15 +19,38 @@ unless a rule exposes it.
   [libkrun](libkrun.md).
 - **Privileges**: the command runs as the user of the host, with an empty capability set and `no_new_privs`
   (`setpriv`): it cannot mount, remount or reach a share.
-- **Config**: it goes from the host FIFO to the standard input of the guest, ahead of anything else, and is read from
-  there (`--_config-on-stdin`): it never touches the disk, so nothing can alter it.
-- **Standard input**: under `python-sb`, the standard input of the caller follows the config on the same stream, so a
-  script given with `-` or read with `sys.stdin` works as in any other provider. A daemon (`sandboxes()`) never
-  relays it: the application keeps its own. The relay is a host process that dies with `smolvm`.
+- **Config and standard input**: both travel on the standard input of the guest, see
+  [the section below](#why-the-config-and-the-standard-input-share-one-stream).
 - **Channel**: the guest listens on `/tmp/pysb.sock`; `--expose-socket` makes it reachable on a private Unix socket of
   the host. The guest needs no network for it. `remote-endpoint=tcp` is refused.
 - **Environment**: the command runs under `env -i` with the variables the rules grant: neither the host nor the image
   environment reaches it.
+
+## Why the config and the standard input share one stream
+
+The guest must receive its config (rules, token) before anything of the user runs, and the other providers pass it
+through a FIFO the child opens. A micro-VM has its own kernel, so every other way in is closed or unsafe:
+
+- the host FIFO cannot be opened from the guest;
+- a file would stay on the disk for anyone to alter, and a share would recreate that file;
+- arguments and environment variables show in `ps` and `/proc` of the host, and the config holds the secret token;
+- the channel socket exists only once the guest service runs, which needs the config first.
+
+`smolvm machine run -i` relays its standard input to the guest: that is the one private, in-memory way in. The config
+is therefore the head of that stream, read by `main_sandbox` with `--_config-on-stdin`. It is a pickle that ends where
+it ends, so what follows stays unread, for the program.
+
+What follows depends on how the sandbox is started:
+
+| Started by | Standard input of the guest program |
+|---|---|
+| `python-sb` | the standard input of the caller, relayed after the config: `python-sb -`, `sys.stdin` and a pipe into the script work as in any other provider |
+| a daemon (`sandboxes()`, `@sandbox`) | nothing: the application keeps its own standard input, as with the other providers |
+
+The relay is a host process started by the launcher with `--_python-sb` only. It writes the config FIFO, then the
+caller's input, into a private FIFO that is unlinked once opened, and dies with `smolvm` (`PR_SET_PDEATHSIG`), so the
+launcher still replaces itself with `smolvm`. It reads the caller's input while the guest runs, even if the program
+never reads it.
 
 ## Prerequisites
 
