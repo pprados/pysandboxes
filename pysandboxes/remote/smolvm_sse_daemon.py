@@ -43,6 +43,10 @@ _GUEST_PYTHON = "/usr/local/bin/python"
 _HOST_PATH = "/usr/local/bin:/usr/bin:/bin"
 # libkrun gives a micro-VM a handful of virtio-fs devices: 8 without a network, fewer with one.
 _MAX_SHARES = 6
+_STDIN_SCRIPT_REFUSED = (
+    "smolvm: a script read from the standard input is not supported, as the standard input of the guest carries "
+    "its config: pass the code with -c, -m or a file"
+)
 # smolvm has no seccomp or landlock switch: the guest is hardened by dropping every capability, as the host user.
 _PROFILE_KEYS = frozenset({"image", "python", "cpus", "mem"})
 
@@ -198,6 +202,9 @@ class SmolvmSSEDaemon(BaseSubProcessDaemon):
                 "  a=$1; shift; n=$((n-1))",
                 '  if [ "$a" = "--_named-pipe" ]; then fifo=$1; shift; n=$((n-1)); else set -- "$@" "$a"; fi',
                 "done",
+                'if [ "${1-}" = "-" ]; then',
+                f"  echo {q(_STDIN_SCRIPT_REFUSED)} >&2; exit 2",
+                "fi",
                 "exec " + " ".join(q(arg) for arg in cmd) + ' "$@" --_named-pipe /dev/stdin < "$fifo"',
             ]
         )

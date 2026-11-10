@@ -2,6 +2,7 @@
 # License: Apache V2
 """The host side of the smolvm provider: what it asks ``smolvm`` for, and what the guest is allowed to read."""
 
+import subprocess
 from pathlib import Path
 
 import pytest
@@ -41,6 +42,30 @@ class TestLaunchCommand:
         assert script.rstrip().endswith('--_named-pipe /dev/stdin < "$fifo"')
         assert " -i " in script
         assert "cat " not in script, "the FIFO is not copied to a file"
+
+    def test_a_script_read_from_the_standard_input_is_refused_before_smolvm_starts(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        script = _launch_script(tmp_path, monkeypatch)
+        (tmp_path / "pipe").write_text("config")
+        marker = tmp_path / "started"
+        (tmp_path / "bin" / "smolvm").write_text(f"#!/bin/sh\ntouch {marker}\n")
+
+        def run(*user_args: str) -> subprocess.CompletedProcess[str]:
+            return subprocess.run(
+                ["sh", "-c", script, "smolvm-launcher", *user_args, "--_named-pipe", str(tmp_path / "pipe")],
+                capture_output=True,
+                text=True,
+                env={"PATH": f"{tmp_path / 'bin'}:/usr/bin:/bin"},
+            )
+
+        refused = run("-")
+        assert refused.returncode == 2 and "not supported" in refused.stderr
+        assert not marker.exists(), "the guest never started"
+
+        allowed = run("script.py", "-")
+        assert allowed.returncode == 0, allowed.stderr
+        assert marker.exists(), "a lone dash that is an argument of the script is not a script on stdin"
 
     def test_the_guest_runs_a_script_that_drops_its_capabilities_and_clears_its_environment(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch

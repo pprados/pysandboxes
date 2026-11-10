@@ -84,6 +84,8 @@ one per writable directory) is refused with a message that says so, rather than 
   runs before that.
 - The guest runs as the user of the host: a file it must read has to be readable by that user, as the guest root has
   no capability to override it.
+- A script read from the standard input (`python-sb -`) is refused with exit 2: the standard input of the guest carries
+  its config, read until its end, so nothing of the caller's is left to read. Use `-c`, `-m` or a file.
 - Releases are checksummed, not signed: `Dockerfile-smolvm` pins the version and its SHA-256.
 - Needs `/dev/kvm`: in a container, the device and a user in its group. Linux only for now. macOS and Windows tags wait for a `cross-os.yml` run.
 

@@ -71,7 +71,7 @@ def test_a_module_already_imported_by_the_framework_runs_with_m(tmp_path: Path) 
     assert "October 2026" in done.stdout
 
 
-@pytest.mark.parametrize("os_sandbox", _ROWS)
+@pytest.mark.parametrize("os_sandbox", [row for row in _ROWS if row.values[0] != "smolvm"])
 def test_a_script_read_from_stdin_runs_under_every_backend(os_sandbox: str, tmp_path: Path) -> None:
     _skip_unavailable(os_sandbox)
 
@@ -79,6 +79,17 @@ def test_a_script_read_from_stdin_runs_under_every_backend(os_sandbox: str, tmp_
 
     assert done.returncode == 0, done.stderr
     assert done.stdout.strip() == "from stdin"
+
+
+def test_a_script_read_from_stdin_is_refused_by_smolvm_not_run_empty(tmp_path: Path) -> None:
+    """The standard input of a smolvm guest carries its config: a script cannot come through it."""
+    _skip_unavailable("smolvm")
+
+    done = _python_sb("smolvm", "python-import=*\n", ["-"], tmp_path, stdin="print('from stdin')\n")
+
+    assert done.returncode != 0
+    assert "not supported" in done.stderr and "-c, -m or a file" in done.stderr
+    assert "from stdin" not in done.stdout
 
 
 @pytest.mark.parametrize("os_sandbox", _ROWS)
