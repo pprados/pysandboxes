@@ -15,6 +15,7 @@ is off unless a rule opens it, and then filtered by the host side of smolvm.
 
 import logging
 import os
+import pwd
 import shlex
 import sys
 from pathlib import Path
@@ -41,6 +42,7 @@ _PACKAGE_DIR = Path(__file__).resolve().parent.parent
 _GUEST_SOCKET = "/tmp/pysb.sock"
 _GUEST_PYTHON = "/usr/local/bin/python"
 _HOST_PATH = "/usr/local/bin:/usr/bin:/bin"
+_AGENT_ROOTFS = Path(".local/share/smolvm/agent-rootfs")
 # The VMM of smolvm gives a micro-VM a handful of virtio-fs devices: 8 without a network, fewer with one.
 _MAX_SHARES = 6
 # Hands the guest its config, then the standard input of the caller, and dies with the launcher it was started by.
@@ -65,6 +67,24 @@ except BrokenPipeError:
 """
 # smolvm has no seccomp or landlock switch: the guest is hardened by dropping every capability, as the host user.
 _PROFILE_KEYS = frozenset({"image", "python", "cpus", "mem"})
+
+
+def smolvm_home() -> str:
+    """Return the ``HOME`` smolvm is started with: smolvm looks for its agent under ``$HOME/.local/share/smolvm``.
+
+    A program may point ``HOME`` somewhere else once it runs (to keep the state of a library in a scratch directory):
+    the agent is then not there, and the guest cannot start. The home of the account stands in only when it holds the
+    agent and the ``HOME`` of the process does not; otherwise ``HOME`` is kept, as in a container where it is chosen
+    for the user.
+    """
+    home = os.environ.get("HOME", "/")
+    if (Path(home) / _AGENT_ROOTFS).is_dir():
+        return home
+    try:
+        account = pwd.getpwuid(os.getuid()).pw_dir
+    except KeyError:
+        return home
+    return account if (Path(account) / _AGENT_ROOTFS).is_dir() else home
 
 
 class SmolvmSSEDaemon(BaseSubProcessDaemon):
@@ -234,6 +254,6 @@ class SmolvmSSEDaemon(BaseSubProcessDaemon):
                 "exec " + " ".join(q(arg) for arg in cmd) + ' "$@" --_config-on-stdin',
             ]
         )
-        host_env = {"PATH": _HOST_PATH, "HOME": os.environ.get("HOME", "/")}
+        host_env = {"PATH": _HOST_PATH, "HOME": smolvm_home()}
         host_env.update({key: value for key, value in os.environ.items() if key.startswith("SMOLVM")})
         return ["sh", "-c", script, "smolvm-launcher"], host_env

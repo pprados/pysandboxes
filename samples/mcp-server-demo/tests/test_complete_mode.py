@@ -54,7 +54,11 @@ def sandboxed_server() -> Client:
             cwd=str(SAMPLE_ROOT),
             # The stdio client passes only a few variables down: without this the profile's
             # os-sandbox=${OS_SANDBOX:-subprocess} never sees the provider under test.
-            env={name: os.environ[name] for name in ("OS_SANDBOX", "QEMU_USE_KVM") if name in os.environ},
+            env={
+                name: os.environ[name]
+                for name in ("OS_SANDBOX", "QEMU_USE_KVM", "PYSANDBOXES_SMOLVM_IMAGE")
+                if name in os.environ
+            },
         )
     )
 

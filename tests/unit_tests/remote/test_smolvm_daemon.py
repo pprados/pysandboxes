@@ -140,3 +140,39 @@ class TestGuestRules:
         rules = SmolvmSSEDaemon("token").update_rules_and_activate(all_rules=EmptyRules, envs=Envs({}))
 
         assert [r.path for r in rules.file_rules if isinstance(r, FSExposeRule) and r.write] == ["/tmp/pysb.sock"]
+
+
+class TestSmolvmHome:
+    def _home_with_agent(self, root: Path) -> Path:
+        (root / ".local/share/smolvm/agent-rootfs").mkdir(parents=True)
+        return root
+
+    def test_the_home_of_the_process_is_kept_when_it_holds_the_agent(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("HOME", str(self._home_with_agent(tmp_path)))
+
+        assert smolvm_sse_daemon.smolvm_home() == str(tmp_path)
+
+    def test_the_home_of_the_account_stands_in_when_the_process_moved_its_own(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        account, scratch = self._home_with_agent(tmp_path / "account"), tmp_path / "scratch"
+        scratch.mkdir()
+        monkeypatch.setenv("HOME", str(scratch))
+        monkeypatch.setattr(smolvm_sse_daemon.pwd, "getpwuid", lambda uid: type("P", (), {"pw_dir": str(account)})())
+
+        assert smolvm_sse_daemon.smolvm_home() == str(account)
+
+    def test_the_home_is_kept_when_no_account_holds_the_agent_either(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """A container user has no account home and a HOME chosen for it: nothing replaces it."""
+        monkeypatch.setenv("HOME", str(tmp_path))
+
+        def no_account(uid: int) -> object:
+            raise KeyError(uid)
+
+        monkeypatch.setattr(smolvm_sse_daemon.pwd, "getpwuid", no_account)
+
+        assert smolvm_sse_daemon.smolvm_home() == str(tmp_path)
