@@ -6,8 +6,9 @@
 ARG PYTHON_VERSION=3.11
 FROM python-sb:${PYTHON_VERSION}
 
-# Declared again: the base image sets its own PYTHON_VERSION (major.minor.patch), which would name another archive.
-ARG PYTHON_VERSION
+# Not PYTHON_VERSION: the base image sets that one as an ENV (major.minor.patch), which wins over an ARG of the same
+# name under Podman and would name another archive.
+ARG GUEST_PYTHON
 ARG SMOLVM_VERSION=1.33.0
 ARG SMOLVM_SHA256=97e0c64d50abc407499802daa6c849ac010ef29d44e1d97664d8a78067927274
 
@@ -24,7 +25,7 @@ RUN apt-get update && \
     rm -rf /var/lib/apt/lists/*
 
 # Readable by anyone: smolvm reads the archive as the user it runs the guest agent as, not as the owner of the file.
-COPY --chmod=0644 build/smolvm-guest-${PYTHON_VERSION}.tar /opt/smolvm/guest.tar
+COPY --chmod=0644 build/smolvm-guest-${GUEST_PYTHON}.tar /opt/smolvm/guest.tar
 ENV PYSANDBOXES_SMOLVM_IMAGE=/opt/smolvm/guest.tar
 # smolvm keeps its state under HOME: a container user chosen at run time (--user) has none that it can write.
 ENV HOME=/tmp

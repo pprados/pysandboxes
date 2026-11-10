@@ -826,6 +826,7 @@ build-smolvm-guest: .make-build-smolvm-guest
 	  echo "Building python-sb-smolvm:$(PYTHON_VERSION), python-sb-smolvm:latest with $$CONTAINER_CMD..."; \
 	  $$CONTAINER_CMD build \
 	  	--build-arg PYTHON_VERSION=$(PYTHON_VERSION) \
+	  	--build-arg GUEST_PYTHON=$(PYTHON_VERSION) \
 	  	-t python-sb-smolvm:$(PYTHON_VERSION) \
 	  	-t python-sb-smolvm:latest \
 	  	-t python-sb-smolvm:smolvm \
