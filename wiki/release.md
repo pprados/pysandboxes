@@ -86,7 +86,7 @@ yanking only hides it.
 | `publish-testpypi` | Waits for the approval, then uploads with Trusted Publishing and PEP 740 attestations |
 | `publish-pypi` | Final tags only: waits for the `pypi` approval, then uploads `pysandboxes` and, when due, `python-sb` |
 | `verify-published` | Downloads the wheel back from the index of the tag kind (pypi.org for a final tag, test.pypi.org otherwise) and compares its sha256 with the one built |
-| `images` | Dispatches `images.yml` on the tag and waits for it (`dispatch-images.sh`; a called workflow would not receive the secrets of the `dockerhub` environment): it checks the tag again, then one runner per Python 3.11 to 3.14 resolves the newest patch of `python:<python>-slim`, builds the seven images from the published wheel on it, smoke-tests them, pushes them to `docker.io/pprados/<image>` |
+| `images` | Dispatches `images.yml` on the tag and waits for it (`dispatch-images.sh`; a called workflow would not receive the secrets of the `dockerhub` environment): it checks the tag again, then one runner per Python 3.11 to 3.14 resolves the newest patch of `python:<python>-slim`, builds the eight images from the published wheel on it, smoke-tests them, pushes them to `docker.io/pprados/<image>` |
 | `advance-master` | Final tags only: fast-forwards `master` to the tagged commit, never forced |
 
 The images are `python-sb`, `python-sb-landlock`, `python-sb-unshare`, `python-sb-bwrap`, `python-sb-qemu`, `python-sb-qemu-microvm`, `python-sb-gvisor` and `python-sb-smolvm`,

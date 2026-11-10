@@ -1,7 +1,7 @@
 # Copyright (c) 2026, Carbon-It, Philippe Prados (pprados)
 # License: Apache V2
 #
-# Builds the seven container images of a signed release tag and pushes them to Docker Hub, one runner per Python, each
+# Builds the eight container images of a signed release tag and pushes them to Docker Hub, one runner per Python, each
 # FROM the newest patch of its Python. Dispatched on the tag by release.yml once the wheel is published, and on a
 # final tag by images-refresh.yml when python:<minor>-slim moves to a new patch; either way it downloads the published
 # wheel, so the images always embed exactly what was published. Never called as a reusable workflow: the secrets of
@@ -47,7 +47,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     environment: dockerhub
-    # One runner per Python: the QEMU images hold guest disks and boot artifacts; seven images times four would not fit on one.
+    # One runner per Python: the QEMU images hold guest disks and boot artifacts; eight images times four would not fit on one.
     strategy:
       matrix:
         python-version: ${{ fromJSON(inputs.python-versions || '["3.11", "3.12", "3.13", "3.14"]') }}
