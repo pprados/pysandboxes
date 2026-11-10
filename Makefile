@@ -3,7 +3,7 @@ SHELL=/bin/bash
 	unit-tests integration-tests container-tests sample-tests sample-tests-matrix all-tests gh-tests gh-all-tests \
 	spell_check spell_fix pip-audit pip-audit-all clean extra-clean help \
 	api_docs_build api_docs_clean api_docs_linkcheck \
-	build-images build-image-base build-image-landlock build-image-unshare build-image-bwrap build-image-qemu build-image-qemu-microvm build-image-gvisor build-image-smolvm build-image-docker build-image-podman build-image-clean \
+	build-images build-image-base build-image-landlock build-image-unshare build-image-bwrap build-image-qemu build-image-qemu-microvm build-image-gvisor build-image-smolvm build-smolvm-guest build-image-docker build-image-podman build-image-clean \
 	minikube-ready minikube-build-images lock validate inspector github-push-test init \
 	clean-sandbox-temps quick-demo-gif \
 	sample-tests-vm sample-tests-vm-matrix sample-tests-vm-tcg \
@@ -808,15 +808,19 @@ QEMU_MICROVM_IMAGE_STAMP := .make-build-image-qemu-microvm
 	touch .make-build-image-qemu-microvm
 endif
 
-build/smolvm-guest-$(PYTHON_VERSION).tar: Dockerfile-smolvm-guest .make-dist
+.make-build-smolvm-guest: Dockerfile-smolvm-guest .make-dist
 	@command -v docker >/dev/null 2>&1 || { echo "docker is required to build the smolvm guest archive"; exit 1; }
 	@mkdir -p build
 	WHEEL="$$(basename "$$(find dist -maxdepth 1 -name '*.whl' -print -quit)")"; \
 	docker build --build-arg WHEEL="$$WHEEL" --build-arg PYTHON_VERSION=$(PYTHON_VERSION) \
 		-t python-sb-smolvm-guest:$(PYTHON_VERSION) -f Dockerfile-smolvm-guest .
 	docker save python-sb-smolvm-guest:$(PYTHON_VERSION) -o build/smolvm-guest-$(PYTHON_VERSION).tar
+	touch .make-build-smolvm-guest
 
-.make-build-image-smolvm: .make-build-image-base Dockerfile-smolvm build/smolvm-guest-$(PYTHON_VERSION).tar
+# Build the smolvm guest archive: build/smolvm-guest-$(PYTHON_VERSION).tar
+build-smolvm-guest: .make-build-smolvm-guest
+
+.make-build-image-smolvm: .make-build-image-base Dockerfile-smolvm .make-build-smolvm-guest
 	@for CONTAINER_CMD in $(CONTAINER_CMDS); do \
 	  if ! command -v $$CONTAINER_CMD >/dev/null 2>&1; then continue; fi; \
 	  echo "Building python-sb-smolvm:$(PYTHON_VERSION), python-sb-smolvm:latest with $$CONTAINER_CMD..."; \
@@ -877,7 +881,7 @@ build-images: Dockerfile .make-dist \
 	.make-build-image-gvisor \
 	.make-build-image-smolvm
 
-IMAGE_STAMPS := .make-build-image-base .make-build-image-landlock .make-build-image-unshare .make-build-image-bwrap .make-build-image-qemu .make-build-image-qemu-microvm .make-build-image-gvisor .make-build-image-smolvm
+IMAGE_STAMPS := .make-build-image-base .make-build-image-landlock .make-build-image-unshare .make-build-image-bwrap .make-build-image-qemu .make-build-image-qemu-microvm .make-build-image-gvisor .make-build-image-smolvm .make-build-smolvm-guest
 
 # The sentinels say "built", never "built *where*", so they are dropped on both sides:
 # before, because they record a build against the previous daemon and would leave every
@@ -898,7 +902,7 @@ build-image-clean:
 	@echo "Pruning build caches and forcing rebuild..."
 	@command -v docker >/dev/null 2>&1 && docker builder prune -f || true
 	@command -v podman >/dev/null 2>&1 && (podman builder prune -f 2>/dev/null || podman system prune -f 2>/dev/null) || true
-	@rm -f .make-build-image-base .make-build-image-landlock .make-build-image-unshare .make-build-image-bwrap .make-build-image-qemu .make-build-image-qemu-microvm .make-build-image-gvisor .make-build-image-smolvm
+	@rm -f .make-build-image-base .make-build-image-landlock .make-build-image-unshare .make-build-image-bwrap .make-build-image-qemu .make-build-image-qemu-microvm .make-build-image-gvisor .make-build-image-smolvm .make-build-smolvm-guest
 	@$(MAKE) build-images
 
 # ---------------------------------------------------------------------------------------

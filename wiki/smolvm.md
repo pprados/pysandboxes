@@ -30,8 +30,8 @@ unless a rule exposes it.
 
 - `smolvm` on the `PATH` (release archive, Linux x86_64 or aarch64, macOS arm64, Windows x86_64).
 - `/dev/kvm` readable and writable on Linux.
-- A guest image holding `setpriv` and `mount` (util-linux, in every Debian image): `make build/smolvm-guest-3.13.tar`
-  (needs Docker; one archive per Python version), then `PYSANDBOXES_SMOLVM_IMAGE=build/smolvm-guest-3.13.tar` or `smolvm.image=<path or registry
+- A guest image holding `setpriv` and `mount` (util-linux, in every Debian image): `make build-smolvm-guest`
+  (needs Docker; writes `build/smolvm-guest-<python>.tar`, one archive per Python version), then `PYSANDBOXES_SMOLVM_IMAGE=build/smolvm-guest-3.13.tar` or `smolvm.image=<path or registry
   reference>` in the profile.
 
 `unavailable_reason()` checks the binary and `/dev/kvm`. A guest image that is missing fails the start with the
@@ -73,7 +73,7 @@ one of them is reported and not exposed.
 
 The package of pysandboxes is shared from the host when it can be (a checkout, which then wins over the image's). An
 installed package sits under `/usr`, which smolvm refuses to share: the guest then runs the copy in its image, which
-`make build/smolvm-guest-<python>.tar` installs from the same wheel. Rebuild the archive when pysandboxes changes. A profile that needs more than 6 shares (top directories of the read-only paths, plus
+`make build-smolvm-guest` installs from the same wheel. Rebuild the archive when pysandboxes changes. A profile that needs more than 6 shares (top directories of the read-only paths, plus
 one per writable directory) is refused with a message that says so, rather than failing inside libkrun.
 
 ## Limits
@@ -90,7 +90,7 @@ one per writable directory) is refused with a message that says so, rather than 
 ## Running it
 
 ```bash
-make build/smolvm-guest-3.13.tar
+make build-smolvm-guest
 PYSANDBOXES_SMOLVM_IMAGE=build/smolvm-guest-3.13.tar python-sb --pysandboxes-config=my.profile -c 'print(1)'
 ```
 

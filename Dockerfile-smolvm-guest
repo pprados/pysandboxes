@@ -2,7 +2,7 @@
 # Python of the host (PYTHON_VERSION: the guard code runs on the interpreter that wrote the config, the init script
 # refuses another one) and pysandboxes, installed from the wheel of the build: the guest runs it when the host's package
 # sits where smolvm refuses to share it (/usr). A package smolvm can share (a checkout) is shared and wins over this copy.
-# Build: make build/smolvm-guest-$(PYTHON_VERSION).tar  =>  a `docker save` archive that smolvm runs without a registry.
+# Build: make build-smolvm-guest  =>  build/smolvm-guest-$(PYTHON_VERSION).tar, a `docker save` archive that smolvm runs without a registry.
 ARG PYTHON_VERSION=3.11
 FROM python:${PYTHON_VERSION}-slim
 
