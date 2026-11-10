@@ -35,8 +35,11 @@ def _strip(path: str) -> str:
 
 
 def _host_interpreter_prefixes() -> set[str]:
-    """The installation of the host's Python: the guest runs the image's, so exposing it would only cost a share."""
-    return {os.path.realpath(prefix) for prefix in (sys.prefix, sys.base_prefix)}
+    """The installation of the host's Python: the guest runs the image's, so exposing it would only cost a share.
+
+    A virtual environment is not part of it: its ``site-packages`` hold the packages of the user, which the guest needs.
+    """
+    return {os.path.realpath(sys.base_prefix)}
 
 
 def is_refused_by_smolvm(path: str) -> bool:
@@ -47,6 +50,25 @@ def is_refused_by_smolvm(path: str) -> bool:
 
 def _is_inside(path: str, parents: Iterable[str]) -> bool:
     return any(path == parent or path.startswith(parent.rstrip("/") + "/") for parent in parents)
+
+
+def guest_python_path(host_path: Iterable[str], exposed: Iterable[str], cwd: str) -> list[str]:
+    """Return the entries of the ``sys.path`` of the host that the guest can import from, in the same order.
+
+    The guest runs the Python of its image, which knows nothing of the virtual environment or the project directory the
+    host process was started from. An entry is kept when a rule exposes it and it is not the interpreter installation,
+    which the guest has of its own; the empty entry stands for the working directory.
+    """
+    exposed = list(exposed)
+    entries: list[str] = []
+    for entry in host_path:
+        path = os.path.abspath(entry or cwd)
+        real = os.path.realpath(path)
+        if not os.path.isdir(real) or _is_inside(real, _host_interpreter_prefixes()):
+            continue
+        if (_is_inside(path, exposed) or _is_inside(real, exposed)) and path not in entries:
+            entries.append(path)
+    return entries
 
 
 def exposures(all_rules: AllRules, *, extra_ro: Iterable[str] = ()) -> tuple[list[str], list[str]]:

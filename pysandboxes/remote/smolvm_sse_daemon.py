@@ -29,7 +29,7 @@ from ..override_compat import override
 from ..sb_types import Args, ConfigLine, ConfigLines, Envs
 from ..tools import Environ
 from .client_subprocess_sse_daemon import BaseSubProcessDaemon
-from .smolvm_root import exposures, init_script, is_refused_by_smolvm, mask_targets, volumes
+from .smolvm_root import exposures, guest_python_path, init_script, is_refused_by_smolvm, mask_targets, volumes
 from .smolvm_rules import network_args
 from .tools import which_command
 
@@ -176,8 +176,11 @@ class SmolvmSSEDaemon(BaseSubProcessDaemon):
             )
         cwd = os.getcwd()
         guest_env = {key: str(value) for key, value in all_rules.envs.items()}
+        python_path = guest_python_path(sys.path, [*ro, *rw], cwd)
         if shared_package:
-            guest_env["PYTHONPATH"] = str(_PACKAGE_DIR.parent)
+            python_path.insert(0, str(_PACKAGE_DIR.parent))
+        if python_path:
+            guest_env["PYTHONPATH"] = os.pathsep.join(dict.fromkeys(python_path))
         guest_python = str(params.get("python", "")) or _GUEST_PYTHON
         guest_script = init_script(
             ro=ro,

@@ -142,17 +142,7 @@ jobs:
     # built for the Python of the row, where tests/integration_tests/_env.py looks for it. The runner user is not
     # root, so smolvm keeps /dev/kvm, opened by the udev rule above.
     - name: Install smolvm and build its guest archive
-      run: |
-        version=$(sed -n 's/^ARG SMOLVM_VERSION=//p' Dockerfile-smolvm)
-        sha256=$(sed -n 's/^ARG SMOLVM_SHA256=//p' Dockerfile-smolvm)
-        curl -fsSL -o "$RUNNER_TEMP/smolvm.tar.gz" \
-          "https://github.com/smol-machines/smolvm/releases/download/v${version}/smolvm-${version}-linux-x86_64.tar.gz"
-        echo "${sha256}  $RUNNER_TEMP/smolvm.tar.gz" | sha256sum -c -
-        sudo mkdir -p /opt/smolvm
-        sudo tar -xzf "$RUNNER_TEMP/smolvm.tar.gz" --strip-components=1 -C /opt/smolvm
-        sudo ln -s /opt/smolvm/smolvm /usr/local/bin/smolvm
-        smolvm --version
-        make -o uv.lock build-smolvm-guest
+      run: .github/scripts/install-smolvm.sh
 
     # The first qemu row would otherwise download the 665 MiB guest image inside its
     # own daemon start timeout, and fail for a slow network rather than for a bug.

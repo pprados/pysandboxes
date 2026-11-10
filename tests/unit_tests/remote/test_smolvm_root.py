@@ -3,6 +3,7 @@
 """The guest sees the host through a few shares, from which its init script binds exactly what the rules expose."""
 
 import logging
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -11,7 +12,15 @@ import pytest
 
 from pysandboxes.all_rules import AllRules, EmptyRules
 from pysandboxes.guard_files import FSExposeRule, IgnoreRule
-from pysandboxes.remote.smolvm_root import STAGE, exposures, init_script, mask_targets, shares, volumes
+from pysandboxes.remote.smolvm_root import (
+    STAGE,
+    exposures,
+    guest_python_path,
+    init_script,
+    mask_targets,
+    shares,
+    volumes,
+)
 from pysandboxes.sb_types import ConfigLine
 
 
@@ -56,9 +65,18 @@ class TestExposures:
     def test_what_the_image_owns_is_never_replaced_by_the_host(self, path: str) -> None:
         assert exposures(_rules((path, False))) == ([], [])
 
-    @pytest.mark.parametrize("prefix", [sys.prefix, sys.base_prefix])
-    def test_the_host_interpreter_is_not_exposed_the_guest_has_its_own(self, prefix: str) -> None:
+    def test_the_host_interpreter_is_not_exposed_the_guest_has_its_own(self) -> None:
+        prefix = sys.base_prefix
         assert exposures(_rules((prefix + "/", False), (prefix + "/lib/", False))) == ([], [])
+
+    def test_a_virtual_environment_is_exposed_as_it_holds_the_packages_of_the_user(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        venv = tmp_path / "venv"
+        (venv / "lib").mkdir(parents=True)
+        monkeypatch.setattr(sys, "prefix", str(venv))
+
+        assert exposures(_rules((f"{venv}/", False), (f"{venv}/lib/", False))) == ([str(venv), str(venv / "lib")], [])
 
     def test_a_missing_path_is_left_out(self, tmp_path: Path) -> None:
         assert exposures(_rules((f"{tmp_path / 'missing'}/", False))) == ([], [])
@@ -242,3 +260,34 @@ class TestInitScript:
         script = _script()
 
         assert script.index("cd /home/a/x") < script.index("exec setpriv")
+
+
+class TestGuestPythonPath:
+    def test_the_packages_of_a_virtual_environment_and_the_project_are_importable_when_exposed(
+        self, tmp_path: Path
+    ) -> None:
+        site = tmp_path / ".venv" / "lib" / "site-packages"
+        project = tmp_path / "sample"
+        site.mkdir(parents=True)
+        project.mkdir()
+
+        assert guest_python_path(["", str(site)], [str(tmp_path)], str(project)) == [str(project), str(site)]
+
+    def test_an_entry_no_rule_exposes_is_left_out_as_the_guest_could_not_read_it(self, tmp_path: Path) -> None:
+        exposed, hidden = tmp_path / "exposed", tmp_path / "hidden"
+        exposed.mkdir()
+        hidden.mkdir()
+
+        assert guest_python_path([str(exposed), str(hidden)], [str(exposed)], str(tmp_path)) == [str(exposed)]
+
+    def test_the_interpreter_of_the_host_is_left_out_the_guest_has_its_own(self) -> None:
+        stdlib = os.path.join(sys.base_prefix, "lib")
+        if not os.path.isdir(stdlib):
+            pytest.skip("no lib directory under the base prefix")
+
+        assert guest_python_path([stdlib], [sys.base_prefix], os.getcwd()) == []
+
+    def test_a_missing_entry_and_a_repeated_one_are_left_out(self, tmp_path: Path) -> None:
+        assert guest_python_path([str(tmp_path / "gone"), str(tmp_path), str(tmp_path)], [str(tmp_path)], "/") == [
+            str(tmp_path)
+        ]

@@ -19,7 +19,8 @@ name: Sample Tests
 # lost editable installs and the working directory -- that no subprocess run can
 # show. A minor release must not ship a sample broken under one of them. `none`
 # confines nothing, so the confinement scenarios fail there by design; qemu boots
-# a VM per sandbox and is covered by integration.yml.
+# a VM per sandbox and is covered by integration.yml. smolvm has a lane of its own,
+# smolvm-samples, which runs the smolagents sample only for now.
 #
 # No secret is needed: pydantic-ai drives TestModel behind a placeholder key,
 # openai-agents-sdk is mocked, and the suites that would reach a real model
@@ -116,6 +117,55 @@ jobs:
     # release job can absorb the wall clock in exchange for isolation.
     - name: Run the samples' test suites
       run: make sample-tests
+
+  # smolvm needs its binary, /dev/kvm and a guest archive per Python, which the lane above does not prepare. Only the
+  # smolagents sample runs under it for now: the others have not been measured with this provider.
+  smolvm-samples:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11", "3.12", "3.13", "3.14"]
+    env:
+      UV_PYTHON: ${{ matrix.python-version }}
+      OS_SANDBOX: smolvm
+      PYSANDBOXES_FAIL_ON_SKIP: "1"
+      PYSANDBOXES_SMOLVM_IMAGE: ${{ github.workspace }}/build/smolvm-guest-${{ matrix.python-version }}.tar
+
+    steps:
+    - uses: actions/checkout@v5
+      with:
+        token: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Install build tools
+      run: sudo apt-get update && sudo apt-get install -y make build-essential
+
+    - name: Set up Python ${{ matrix.python-version }}
+      uses: actions/setup-python@v6
+      with:
+        python-version: ${{ matrix.python-version }}
+
+    - name: Install uv
+      shell: bash
+      run: |
+        curl -LsSf https://astral.sh/uv/install.sh | sh -s --
+        echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+    # The rule GitHub documents for hardware-accelerated emulators: the runner user then opens /dev/kvm.
+    - name: Give the runner user /dev/kvm
+      run: |
+        echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' \
+          | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+        sudo udevadm control --reload-rules
+        sudo udevadm trigger --name-match=kvm
+        test -c /dev/kvm
+
+    - name: Install smolvm and build its guest archive
+      run: .github/scripts/install-smolvm.sh
+
+    - name: Run the smolagents sample under smolvm
+      run: make sample-tests-smolagents
 
   vm-samples:
     runs-on: ubuntu-latest
