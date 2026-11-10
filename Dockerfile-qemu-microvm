@@ -6,4 +6,8 @@
 ARG PYTHON_VERSION=3.11
 FROM python-sb-qemu:${PYTHON_VERSION}
 
+# The default profile needs more host shares than the six 9p slots of the microvm machine: drop the CA paths first.
+ENV QEMU_MICROVM_OPTIONAL_PATHS=/etc/ssl,/etc/ca-certificates,/usr/share/ca-certificates \
+    QEMU_MICROVM_EMPTY_PATHS=/etc/pki
+
 RUN python -c 'from pysandboxes.remote.qemu_image import get_default_image_path; from pysandboxes.remote.qemu_microvm_boot import ensure_microvm_boot_artifacts; ensure_microvm_boot_artifacts(get_default_image_path(), {})'
