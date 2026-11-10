@@ -104,7 +104,7 @@ jobs:
         --dest dist/
 
     # A fresh checkout's mtimes would make .make-dist rerun uv build, which deletes the wheel.
-    - name: Build the seven images from the published wheel
+    - name: Build the eight images from the published wheel
       run: |
         touch .make-dist
         make -o uv.lock CONTAINER_CMDS=docker PYTHON_VERSION="$PATCH" build-images
@@ -123,7 +123,7 @@ jobs:
     - name: Push the tags
       run: |
         mapfile -t tags < <(.github/scripts/image-tags.sh "$VERSION" "$PATCH" "$DEFAULT_PYTHON")
-        for image in python-sb python-sb-landlock python-sb-unshare python-sb-bwrap python-sb-qemu python-sb-qemu-microvm python-sb-gvisor; do
+        for image in python-sb python-sb-landlock python-sb-unshare python-sb-bwrap python-sb-qemu python-sb-qemu-microvm python-sb-gvisor python-sb-smolvm; do
           for tag in "${tags[@]}"; do
             target="docker.io/pprados/$image:$tag"
             docker tag "$image:$PATCH" "$target"

@@ -1,6 +1,6 @@
 # Images on Docker Hub
 
-Each release publishes seven images to Docker Hub, built from the wheel published on the same run (see
+Each release publishes eight images to Docker Hub, built from the wheel published on the same run (see
 [Releasing](release.md)). Use them to run `python-sb` in a container without building anything locally.
 
 | Image | Provider it carries | Contents |
@@ -12,6 +12,7 @@ Each release publishes seven images to Docker Hub, built from the wheel publishe
 | `docker.io/pprados/python-sb-qemu` | `qemu` | the base image plus QEMU, `genisoimage` and the guest VM image |
 | `docker.io/pprados/python-sb-qemu-microvm` | `qemu-microvm` | the QEMU image plus matched direct-boot kernel and initrd artifacts |
 | `docker.io/pprados/python-sb-gvisor` | `gvisor` | the base image plus `runsc` with its sidecar directory, `iptables`, `iproute2` and `slirp4netns` |
+| `docker.io/pprados/python-sb-smolvm` | `smolvm` | the base image plus `smolvm` and its guest archive, built for the Python of the image |
 
 Each image holds every tool its provider invokes, which is the hard part to get right by hand: without `iptables`,
 for instance, a bwrap profile with socket rules refuses to start. There is no `python-sb-firejail` on purpose:
@@ -98,10 +99,17 @@ docker run -it --rm --device /dev/kvm -v "$(pwd)":/app -w /app \
 docker run -it --rm --device /dev/kvm -v "$(pwd)":/app -w /app \
   docker.io/pprados/python-sb-qemu-microvm:sb$VERSION \
   sh -c 'OS_SANDBOX=qemu-microvm python-sb my_script.py'
+
+# smolvm: no privilege, but /dev/kvm and a user of its group (smolvm lowers a root caller, which then loses the device)
+docker run -it --rm --device /dev/kvm --group-add "$(stat -c %g /dev/kvm)" --user "$(id -u):$(id -g)" \
+  -v "$(pwd)":/app -w /app docker.io/pprados/python-sb-smolvm:sb$VERSION \
+  sh -c 'OS_SANDBOX=smolvm python-sb my_script.py'
 ```
 
-The same commands work with `podman` in place of `docker`. The provider pages detail each option:
-[LandLock](landlock.md), [Unshare](unshare.md), [Bubblewrap](bwrap.md), [QEMU](qemu.md), [gVisor](gvisor.md).
+The same commands work with `podman` in place of `docker`, except `smolvm` under rootless Podman, which also needs
+`--userns=keep-id`. The provider pages detail each option:
+[LandLock](landlock.md), [Unshare](unshare.md), [Bubblewrap](bwrap.md), [QEMU](qemu.md), [gVisor](gvisor.md),
+[smolvm](smolvm.md).
 
 ## Kubernetes
 

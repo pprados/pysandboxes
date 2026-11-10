@@ -85,8 +85,9 @@ yanking only hides it.
 | `images` | Dispatches `images.yml` on the tag and waits for it (`dispatch-images.sh`; a called workflow would not receive the secrets of the `dockerhub` environment): it checks the tag again, then one runner per Python 3.11 to 3.14 resolves the newest patch of `python:<python>-slim`, builds the seven images from the published wheel on it, smoke-tests them, pushes them to `docker.io/pprados/<image>` |
 | `advance-master` | Final tags only: fast-forwards `master` to the tagged commit, never forced |
 
-The images are `python-sb`, `python-sb-landlock`, `python-sb-unshare`, `python-sb-bwrap`, `python-sb-qemu`, `python-sb-qemu-microvm` and `python-sb-gvisor`,
-`linux/amd64`. The smoke test checks that each provider image runs every tool its provider invokes.
+The images are `python-sb`, `python-sb-landlock`, `python-sb-unshare`, `python-sb-bwrap`, `python-sb-qemu`, `python-sb-qemu-microvm`, `python-sb-gvisor` and `python-sb-smolvm`,
+`linux/amd64`. The smoke test checks that each provider image runs every tool its provider invokes, and starts the
+`smolvm` guest without privilege when the runner has `/dev/kvm`.
 `.github/scripts/image-tags.sh` lists their tags, in the manner of the official `python` images, the pysandboxes
 version prefixed with `sb`: `<patch>-sb<version>` and `<python>-sb<version>` for every release, `sb<version>` for
 Python 3.14, plus `<patch>`, `<python>` and, for Python 3.14, `3` and `latest` for a final release only (see
@@ -168,5 +169,5 @@ Already in place. Recreate them only if they are lost:
 | `verify-published`: "published but not visible yet" | The index's CDN (test.pypi.org or pypi.org) has not served the file within 10 min. Re-run the failed jobs |
 | `verify-published`: the wheel "differs" | The index (test.pypi.org or pypi.org) holds another file for this version (a re-run rebuilt a different wheel; the upload is skipped when the version exists). Publish the next number |
 | `images` fails at the smoke test | An image lacks the version or a provider binary. Nothing pushed |
-| `images` fails while pushing | Part of the seven images may be published. Re-run the failed jobs: the same tags are overwritten |
+| `images` fails while pushing | Part of the eight images may be published. Re-run the failed jobs: the same tags are overwritten |
 | `advance-master` fails | The `master` environment lacks `MASTER_DEPLOY_KEY`, or the key is wrong or read-only, or `master` is not an ancestor of the tag. Merge nothing, investigate, then push the tagged commit to `master` by hand |
