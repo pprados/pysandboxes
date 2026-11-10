@@ -163,11 +163,11 @@ def test_the_smolvm_guest_runs_a_program_with_no_privilege(fake: Path) -> None:
     assert "--privileged" not in run[0], "the point of the check is that no privilege is needed"
 
 
-def test_a_smolvm_guest_that_does_not_run_fails(fake: Path) -> None:
+def test_a_smolvm_guest_that_does_not_run_only_warns(fake: Path) -> None:
     (fake / "broken").write_text("guest-python-sb-smolvm\n")
     result = _smoke(fake)
-    assert result.returncode == 1
-    assert "the smolvm guest of python-sb-smolvm" in result.stdout, "the qemu guests ran and only smolvm failed"
+    assert result.returncode == 0
+    assert "::warning::the smolvm guest of python-sb-smolvm" in result.stdout
 
 
 def test_a_guest_that_cannot_apply_its_network_rules_fails(fake: Path) -> None:
