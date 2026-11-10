@@ -93,7 +93,7 @@ minikube-ready:
 # They are loaded, not rebuilt there: `minikube docker-env` now points at an ssh:// daemon, where buildx
 # falls back to its docker-container driver and fails to start BuildKit.
 MINIKUBE_IMAGES := python-sb:latest python-sb-landlock:latest python-sb-unshare:latest python-sb-bwrap:latest \
-	python-sb-qemu:latest python-sb-qemu-microvm:latest python-sb-gvisor:latest
+	python-sb-qemu:latest python-sb-qemu-microvm:latest python-sb-gvisor:latest python-sb-smolvm:latest
 minikube-build-images: build-images
 	@if command -v minikube >/dev/null 2>&1 && minikube status >/dev/null 2>&1; then \
 	  for IMAGE in $(MINIKUBE_IMAGES); do \

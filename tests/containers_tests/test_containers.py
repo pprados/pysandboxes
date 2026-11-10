@@ -478,6 +478,9 @@ def _run_container_runtime(
     # smolvm lowers the privileges of a root caller and its VMM then loses /dev/kvm: the container runs as the user.
     if os_sandbox.lower() == "smolvm":
         kvm_flags += ["--user", f"{os.getuid()}:{os.getgid()}"]
+        if runtime == "podman":
+            # Rootless Podman maps the groups of the host to nobody: only keep-id leaves /dev/kvm usable to the user.
+            kvm_flags.append("--userns=keep-id")
     run_timeout = _container_run_timeout(os_sandbox, kvm_flags)
     # Use host/platform DNS so config parsing can resolve hostname
     dns_servers = _host_dns_servers()
@@ -633,8 +636,6 @@ def test_container_runtime(runtime: str, os_sandbox: str, py_sandbox: bool, priv
 
     if os_sandbox == "landlock" and not landlock_user_available():
         pytest.skip("Landlock requires filesystem support and network ABI v4 (Linux 6.7+) for default TCP deny")
-    if os_sandbox == "smolvm" and runtime != "docker":
-        pytest.skip("smolvm is measured with Docker only")
 
     result = _run_container_runtime(runtime, os_sandbox, py_sandbox, privileged)
     assert result.returncode == 0, (
@@ -676,6 +677,17 @@ reduced_privilege_security_context: dict[str, str] = {
 }
 
 
+KVM_DEVICE_PLUGIN_MANIFEST = CONTAINER_SCRIPT_DIR / "kube-kvm-device-plugin.yaml"
+_KVM_RESOURCE = "pysandboxes.test/kvm"
+
+# What the pod needs of /app to run a test, copied to /work (readable by the unprivileged user, tmp writable).
+_KUBE_COPY_OFF_9P = (
+    "mkdir -p /work && tar -C /app --exclude='*/__pycache__' -cf - pysandboxes tests pyproject.toml README.md "
+    "LICENSE.txt CHANGELOG.md SECURITY.md | tar -C /work -xf - && "
+    "chmod -R a+rX /work && mkdir -p /work/tmp && chmod 1777 /work/tmp"
+)
+
+
 def _kube_manifest_text(image_name: str, privileged: bool, os_sandbox: str = "") -> str:
     """Return the pod manifest for one matrix row: image substituted, privileges applied."""
     text = KUBE_MANIFEST.read_text(encoding="utf-8")
@@ -684,6 +696,21 @@ def _kube_manifest_text(image_name: str, privileged: bool, os_sandbox: str = "")
     if not privileged:
         text, count = _SECURITY_CONTEXT_RE.subn(reduced_privilege_security_context.get(os_sandbox, ""), text)
         assert count == 1, f"no securityContext block to remove in {KUBE_MANIFEST}"
+    if os_sandbox == "smolvm":
+        if privileged:
+            text = text.replace(
+                "      volumeMounts:\n",
+                "      volumeMounts:\n        - name: dev-kvm\n          mountPath: /dev/kvm\n",
+                1,
+            )
+            text += "    - name: dev-kvm\n      hostPath:\n        path: /dev/kvm\n        type: CharDevice\n"
+        else:
+            # Without privileges a pod gets the device from a device plugin, the way a real cluster hands it out.
+            text = text.replace(
+                "      workingDir: /app\n",
+                f"      workingDir: /app\n      resources:\n        limits:\n          {_KVM_RESOURCE}: 1\n",
+                1,
+            )
     if os_sandbox == "qemu-microvm":
         # KVM is explicit only for the already privileged row; the ordinary pod
         # keeps its confinement and deliberately exercises TCG without a device.
@@ -724,6 +751,23 @@ def _minikube_docker_env() -> dict[str, str]:
             key, value = m.group(1), m.group(2).strip().strip("'\"")
             env[key] = value
     return env
+
+
+def _ensure_kvm_device_plugin() -> None:
+    """Apply the KVM device plugin and wait until the node offers the resource an unprivileged pod asks for."""
+    subprocess.run(["kubectl", "apply", "-f", str(KVM_DEVICE_PLUGIN_MANIFEST)], check=True, capture_output=True)
+    resource = _KVM_RESOURCE.replace(".", r"\.")
+    deadline = time.monotonic() + WAIT_TIMEOUT
+    while time.monotonic() < deadline:
+        offered = subprocess.run(
+            ["kubectl", "get", "nodes", "-o", f"jsonpath={{.items[0].status.allocatable.{resource}}}"],
+            capture_output=True,
+            text=True,
+        ).stdout.strip()
+        if offered not in ("", "0"):
+            return
+        time.sleep(2)
+    raise RuntimeError(f"the node does not offer {_KVM_RESOURCE} {WAIT_TIMEOUT}s after the device plugin was applied")
 
 
 def _ensure_minikube_ready() -> None:
@@ -862,6 +906,8 @@ def _run_kubernetes_test(os_sandbox: str, py_sandbox: bool, privileged: bool) ->
     try:
         _ensure_minikube_ready()
         _assert_minikube_image(os_sandbox)
+        if os_sandbox == "smolvm" and not privileged:
+            _ensure_kvm_device_plugin()
 
         logger.info("Starting minikube mount in background...")
         mount_proc = subprocess.Popen(
@@ -959,10 +1005,23 @@ def _run_kubernetes_test(os_sandbox: str, py_sandbox: bool, privileged: bool) ->
                         "print('MicroVM acceleration:', 'KVM' if args else 'TCG', flush=True)"
                     )
                     accel_check = f"python -c {shlex.quote(probe)} && "
+                # smolvm lowers the privileges of a root caller and its VMM then loses /dev/kvm: pip stays root,
+                # the sandbox runs as an ordinary user of the group that owns the device. pip leaves a root-owned
+                # /tmp/.cache under the HOME of the image, where smolvm keeps its state: it gets a home of its own.
+                as_user = (
+                    "mkdir -p /tmp/smolvm-home && chown 1000:1000 /tmp/smolvm-home && "
+                    "setpriv --reuid=1000 --regid=1000 --groups=$(stat -c %g /dev/kvm) env HOME=/tmp/smolvm-home "
+                    if os_sandbox == "smolvm"
+                    else ""
+                )
+                # The 9p mount of minikube cannot be shared with a guest: its server (go9p) panics on the directory
+                # reads of virtio-fs and drops the connection. smolvm gets a copy on the filesystem of the pod.
+                from_copy = f"{_KUBE_COPY_OFF_9P} && cd /work && " if os_sandbox == "smolvm" else ""
                 exec_cmd = (
-                    "pip install --no-cache-dir -e . && "
+                    f"{from_copy}pip install --no-cache-dir -e . && "
                     f"{accel_check}"
-                    f"PYTHONUNBUFFERED=1 TERM={term} OS_SANDBOX={os_sandbox_env} {_row_env(os_sandbox, privileged)}"
+                    f"{as_user}PYTHONUNBUFFERED=1 TERM={term} OS_SANDBOX={os_sandbox_env} "
+                    f"{_row_env(os_sandbox, privileged)}"
                     f"python-sb {py_sandbox_args} {PYTHON_SB_ARGS} -m tests.integration_tests.tst_usage"
                 )
 
@@ -1063,9 +1122,6 @@ def test_container_kubernetes(os_sandbox: str, py_sandbox: bool, privileged: boo
         )
     except (subprocess.CalledProcessError, FileNotFoundError):
         pytest.skip("minikube not available")
-
-    if os_sandbox == "smolvm":
-        pytest.skip("smolvm is measured with Docker only")
 
     rc = _run_kubernetes_test(os_sandbox, py_sandbox, privileged)
     assert rc == 0, f"Kubernetes pod test exited with code {rc}"

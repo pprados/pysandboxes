@@ -25,7 +25,7 @@ Start here; the matrix below gives the detail behind each line.
 | Compiled code or kernel exploits, user-space kernel, starts in about a second | [`gvisor`](gvisor.md) |
 | Compiled code or kernel exploits, with its own guest kernel in a micro-VM (KVM, about a second), TCP filtered by address only, no IPv6, Linux only | [`smolvm`](smolvm.md) |
 | Resource limits and seccomp | [`firejail`](firejail.md) |
-| Inside Docker, Podman or Kubernetes | [`landlock`](landlock.md), [`qemu`](qemu.md) or [`qemu-microvm`](qemu-microvm.md) unprivileged; [`unshare`](unshare.md) or [`bwrap`](bwrap.md) with `--privileged`; [`smolvm`](smolvm.md) with Docker only, as a user of the `kvm` group (`--device /dev/kvm --group-add`, `--user`), Podman and Kubernetes not measured; [`gvisor`](gvisor.md) with `--privileged` or its lowered confinement (see below) |
+| Inside Docker, Podman or Kubernetes | [`landlock`](landlock.md), [`qemu`](qemu.md) or [`qemu-microvm`](qemu-microvm.md) unprivileged; [`unshare`](unshare.md) or [`bwrap`](bwrap.md) with `--privileged`; [`smolvm`](smolvm.md) unprivileged, as a user of the `kvm` group with `/dev/kvm` (Docker `--device`, `--group-add`, `--user`; Podman also `--userns=keep-id`; Kubernetes through a device plugin); [`gvisor`](gvisor.md) with `--privileged` or its lowered confinement (see below) |
 | Files and ports on macOS (Seatbelt, no host filtering) | [`sandbox-exec`](sandbox-exec.md) |
 | Files and network on Windows, without administrator rights (AppContainer token, no host or port filtering) | [`appcontainer`](appcontainer.md) |
 | Process separation only, no OS boundary (also on macOS, and the fallback on Windows) | [`subprocess`](subprocess.md) |
@@ -76,19 +76,19 @@ A ❌ means the provider does not enforce that control. The Python layer may sti
 | OS-sandbox               |  ❌   |     ❌      |     ✅     |     ✅     |     ✅     |     ✅  |        ✅         | ✅ | ✅ | ✅ | ✅ |
 | Vm compatible            |  ❌   |     ✅      |     ✅     |     ✅     |     ✅     |     ✅  |        ✅         | ✅ | ✅ | ✅ | ✅ |
 | **Docker / Podman**      |      |            |           |           |           |        |                  |  | |  |  |
-| • unprivileged           |  ✅   |     ✅      |     ✅     |     ❌     |     ❌     |     ❌  |        ✅         | ❌ | —⁵ | n/a | n/a |
-| • --privileged           |  ✅   |     ✅      |     ✅     |     ✅     |     ✅     |     ❌  |        ✅         | ✅ | —⁵ | n/a | n/a |
+| • unprivileged           |  ✅   |     ✅      |     ✅     |     ❌     |     ❌     |     ❌  |        ✅         | ❌ | ✅⁵ | n/a | n/a |
+| • --privileged           |  ✅   |     ✅      |     ✅     |     ✅     |     ✅     |     ❌  |        ✅         | ✅ | ✅⁵ | n/a | n/a |
 | **Kubernetes**           |      |            |           |           |           |        |                  |  | |  |  |
-| • unprivileged pod       |  ✅   |     ✅      |     ✅     |     ❌     |     ❌     |     ❌  |        ✅         | ❌ | —⁵ | n/a | n/a |
-| • SYS_ADMIN              |  ✅   |     ✅      |     ✅     |     ✅     |     ✅     |     ❌  |        ❌         | ✅ | —⁵ | n/a | n/a |
-| • NET_ADMIN              |  ✅   |     ✅      |     ✅     |     ✅     |     ✅     |     ❌  |        ❌         | ✅ | —⁵ | n/a | n/a |
+| • unprivileged pod       |  ✅   |     ✅      |     ✅     |     ❌     |     ❌     |     ❌  |        ✅         | ❌ | ✅⁵ | n/a | n/a |
+| • SYS_ADMIN              |  ✅   |     ✅      |     ✅     |     ✅     |     ✅     |     ❌  |        ❌         | ✅ | not needed⁵ | n/a | n/a |
+| • NET_ADMIN              |  ✅   |     ✅      |     ✅     |     ✅     |     ✅     |     ❌  |        ❌         | ✅ | not needed⁵ | n/a | n/a |
 | **Extra**                |      |            |           |           |           |        |                  |  | |  |  |
 | • Resource limits        |  ❌   |     ❌      |     ❌     |     ❌     |     ❌     |     ✅  |        ✅         | ❌ | ✅ | ❌ | ❌ |
 | • Seccomp                |  ❌   |     ❌      |     ❌     |     ❌     |     ❌     |   ✅    |        ✅         | ❌ | ❌ | ❌ | n/a |
 | • Latency                | <1s  |    <1s     |    <1s    |    <1s    |    <1s    |    <1s |      >20s        | ~1s | ~1s | <1s | Pending |
 | **OS**                   | Any  |    Any     |   Linux   |   Linux   |   Linux   |  Linux |      Linux       | Linux | Linux | macOS | Windows |
 
-¹ `appcontainer` is Windows-only: the Docker and Kubernetes rows do not apply. ² `ignore=` covers only paths present at launch, and their names may remain listable. ³ AppContainer denies outbound network access by default. An `ALLOW` `net=` rule grants a broad public-Internet or private-network capability; AppContainer itself does not filter host, port, protocol, or loopback. The Python guard checks the first three only while enabled, so native code can bypass those checks. Loopback is blocked by AppContainer even when a rule allows it. ⁴ `smolvm` filters TCP by address, never by port: a TCP rule with a port opens every port of its address, and a port on any address stays closed. A UDP rule keeps its port. ⁵ `smolvm` needs `/dev/kvm` and a non-root user in its group (`--user`, `--group-add`); Docker is measured, Podman and Kubernetes are not.
+¹ `appcontainer` is Windows-only: the Docker and Kubernetes rows do not apply. ² `ignore=` covers only paths present at launch, and their names may remain listable. ³ AppContainer denies outbound network access by default. An `ALLOW` `net=` rule grants a broad public-Internet or private-network capability; AppContainer itself does not filter host, port, protocol, or loopback. The Python guard checks the first three only while enabled, so native code can bypass those checks. Loopback is blocked by AppContainer even when a rule allows it. ⁴ `smolvm` filters TCP by address, never by port: a TCP rule with a port opens every port of its address, and a port on any address stays closed. A UDP rule keeps its port. ⁵ `smolvm` needs no privilege and no capability, only `/dev/kvm` and a non-root user in its group, so the privileged rows add nothing and the `SYS_ADMIN` and `NET_ADMIN` rows are not needed. Docker: `--device /dev/kvm --group-add <gid> --user`. Rootless Podman: the same with `--userns=keep-id`, which is what leaves the device usable to the user. Kubernetes: a pod with no `securityContext` that asks a device plugin for the device (`resources.limits`), or a privileged pod that mounts `/dev/kvm`; the project's tests use [a plugin manifest](../tests/containers_tests/kube-kvm-device-plugin.yaml) for the first.
 
 QEMU and QEMU microvm pass the `readonly=on` export option for `expose-ro` mounts; end-to-end native guest write regressions cover both. Microvm fails closed when the eight virtio-mmio transports are exhausted. Landlock denies TCP bind/connect by default on ABI v4+, but cannot filter UDP and is unavailable below ABI v4. See [QEMU security limitations](qemu.md#security-limitations), [QEMU microvm limits](qemu-microvm.md#limits), and [Landlock limits](landlock.md#limits).
 
@@ -247,6 +247,13 @@ A container adds a second boundary around the provider and takes nothing away fr
   - **Container tests**: a Docker or Podman run may take 120s, or 900s for a `qemu` or `qemu-microvm` row that is
     given no `/dev/kvm` (the same 900s as the Kubernetes exec, `K8S_QEMU_EXEC_TIMEOUT`). `CONTAINER_RUN_TIMEOUT`
     overrides both. These are the test suite's limits, not the product's.
+- `smolvm` needs no privilege in a container, only `/dev/kvm` and a non-root user of its group: a root caller is
+  lowered by smolvm and its VMM then loses the device, even with `--privileged`. Docker: `--device /dev/kvm
+  --group-add <gid> --user <uid>`. Rootless Podman maps the groups of the host to `nobody`, so it also needs
+  `--userns=keep-id`. A Kubernetes pod gets the device from a device plugin (`resources.limits`), with no
+  `securityContext`; a hostPath mount of `/dev/kvm` works in a privileged pod. The 9p mount of minikube cannot be shared
+  with a guest (its server fails on the directory reads), so the project's pod tests copy what they need first. See
+  [smolvm.md](smolvm.md).
 - `bwrap` and `unshare` create namespaces of their own, which the default container confinement refuses:
   lower it as each provider page describes, or use `--privileged`.
 - `gvisor` runs in Docker, Podman and Kubernetes. It adapts to where it runs by choosing how `runsc` hooks the guest's

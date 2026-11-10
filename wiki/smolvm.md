@@ -132,8 +132,19 @@ The container must run as a user that can open `/dev/kvm`: smolvm lowers the pri
 then loses the device (`KvmOpen(Error(13))`, even with `--privileged`), so `--user` and `--group-add` are required. The
 guest archive is world-readable and `HOME=/tmp` for the same reason: a container user has no other place to write.
 Measured: guest kernel 6.18.60 against the host's 7.0, `expose-ro`, `expose-rw` (the write reaches the host), `ignore=`
-and the address filter all hold. The container suite (`make container-tests`) runs the four `smolvm` rows under Docker as
-the user of the caller with `/dev/kvm`; Podman and Kubernetes are not measured, and their rows are skipped.
+and the address filter all hold. The container suite (`make container-tests`) runs the four `smolvm` rows on each of Docker, Podman and Kubernetes,
+privileged or not, and none of them needs a privilege:
+
+| Engine | What the container gets |
+|---|---|
+| Docker | `--device /dev/kvm --group-add <gid of /dev/kvm> --user <uid>:<gid>` |
+| Podman, rootless | the same, plus `--userns=keep-id`: otherwise the groups of the host are mapped to `nobody` and `/dev/kvm` stays unusable, even with `--privileged` |
+| Kubernetes | a pod with no `securityContext` that asks a device plugin for the device (`resources.limits`); a privileged pod mounts `/dev/kvm` instead |
+
+Two traps found by the suite. In a pod, `pip` run as root leaves a root-owned `/tmp/.cache` under the `HOME` of the image,
+where smolvm keeps its state: the sandbox user needs a `HOME` of its own. And the 9p mount of minikube cannot be shared
+with a guest, as its server fails on the directory reads of virtio-fs: the pod tests copy what they need to the
+filesystem of the pod first.
 
 Tests: `pytest tests/integration_tests/remote/test_smolvm.py`, the `smolvm` cases of `test_os_netfilter.py` (the guest
 reaches the host on its address, never on loopback) and the `smolvm` row of
