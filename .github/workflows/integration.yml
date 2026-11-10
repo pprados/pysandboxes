@@ -23,18 +23,11 @@ on:
         description: Leave the qemu-tcg rows out and require /dev/kvm
         type: boolean
         default: false
-      selection:
-        description: pytest selection, for example `-k smolvm`; empty runs the whole suite
-        type: string
-        default: ""
   workflow_call:
     inputs:
       exclude-tcg:
         type: boolean
         default: false
-      selection:
-        type: string
-        default: ""
 
 # One run per branch at a time: a second dispatch waits for the running one instead
 # of booting the same VMs twice, and a third replaces the waiting one. A run is
@@ -137,22 +130,13 @@ jobs:
     - name: Install dependencies
       run: uv sync --group test
 
-    # Without the binary and the guest archive the smolvm rows skip themselves, which PYSANDBOXES_FAIL_ON_SKIP turns
-    # into failures. The release is the one Dockerfile-smolvm pins, checked against the same SHA-256; the archive is
-    # built for the Python of the row, where tests/integration_tests/_env.py looks for it. The runner user is not
-    # root, so smolvm keeps /dev/kvm, opened by the udev rule above.
-    - name: Install smolvm and build its guest archive
-      run: .github/scripts/install-smolvm.sh
-
     # The first qemu row would otherwise download the 665 MiB guest image inside its
     # own daemon start timeout, and fail for a slow network rather than for a bug.
-    # Dockerfile-qemu fetches it at build time for the same reason. A narrowed selection skips both qemu steps.
+    # Dockerfile-qemu fetches it at build time for the same reason.
     - name: Fetch the QEMU guest image
-      if: ${{ inputs.selection == '' }}
       run: uv run python -m pysandboxes.remote.qemu_fetch_image
 
     - name: Prepare the microvm direct-boot artifacts
-      if: ${{ inputs.selection == '' }}
       run: >-
         uv run python -c 'from pysandboxes.remote.qemu_image import get_default_image_path;
         from pysandboxes.remote.qemu_microvm_boot import ensure_microvm_boot_artifacts;
@@ -163,9 +147,10 @@ jobs:
         PYSANDBOXES_FAIL_ON_SKIP: "1"
         PYSANDBOXES_QEMU_TCG: "1"
         PYSANDBOXES_FIREJAIL_TEST_BRIDGE: br-pysb-test
-        PYTEST_ADDOPTS: --durations=20 ${{ inputs.exclude-tcg && '-m "not slow"' || '' }}
-        SELECTION: ${{ inputs.selection }}
-      run: make integration-tests ${SELECTION:+INTEGRATION_TESTS="tests/integration_tests $SELECTION"}
+        # smolvm is left out: on a hosted runner every virtio-fs share (-v) of a guest fails with
+        # "restore boot volume mounts: Not supported (os error 95)". It is run locally before a release.
+        PYTEST_ADDOPTS: --durations=20 -k "not smolvm" ${{ inputs.exclude-tcg && '-m "not slow"' || '' }}
+      run: make integration-tests
 
     - name: Remove Firejail test bridge
       if: always()

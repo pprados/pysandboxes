@@ -50,7 +50,11 @@ without one) bumped by patch or minor, date the `[0.0.0]` entry of `CHANGELOG.md
 `make publish-final VERSION=X.Y.Z` does the same with the version given, which must be greater than the last final
 tag: it sets the first number of a series, such as `0.5.0`. The tests run on GitHub, in `release.yml`, which reuses a
 green nightly of the same commit. `make release` (`validate` and `all-tests`) and `make sample-tests-matrix` remain
-available to run the same checks locally, on demand. The tag holds no open entry; the first merge into `develop`
+available to run the same checks locally, on demand. The `smolvm` provider is the exception to GitHub: a hosted runner
+refuses every virtio-fs share of a guest (`restore boot volume mounts: Not supported`), so `integration.yml` deselects it.
+Before a minor or final release, run it locally with `make build-smolvm-guest`, then
+`make integration-tests INTEGRATION_TESTS="tests/integration_tests -k smolvm"` and `OS_SANDBOX=smolvm make sample-tests`
+(with `PYSANDBOXES_SMOLVM_IMAGE` set to the archive). The tag holds no open entry; the first merge into `develop`
 after the release opens a new `[0.0.0]` entry.
 
 The first final version publishes the `[0.0.0]` entry as written. From the next one on, `scripts/changelog-draft.sh`
@@ -87,7 +91,7 @@ yanking only hides it.
 
 The images are `python-sb`, `python-sb-landlock`, `python-sb-unshare`, `python-sb-bwrap`, `python-sb-qemu`, `python-sb-qemu-microvm`, `python-sb-gvisor` and `python-sb-smolvm`,
 `linux/amd64`. The smoke test checks that each provider image runs every tool its provider invokes, and starts the
-`smolvm` guest without privilege when the runner has `/dev/kvm`.
+`smolvm` guest without privilege when the runner has `/dev/kvm`; a failure there only warns.
 `.github/scripts/image-tags.sh` lists their tags, in the manner of the official `python` images, the pysandboxes
 version prefixed with `sb`: `<patch>-sb<version>` and `<python>-sb<version>` for every release, `sb<version>` for
 Python 3.14, plus `<patch>`, `<python>` and, for Python 3.14, `3` and `latest` for a final release only (see
