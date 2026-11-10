@@ -23,8 +23,9 @@ Start here; the matrix below gives the detail behind each line.
 | Strongest separation, in a VM (more than 20 s to start) | [`qemu`](qemu.md) |
 | Smaller QEMU machine, x86_64 Linux, with at most eight virtio-mmio transports | [`qemu-microvm`](qemu-microvm.md) |
 | Compiled code or kernel exploits, user-space kernel, starts in about a second | [`gvisor`](gvisor.md) |
+| Compiled code or kernel exploits, with its own guest kernel in a micro-VM (KVM, about a second), TCP filtered by address only, no IPv6, Linux only | [`smolvm`](smolvm.md) |
 | Resource limits and seccomp | [`firejail`](firejail.md) |
-| Inside Docker, Podman or Kubernetes | [`landlock`](landlock.md), [`qemu`](qemu.md) or [`qemu-microvm`](qemu-microvm.md) unprivileged; [`unshare`](unshare.md) or [`bwrap`](bwrap.md) with `--privileged`; [`gvisor`](gvisor.md) with `--privileged` or its lowered confinement (see below) |
+| Inside Docker, Podman or Kubernetes | [`landlock`](landlock.md), [`qemu`](qemu.md) or [`qemu-microvm`](qemu-microvm.md) unprivileged; [`unshare`](unshare.md) or [`bwrap`](bwrap.md) with `--privileged`; [`smolvm`](smolvm.md) with Docker only, as a user of the `kvm` group (`--device /dev/kvm --group-add`, `--user`), Podman and Kubernetes not measured; [`gvisor`](gvisor.md) with `--privileged` or its lowered confinement (see below) |
 | Files and ports on macOS (Seatbelt, no host filtering) | [`sandbox-exec`](sandbox-exec.md) |
 | Files and network on Windows, without administrator rights (AppContainer token, no host or port filtering) | [`appcontainer`](appcontainer.md) |
 | Process separation only, no OS boundary (also on macOS, and the fallback on Windows) | [`subprocess`](subprocess.md) |
