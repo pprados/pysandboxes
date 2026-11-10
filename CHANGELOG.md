@@ -21,6 +21,12 @@
 `unshare` provider, with `--privileged` for Docker.
 
 
+## [0.0.0] - 202X-XX-XX
+
+### Fixed
+
+- The `python-sb-qemu-microvm` image now starts its default profile, which no longer exceeds the microvm host-share capacity.
+
 ## [0.11.0] - 2026-11-10
 
 ### Added
