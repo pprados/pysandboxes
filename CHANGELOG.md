@@ -21,7 +21,7 @@
 `unshare` provider, with `--privileged` for Docker.
 
 
-## [0.11.0] - 2026-11-09
+## [0.0.0] - 202X-XX-XX
 
 ### Added
 
@@ -36,6 +36,7 @@
 - Paths reached through a symbolic link loop are now handled without granting any extra access.
 - Links the system cannot resolve keep their absolute path when access rules are checked.
 - QEMU guests now expose a CPU model recent enough for NumPy to load.
+- With `remote-endpoint=auto`, the `qemu` and `qemu-microvm` providers now fall back to a local TCP port when the installed QEMU, such as 8.2, refuses a Unix socket forward, instead of leaving the guest unreachable; `remote-endpoint=unix` reports the cause.
 
 ### Security
 

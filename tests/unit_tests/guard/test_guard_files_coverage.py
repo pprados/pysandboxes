@@ -143,7 +143,7 @@ def test_a_link_the_system_cannot_resolve_keeps_its_absolute_path(monkeypatch: p
 
     monkeypatch.setattr(guard_files, "_os_path_realpath", loop)
 
-    assert guard_files._safe_realpath("/etc/../etc/rmt") == "/etc/rmt"
+    assert guard_files._safe_realpath("/etc/../etc/rmt") == os.path.abspath("/etc/rmt")
     assert guard_files._canonicalizing.get() is False
 
 

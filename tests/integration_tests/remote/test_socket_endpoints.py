@@ -15,6 +15,7 @@ import pytest  # type: ignore[import-untyped]
 
 from pysandboxes import sandboxes
 from pysandboxes._os_sandbox import unsupported_platform_reason
+from pysandboxes.e import SandBoxError
 from pysandboxes.remote import client_subprocess_sse_daemon as csd
 from tests.integration_tests._env import provider_skip_reason
 from tests.unit_tests._unix_sockets import requires_unix_sockets
@@ -31,6 +32,20 @@ UNIX_PROVIDERS = [
     for row in ("subprocess", "landlock", "bwrap", "firejail", "unshare", "qemu", "sandbox-exec")
     if not unsupported_platform_reason(row)
 ]
+
+
+# QEMU 8.2 refuses a hostfwd=unix: rule: that binary gets the TCP fallback test below instead of a Unix socket row.
+def _qemu_refuses_unix_forwarding() -> bool:
+    if "qemu" not in UNIX_PROVIDERS or provider_skip_reason("qemu") is not None:
+        return False
+    from pysandboxes.remote.qemu_sse_daemon import _qemu_accepts_unix_hostfwd, _qemu_binary
+
+    return not _qemu_accepts_unix_hostfwd(_qemu_binary())
+
+
+QEMU_TCP_ONLY = _qemu_refuses_unix_forwarding()
+if QEMU_TCP_ONLY:
+    UNIX_PROVIDERS.remove("qemu")
 NO_NETWORK_PROVIDERS = [row for row in UNIX_PROVIDERS if row != "qemu"]
 
 
@@ -80,6 +95,30 @@ def test_a_profile_without_the_key_uses_a_unix_socket(
         assert sync_function("a", b="2") == "a 2"
 
     assert len(set(bound_paths)) == 1
+
+
+if QEMU_TCP_ONLY:
+
+    @requires_unix_sockets
+    def test_auto_falls_back_to_tcp_on_a_qemu_without_unix_forwarding(
+        bound_paths: list[str], monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("OS_SANDBOX", "qemu")
+
+        with sandboxes(sandboxes_config=plain_profile):
+            assert sync_function("a", b="3") == "a 3"
+
+        assert bound_paths == []
+
+    @requires_unix_sockets
+    def test_a_forced_unix_socket_is_refused_on_a_qemu_without_unix_forwarding(
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        monkeypatch.setenv("OS_SANDBOX", "qemu")
+
+        with pytest.raises(SandBoxError, match="remote-endpoint=unix is impossible"):
+            with sandboxes(sandboxes_config=config_path):
+                pass
 
 
 @requires_unix_sockets

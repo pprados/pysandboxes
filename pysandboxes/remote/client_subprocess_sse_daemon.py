@@ -17,9 +17,9 @@ import errno
 import gc
 import logging
 import os
-import shutil
 import pickle
 import random
+import shutil
 import socket
 import sys
 import tempfile
@@ -352,6 +352,10 @@ class BaseSubProcessDaemon(BaseSSESandbox):
     supports_unix_endpoint: bool = False
     # False when the provider's own process creates the socket (QEMU ``hostfwd=unix:``) and the guest stays on TCP.
     endpoint_handed_down: bool = True
+
+    def unix_endpoint_blocker(self) -> str | None:
+        """Why this provider's binary cannot serve a Unix endpoint here, or ``None`` when it can."""
+        return None
 
     async def _on_process_started(self) -> None:
         """Hook called after the subprocess is started but before the ping loop."""
@@ -860,6 +864,8 @@ class BaseSubProcessDaemon(BaseSSESandbox):
         elif mode == "auto" and (all_rules.port != -1 or sys.platform not in ("linux", "darwin")):
             reason = "a fixed port or a platform without proof asks for TCP"
         else:
+            reason = self.unix_endpoint_blocker()
+        if reason is None:
             directory = tempfile.mkdtemp(prefix="pysb_", dir="/tmp" if os.path.isdir("/tmp") else None)
             endpoint = Endpoint(UNIX, path=os.path.join(directory, "s"))
             try:

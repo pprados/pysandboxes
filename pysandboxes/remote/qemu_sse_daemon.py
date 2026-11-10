@@ -9,6 +9,7 @@ which reads the config as a regular file on its own 9p mount.
 """
 
 import asyncio
+import functools
 import gc
 import logging
 import os
@@ -996,6 +997,19 @@ def _qemu_binary() -> str:
     return name  # Let subprocess fail with a clear error if not in PATH
 
 
+@functools.lru_cache(maxsize=None)
+def _qemu_accepts_unix_hostfwd(binary: str) -> bool:
+    """Tell whether ``binary`` parses a ``hostfwd=unix:`` rule: QEMU 8.2 refuses it, which TCP then has to cover."""
+    with tempfile.TemporaryDirectory(prefix="pysb_probe_", dir="/tmp" if os.path.isdir("/tmp") else None) as directory:
+        command = [binary, "-machine", "none", "-nodefaults", "-display", "none", "-monitor", "stdio"]
+        command += ["-netdev", f"user,id=probe,hostfwd=unix:{directory}/s-:1"]
+        try:
+            probe = subprocess.run(command, input=b"quit\n", capture_output=True, timeout=30, check=False)
+        except (OSError, subprocess.TimeoutExpired):
+            return False
+    return probe.returncode == 0
+
+
 def _microvm_readonly_tags(all_rules: AllRules, mounts: list[tuple[str, Path, str]]) -> set[str]:
     exposes = [rule for rule in all_rules.file_rules if isinstance(rule, FSExposeRule)]
     readonly = {
@@ -1162,6 +1176,12 @@ class QemuSSEDaemon(VMSSEDaemon):
     @override
     def unavailable_reason(cls) -> str | None:
         return None if which_command(_qemu_binary()) else "QEMU not installed"
+
+    @override
+    def unix_endpoint_blocker(self) -> str | None:
+        if _qemu_accepts_unix_hostfwd(_qemu_binary()):
+            return None
+        return "this QEMU does not accept a hostfwd=unix: rule"
 
     def guest_run_dir_mount(self) -> str:
         return GUEST_RUN_MOUNT
