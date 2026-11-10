@@ -1,6 +1,6 @@
 # Copyright (c) 2026, Philippe PRADOS
 # License: Apache V2
-"""smolvm provider: the sandboxed code runs in a libkrun microVM, with its own kernel, started by ``smolvm``.
+"""smolvm provider: the sandboxed code runs in a microVM, with its own kernel, started by ``smolvm``.
 
 The guest is an OCI image holding Python and pysandboxes. The package of the host is shared read-only and wins over
 the image's, unless it sits where smolvm refuses to share (``/usr``, an installed package): the guest then runs the
@@ -41,7 +41,7 @@ _PACKAGE_DIR = Path(__file__).resolve().parent.parent
 _GUEST_SOCKET = "/tmp/pysb.sock"
 _GUEST_PYTHON = "/usr/local/bin/python"
 _HOST_PATH = "/usr/local/bin:/usr/bin:/bin"
-# libkrun gives a micro-VM a handful of virtio-fs devices: 8 without a network, fewer with one.
+# The VMM of smolvm gives a micro-VM a handful of virtio-fs devices: 8 without a network, fewer with one.
 _MAX_SHARES = 6
 # Hands the guest its config, then the standard input of the caller, and dies with the launcher it was started by.
 _RELAY = """\

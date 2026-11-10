@@ -1,7 +1,6 @@
 # smolvm provider (`os-sandbox=smolvm`)
 
-The sandboxed code runs in a micro-VM started by [smolvm](https://github.com/smol-machines/smolvm): libkrun as the
-VMM, its own guest kernel, an OCI image as the root. The VM boundary is the isolation; nothing of the host is visible
+The sandboxed code runs in a micro-VM started by [smolvm](https://github.com/smol-machines/smolvm): its own guest kernel, an OCI image as the root. The VM boundary is the isolation; nothing of the host is visible
 unless a rule exposes it.
 
 ## How it works
@@ -12,11 +11,10 @@ unless a rule exposes it.
   `<version>` is the Python of the host (`PYTHON_VERSION`): the guard code runs on the interpreter that wrote the
   config. The init script checks it first and stops with exit 72 on another version, naming the version to build. The
   package itself is shared read-only from the host, so what runs is the code of the host.
-- **Files**: libkrun gives a micro-VM only a handful of virtio-fs devices, so there is not one mount per rule. The
+- **Files**: the VMM gives a micro-VM only a handful of virtio-fs devices, so there is not one mount per rule. The
   guest receives one read-only share per top directory of the paths the rules expose, and an init script that binds
   each path where the rule puts it, masks what `ignore=` names, then detaches every share: only the binds remain, and
-  a share still mounted stops the guest. A writable directory keeps a share of its own. Same strategy as
-  [libkrun](libkrun.md).
+  a share still mounted stops the guest. A writable directory keeps a share of its own.
 - **Privileges**: the command runs as the user of the host, with an empty capability set and `no_new_privs`
   (`setpriv`): it cannot mount, remount or reach a share.
 - **Config and standard input**: both travel on the standard input of the guest, see
@@ -100,7 +98,7 @@ one of them is reported and not exposed.
 The package of pysandboxes is shared from the host when it can be (a checkout, which then wins over the image's). An
 installed package sits under `/usr`, which smolvm refuses to share: the guest then runs the copy in its image, which
 `make build-smolvm-guest` installs from the same wheel. Rebuild the archive when pysandboxes changes. A profile that needs more than 6 shares (top directories of the read-only paths, plus
-one per writable directory) is refused with a message that says so, rather than failing inside libkrun.
+one per writable directory) is refused with a message that says so, rather than failing inside the VMM.
 
 ## Limits
 

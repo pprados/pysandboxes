@@ -2,10 +2,11 @@
 # License: Apache V2
 """What the smolvm guest sees of the host: a few shares, from which its init script binds exactly what the rules expose.
 
-libkrun gives a micro-VM a small number of virtio-fs devices, one per smolvm mount, so one mount per rule does not
-scale. The guest instead receives one read-only share per top directory of the paths the rules expose, binds each of
-those paths where the rules put it, masks what ``ignore=`` names, then detaches every share: only the binds stay. A
-writable directory keeps a share of its own. The command then runs as the host user, with no capability.
+The VMM of smolvm gives a micro-VM a small number of virtio-fs devices, one per smolvm mount, so one mount per rule
+does not scale. The guest instead receives one read-only share per top directory of the paths the rules expose,
+binds each of those paths where the rules put it, masks what ``ignore=`` names, then detaches every share: only the
+binds stay. A writable directory keeps a share of its own. The command then runs as the host user, with no
+capability.
 """
 
 import fnmatch
