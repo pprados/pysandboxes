@@ -36,3 +36,13 @@ if ! guest_kernel=$(RUST_LOG=debug smolvm machine run --image "$guest" -- uname 
     exit 1
 fi
 echo "guest: $guest_kernel"
+
+# What python-sb adds to that command, one option at a time: the first failure of a test run names the option.
+probe=$(mktemp -d)
+for option in "-v $probe:/mnt/probe:ro" "-v $probe:/mnt/probe" "-v $PWD:/mnt/probe:ro" "--expose-socket /tmp/probe.sock:$probe/probe.sock"; do
+    if smolvm machine run --image "$guest" $option -- true 2>"$log"; then
+        echo "smolvm option ok: $option" >&2
+    else
+        echo "smolvm option FAILS: $option: $(tail -n 1 "$log")" >&2
+    fi
+done
