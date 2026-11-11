@@ -9,6 +9,7 @@ the expiry needs the TTL to pass.
 """
 
 import json
+import os
 import shutil
 import subprocess
 import sys
@@ -22,10 +23,12 @@ from pysandboxes._os_sandbox import unsupported_platform_reason
 from ._env import provider_skip_reason
 
 ROOT_DIR = Path(__file__).resolve().parent.parent.parent
-PROVIDERS = ("unshare", "bwrap", "gvisor", "qemu", "qemu-microvm")
+PROVIDERS = ("unshare", "bwrap", "gvisor", "qemu", "qemu-microvm", "firejail")
 
 
 def _skip_reason(provider: str) -> str | None:
+    if provider == "firejail" and os.geteuid() != 0:
+        return "net-resolve=runtime under firejail needs root: only root may join the network namespace of a jail"
     return (
         unsupported_platform_reason(provider)
         or provider_skip_reason(provider)
