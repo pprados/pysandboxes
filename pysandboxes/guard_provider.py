@@ -49,7 +49,15 @@ def parse_remote_endpoint(rules: ConfigLines, errors: List[ErrorMsg]) -> Tuple[s
     return endpoint, others
 
 
-NET_RESOLVE_RUNTIME_PROVIDERS = ("unshare", "bwrap", "gvisor", "firejail", "qemu", "qemu-microvm")
+NET_RESOLVE_RUNTIME_PROVIDERS = (
+    "unshare",
+    "bwrap",
+    "gvisor",
+    "firejail",
+    "qemu",
+    "qemu-microvm",
+    "subprocess",
+)
 
 
 def parse_net_resolve(rules: ConfigLines, errors: List[ErrorMsg]) -> Tuple[str, ConfigLines]:
