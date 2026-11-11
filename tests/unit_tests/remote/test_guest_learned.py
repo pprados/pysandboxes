@@ -82,7 +82,12 @@ def test_a_malformed_request_runs_nothing(raw: bytes) -> None:
 
 def test_a_request_sent_over_a_socket_reaches_the_server_and_its_answer_comes_back() -> None:
     ran: list[list[str]] = []
-    server = gl.serve(0, TOKEN, "/ipt", lambda argv: ran.append(argv) or 0, host="127.0.0.1")
+
+    def run(argv: list[str]) -> int:
+        ran.append(argv)
+        return 0
+
+    server = gl.serve(0, TOKEN, "/ipt", run, host="127.0.0.1")
     port = server.getsockname()[1]
     try:
         assert gl.send(port, TOKEN, ADD) == 0
@@ -103,7 +108,12 @@ def test_a_guest_that_cannot_be_reached_answers_failure_not_an_exception() -> No
 
 def test_the_guest_enforcer_opens_each_port_of_a_name_rule_through_the_channel(monkeypatch: pytest.MonkeyPatch) -> None:
     sent: list[list[str]] = []
-    monkeypatch.setattr(gl, "send", lambda port, token, argv: sent.append(argv) or 0)
+
+    def send(port: int, token: str, argv: list[str]) -> int:
+        sent.append(argv)
+        return 0
+
+    monkeypatch.setattr(gl, "send", send)
 
     NetnsIptablesEnforcer.via_guest(4242, TOKEN).allow(
         __import__("ipaddress").ip_address("10.0.2.2"), NameRule(True, "a.test", ("tcp",), ((443, 443),)), 60

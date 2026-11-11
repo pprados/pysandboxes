@@ -31,6 +31,10 @@ GATEWAY = "10.0.2.2"
 ALLOWED_NAME = "app.test.example"
 DENIED_NAME = "other.test.example"
 TTL = 3
+MICROVM_LINES = (
+    "qemu.microvm_optional_paths=/etc/ssl,/etc/ca-certificates,/usr/share/ca-certificates\n"
+    "qemu.microvm_empty_paths=/etc/pki\n"
+)
 
 
 class FakeAuthority:
@@ -189,9 +193,10 @@ def main() -> int:
         "net-resolve=runtime\n"
         "python-import=*\n"
         "expose-ro=.\n"
-        f"{'' if provider == 'qemu' else 'expose-ro=/etc' + chr(10)}"
+        f"{'' if provider.startswith('qemu') else 'expose-ro=/etc' + chr(10)}"
         f"expose-ro={sys.base_prefix}/lib\n"
         f"net=ALLOW|TCP|{ALLOWED_NAME}|{allowed.port}|OUT\n"
+        f"{MICROVM_LINES if provider == 'qemu-microvm' else ''}"
     )
     try:
         if layers == "python-sb":

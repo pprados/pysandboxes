@@ -1654,6 +1654,8 @@ class QemuMicrovmSSEDaemon(QemuSSEDaemon):
         memory = normalize_qemu_m_memory_arg(all_rules.os_sandbox_params.get("memory", "2048").strip())
         image_format = "qcow2" if image.suffix == ".qcow2" or "cloudimg" in image.name else "raw"
         forward = f"unix:{self.endpoint.path}-:{port}" if self.endpoint is not None else f"tcp:127.0.0.1:{port}-:{port}"
+        if self._resolver_port is not None:
+            forward += f",hostfwd=tcp:127.0.0.1:{self._control_port}-:{self._control_port}"
         cmd: Args = [
             binary,
             *accel_args,

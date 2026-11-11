@@ -22,6 +22,7 @@ def test_microvm_command_and_capacity(monkeypatch: pytest.MonkeyPatch) -> None:
     assets = daemon._QemuLaunchAssets(Path("root.raw"), Path("seed.iso"), [("share", Path("/tmp"), "/share")])
     instance = object.__new__(daemon.QemuMicrovmSSEDaemon)
     instance.endpoint = None
+    instance._resolver_port = None
     cmd = instance._machine_command(rules, assets, 1234)
     probe.assert_called_once_with(cmd[0], ["-enable-kvm"])
     assert "user,id=net0,hostfwd=tcp:127.0.0.1:1234-:1234" in cmd
@@ -62,6 +63,7 @@ def test_microvm_preserves_interpreter_symlinks_without_changing_writable_shares
 
     instance = object.__new__(daemon.QemuMicrovmSSEDaemon)
     instance.endpoint = None
+    instance._resolver_port = None
     cmd = instance._machine_command(rules, assets, 1234)
 
     share = cmd[cmd.index("-fsdev") + 1]
@@ -78,10 +80,26 @@ def test_microvm_forwards_the_channel_to_the_unix_socket_the_host_hands_down(mon
     assets = daemon._QemuLaunchAssets(Path("root.raw"), Path("seed.iso"), [])
     instance = object.__new__(daemon.QemuMicrovmSSEDaemon)
     instance.endpoint = Endpoint(UNIX, path="/tmp/pysb_x/s")
+    instance._resolver_port = None
 
     cmd = instance._machine_command(EmptyRules, assets, 1234)
 
     assert "user,id=net0,hostfwd=unix:/tmp/pysb_x/s-:1234" in cmd
+
+
+def test_microvm_forwards_the_control_port_of_the_guest_with_runtime_dns(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(daemon, "microvm_mmio_capacity", lambda *_: 16)
+    monkeypatch.setattr(daemon, "qemu_accel_args", lambda *_: [])
+    monkeypatch.setattr(daemon, "ensure_microvm_boot_artifacts", lambda *_: (Path("kernel"), Path("initrd")))
+    assets = daemon._QemuLaunchAssets(Path("root.raw"), Path("seed.iso"), [])
+    instance = object.__new__(daemon.QemuMicrovmSSEDaemon)
+    instance.endpoint = None
+    instance._resolver_port = 15353
+    instance._control_port = 40000
+
+    cmd = instance._machine_command(EmptyRules, assets, 1234)
+
+    assert "user,id=net0,hostfwd=tcp:127.0.0.1:1234-:1234,hostfwd=tcp:127.0.0.1:40000-:40000" in cmd
 
 
 def test_capacity_probe_uses_launch_acceleration(monkeypatch: pytest.MonkeyPatch) -> None:

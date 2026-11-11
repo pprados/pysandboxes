@@ -22,7 +22,7 @@ from pysandboxes._os_sandbox import unsupported_platform_reason
 from ._env import provider_skip_reason
 
 ROOT_DIR = Path(__file__).resolve().parent.parent.parent
-PROVIDERS = ("unshare", "bwrap", "gvisor", "qemu")
+PROVIDERS = ("unshare", "bwrap", "gvisor", "qemu", "qemu-microvm")
 
 
 def _skip_reason(provider: str) -> str | None:

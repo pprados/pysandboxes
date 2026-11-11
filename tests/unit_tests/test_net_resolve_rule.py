@@ -63,7 +63,7 @@ def test_pinned_is_accepted_by_every_provider() -> None:
     assert errors == []
 
 
-@pytest.mark.parametrize("provider", ["unshare", "bwrap", "gvisor", "firejail", "qemu"])
+@pytest.mark.parametrize("provider", ["unshare", "bwrap", "gvisor", "firejail", "qemu", "qemu-microvm"])
 def test_runtime_is_accepted_by_the_providers_with_an_enforcer(provider: str) -> None:
     errors: list = []
 
