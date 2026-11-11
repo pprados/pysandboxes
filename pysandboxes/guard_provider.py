@@ -1,6 +1,7 @@
 # Copyright (c) 2026, Carbon-It, Philippe Prados (pprados)
 # License: Apache V2
 import logging
+import os
 from collections import defaultdict
 from pathlib import Path
 from typing import Any, List, Tuple, cast
@@ -87,6 +88,15 @@ def check_net_resolve_provider(net_resolve: str, os_sandbox: str, config_path: P
             (
                 f"net-resolve=runtime is not supported by the {os_sandbox!r} provider "
                 f"(supported: {', '.join(NET_RESOLVE_RUNTIME_PROVIDERS)}). Use net-resolve=pinned.",
+                config_path,
+                0,
+            )
+        )
+    elif net_resolve == "runtime" and os_sandbox == "firejail" and os.geteuid() != 0:
+        errors.append(
+            (
+                "net-resolve=runtime under firejail needs root: only root may join the network namespace of a jail. "
+                "Use net-resolve=pinned.",
                 config_path,
                 0,
             )
