@@ -296,7 +296,7 @@ def parse_rules(
             if "," in value:
                 errors.append(
                     (
-                        f"{format_ruleref(rule)}: " f"In {rule.rule!r}, " f"expected a single path (no comma).",
+                        f"{format_ruleref(rule)}: In {rule.rule!r}, expected a single path (no comma).",
                         rule.path,
                         rule.ln,
                     )
@@ -305,7 +305,7 @@ def parse_rules(
             if not value:
                 errors.append(
                     (
-                        f"{format_ruleref(rule)}: " f"In {rule.rule!r}, path must be set.",
+                        f"{format_ruleref(rule)}: In {rule.rule!r}, path must be set.",
                         rule.path,
                         rule.ln,
                     )
@@ -317,7 +317,7 @@ def parse_rules(
             except (OSError, ValueError, RuntimeError):
                 errors.append(
                     (
-                        f"{format_ruleref(rule)}: " f"In {rule.rule!r}, path is invalid.",
+                        f"{format_ruleref(rule)}: In {rule.rule!r}, path is invalid.",
                         rule.path,
                         rule.ln,
                     )
@@ -328,7 +328,7 @@ def parse_rules(
                 rel = str(resolved.relative_to(cwd)) if resolved.is_relative_to(cwd) else str(resolved)
                 errors.append(
                     (
-                        f"{format_ruleref(rule)}: " f"In {rule.rule!r}, path {rel!r} must exist.",
+                        f"{format_ruleref(rule)}: In {rule.rule!r}, path {rel!r} must exist.",
                         rule.path,
                         rule.ln,
                     )
@@ -337,7 +337,7 @@ def parse_rules(
             if not resolved.is_dir() and not is_special_file(resolved):
                 errors.append(
                     (
-                        f"{format_ruleref(rule)}: " f"In {rule.rule!r}, path must be a directory.",
+                        f"{format_ruleref(rule)}: In {rule.rule!r}, path must be a directory.",
                         rule.path,
                         rule.ln,
                     )
@@ -616,7 +616,7 @@ def generate_rules(
             if not value:
                 value = str(path)
             if value:
-                result.add(f'{"expose-rw" if write else "expose-ro"}={value}')
+                result.add(f"{'expose-rw' if write else 'expose-ro'}={value}")
             if path != home:
                 allready_added.append(LearnFileRule(path, write))
     return sorted(list(result))
@@ -757,9 +757,7 @@ def _apply_dest_to_src_rules(
                         add_learning_rule(LearnFileRule(Path(str(path)), True))
                     else:
                         raise RulePermissionError(
-                            f"Cannot write to {rp!r}. "
-                            f"Rule {rule.config.rule!r} from "
-                            f"{format_ruleref(rule.config)}"
+                            f"Cannot write to {rp!r}. Rule {rule.config.rule!r} from {format_ruleref(rule.config)}"
                         )
                 return fake_path, None
         elif isinstance(rule, IgnoreRule):
@@ -807,7 +805,7 @@ def _raise_ignore(file: str | bytes | os.PathLike[str] | os.PathLike[bytes] | in
     assert rule is not None
 
     ex = RuleFileNotFoundError(
-        f"Access to {file!r} is ignored by " f"rule {rule.config.rule!r} from {format_ruleref(rule.config)}"
+        f"Access to {file!r} is ignored by rule {rule.config.rule!r} from {format_ruleref(rule.config)}"
     )
     ex.errno = ENOENT
     raise ex

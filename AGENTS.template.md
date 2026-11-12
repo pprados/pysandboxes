@@ -24,8 +24,8 @@ make gh-tests                # Run the github action locally, through `gh act`
 
 ### Code Quality
 ```bash
-make format                  # Format code with black
-make lint                    # Run all linters (mypy, pyright, black, ruff)
+make format                  # Format code with ruff
+make lint                    # Run all linters (mypy, pyright, ruff)
 make spell_check             # Check spell
 make coverage                # Unit and integration tests with a coverage report
 make mutation MODULE=pysandboxes/<module>.py  # Mutation testing of one module (cosmic-ray): a survivor is a missing test or an equivalent mutant
@@ -147,7 +147,7 @@ Security rules are defined in `.py-sandboxes` files using a whitelist-based syst
 - Public APIs must have docstrings
 - Functions must be focused and small
 - Follow existing patterns exactly
-- Line length: 120 chars maximum (`line-length` in pyproject.toml, for both ruff and black)
+- Line length: 120 chars maximum (`line-length` in pyproject.toml, for ruff)
 - Always uses 3.11 syntax (str | None in place of Optional[str])
 - avoid useless comments when generating code
 - For all new file, add the comment:

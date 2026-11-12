@@ -327,7 +327,7 @@ class BWrapSSEDaemon(BaseSubProcessDaemon):
         if "COMMIT" in netfilter:
             idx = netfilter.index("COMMIT")
             sse_allow = (
-                f"-A INPUT -p tcp -s {SLIRP_GW}/32 --dport {port} " "-m conntrack --ctstate NEW,ESTABLISHED -j ACCEPT"
+                f"-A INPUT -p tcp -s {SLIRP_GW}/32 --dport {port} -m conntrack --ctstate NEW,ESTABLISHED -j ACCEPT"
             )
             netfilter = list(netfilter[:idx]) + [sse_allow] + list(netfilter[idx:])
         return tuple(netfilter)

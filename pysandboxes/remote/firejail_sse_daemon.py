@@ -374,7 +374,7 @@ class FireJailSSEDaemon(BaseSubProcessDaemon):
             args.append("--quiet")
         else:
             logger.debug(
-                "Activate Firejail's output (to remove, " "change the level of the logger %s)",
+                "Activate Firejail's output (to remove, change the level of the logger %s)",
                 __name__,
             )
 
@@ -483,7 +483,7 @@ class FireJailSSEDaemon(BaseSubProcessDaemon):
             # would also cut the host from the daemon's SSE port. A missing line is refused.
             if restricted_network and not restricted_network_explicit_yes:
                 logger.error(
-                    "Set 'restricted-network no' in %s " "to use firejail with networks rules.",
+                    "Set 'restricted-network no' in %s to use firejail with networks rules.",
                     repr(str(firejail_config)),
                 )
                 raise SandBoxError(f"Set 'restricted-network no' in {str(firejail_config)!r} to use network rules.")

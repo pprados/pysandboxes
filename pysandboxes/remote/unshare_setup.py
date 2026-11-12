@@ -203,7 +203,7 @@ def main() -> None:
     logger.debug("load config ...")
     txt_config = Path(config_path).read_text()
     config = UnshareSetupConfig.from_json(txt_config)
-    logger.debug(f"\n{json.dumps(json.loads(txt_config),indent=2)}")
+    logger.debug(f"\n{json.dumps(json.loads(txt_config), indent=2)}")
 
     # --- A. Wait for network ---
     # Note: PID_FILE is written by the daemon (sse_unshare_daemon.py) with the

@@ -37,7 +37,7 @@ def _learn_the_happy_path(tmp_path: Path) -> Path:
     """Produce a profile the way a user does: learn a run that raises nothing."""
     learned = tmp_path / "learned.profile"
     bootstrap = tmp_path / "bootstrap.profile"
-    bootstrap.write_text("py-sandbox=true\n" "os-sandbox=subprocess\n" f"learn={learned}\n")
+    bootstrap.write_text(f"py-sandbox=true\nos-sandbox=subprocess\nlearn={learned}\n")
 
     with sandboxes(sandboxes_config=bootstrap):
         assert run_in_sandbox() == 42

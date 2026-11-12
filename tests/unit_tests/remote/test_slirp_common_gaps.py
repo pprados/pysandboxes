@@ -30,7 +30,6 @@ def _spec(*rules: SocketRule, **kwargs: bool) -> str:
 
 
 class TestExtractPortForwards:
-
     def test_an_allowed_incoming_rule_is_forwarded_sorted_by_kind_and_port(self) -> None:
         spec = _spec(
             _rule(Action.ALLOW, (Direction.IN,), (443, 80)),

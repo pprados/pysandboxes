@@ -175,7 +175,7 @@ example `https://github.com/pprados/pysandboxes/compare/develop...<branch>?templ
 - Type hints on all code, Python 3.11 syntax (`str | None`, not `Optional[str]`).
 - Docstrings on public APIs. Small, focused functions that follow the pattern of their neighbours (a new guard
   follows the `guard_*.py` pattern).
-- Lines of at most 120 characters, formatted by `black`.
+- Lines of at most 120 characters, formatted by `ruff format`.
 - Dependencies through `uv` only; refresh `uv.lock` (`make lock`) when `pyproject.toml` changes.
 
 ### Security model

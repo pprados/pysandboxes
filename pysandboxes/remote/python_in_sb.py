@@ -219,17 +219,15 @@ def _python_interactive(
     except ValueError:
         pass
     if all_rules.learn:
-        sb_mode = (
-            f"{BOLD}API calls are LEARNED and saved in " f"{str(conf_path)!r} at the " f"end of the session.{RESET}\n"
-        )
+        sb_mode = f"{BOLD}API calls are LEARNED and saved in {str(conf_path)!r} at the end of the session.{RESET}\n"
         exit_msg = f"Save rules to {str(all_rules.learning_path)!r}"
     elif all_rules.use_py_sandbox:
-        sb_mode = f"{BOLD}APIs are LIMITED according to the rules in " f"{str(conf_path)!r} "
+        sb_mode = f"{BOLD}APIs are LIMITED according to the rules in {str(conf_path)!r} "
         if all_rules.os_sandbox != "subprocess":
             sb_mode += f"and by the os-sandbox={all_rules.os_sandbox!r}"
         sb_mode += f"{RESET}\n"
     else:
-        sb_mode = f"*** APIs are LIMITED only by the os-sandbox " f"of type {all_rules.os_sandbox!r} ***\n"
+        sb_mode = f"*** APIs are LIMITED only by the os-sandbox of type {all_rules.os_sandbox!r} ***\n"
     banner = (
         f"{RED}SANDBOXES Python{RESET} {sys.version} on {sys.platform}\n"
         f"{sb_mode}"
@@ -383,7 +381,7 @@ def _python_script(all_rules: AllRules, script: Path, args: List[str]) -> int:
         script_body = script.read_text()
     except FileNotFoundError:
         print(
-            f"python: can't open file {str(script)!r}: " f"[Errno 2] No such file or directory",
+            f"python: can't open file {str(script)!r}: [Errno 2] No such file or directory",
             file=sys.stderr,
         )
         return 2

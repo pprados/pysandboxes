@@ -101,7 +101,7 @@ def test_system_exit_crosses_a_learned_profile(tmp_path: Path) -> None:
     """The error path must not import anything a profile learned on the happy path lacks."""
     learned = tmp_path / "learned.profile"
     bootstrap = tmp_path / "bootstrap.profile"
-    bootstrap.write_text("py-sandbox=true\n" "os-sandbox=subprocess\n" f"learn={learned}\n")
+    bootstrap.write_text(f"py-sandbox=true\nos-sandbox=subprocess\nlearn={learned}\n")
     with sandboxes(sandboxes_config=bootstrap):
         sandbox_pid()
     assert learned.exists()

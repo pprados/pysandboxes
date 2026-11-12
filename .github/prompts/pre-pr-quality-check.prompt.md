@@ -20,7 +20,7 @@ Run the same checks locally that CI runs before opening or updating a pull reque
 
 ### Step 1: Format and lint
 
-Format code and run lint (mypy, pyright, black, ruff). This matches the lint workflow.
+Format code and run lint (mypy, pyright, ruff). This matches the lint workflow.
 
 make format
 make lint

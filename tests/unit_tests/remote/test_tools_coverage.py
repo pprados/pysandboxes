@@ -286,7 +286,7 @@ class TestGetDefaultInterface:
 
     def test_default_route_found_in_proc(self) -> None:
         """A `00000000` destination row in /proc/net/route names the default interface."""
-        content = "Iface\tDestination\tGateway\n" "eth0\t00000000\t0101A8C0\n"
+        content = "Iface\tDestination\tGateway\neth0\t00000000\t0101A8C0\n"
         with patch("builtins.open", mock_open(read_data=content)):
             with patch("pysandboxes.remote.tools._get_default_interface_via_ip") as via_ip:
                 assert get_default_interface() == "eth0"
@@ -294,7 +294,7 @@ class TestGetDefaultInterface:
 
     def test_no_default_route_falls_back_to_ip_route(self) -> None:
         """No default row in /proc/net/route falls back to `ip route`."""
-        content = "Iface\tDestination\tGateway\n" "eth0\t0100A8C0\t0101A8C0\n"
+        content = "Iface\tDestination\tGateway\neth0\t0100A8C0\t0101A8C0\n"
         with patch("builtins.open", mock_open(read_data=content)):
             with patch("pysandboxes.remote.tools._get_default_interface_via_ip", return_value="wlan0") as via_ip:
                 assert get_default_interface() == "wlan0"

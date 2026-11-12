@@ -116,7 +116,6 @@ ACCESS_RW = (
 
 # Syscall numbers (Linux x86_64 and aarch64 common)
 try:
-
     libc = ctypes.CDLL(None, use_errno=True)
     syscall = libc.syscall
     syscall.restype = c_int

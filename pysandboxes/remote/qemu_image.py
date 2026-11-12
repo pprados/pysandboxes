@@ -212,7 +212,7 @@ def _validate_download_url(url: str) -> str:
     url_lower = url.lower().strip()
     if not (url_lower.startswith("http://") or url_lower.startswith("https://")):
         raise ValueError(
-            f"Unsafe URL scheme in image download URL. " f"Only http:// and https:// are allowed, got: {url[:50]}"
+            f"Unsafe URL scheme in image download URL. Only http:// and https:// are allowed, got: {url[:50]}"
         )
     return url
 

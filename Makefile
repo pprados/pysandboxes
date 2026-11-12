@@ -504,7 +504,7 @@ all-tests: unit-tests integration-tests container-tests sample-tests
 PYTHON_FILES=pysandboxes/ tests/
 lint_diff format_diff: PYTHON_FILES=$(shell git diff --name-only --diff-filter=d develop -- '*.py' '*.ipynb')
 
-# lint only checks: it must never rewrite the sources, otherwise `black --check`
+# lint only checks: it must never rewrite the sources, otherwise `ruff format --check`
 # would always pass. Run `make format` to fix what lint reports.
 # The *_diff variants get an empty file list when the branch has no Python
 # change, so the guard keeps the tools from running on the whole tree.
@@ -514,7 +514,7 @@ lint lint_diff:
 		set -e -x; \
 		unset VIRTUAL_ENV; uv run mypy $$FILES; \
 		uvx pyright $$FILES; \
-		uvx black --check $$FILES; \
+		uvx ruff format --check $$FILES; \
 		uvx ruff check $$FILES; \
 	fi
 
@@ -525,7 +525,7 @@ format format_diff:
 	@FILES="$(PYTHON_FILES)"; \
 	if [ -z "$$FILES" ]; then echo "format: no Python file to format."; else \
 		set -e -x; \
-		uvx black $$FILES; \
+		uvx ruff format $$FILES; \
 		uvx ruff check --select I --fix $$FILES; \
 	fi
 
@@ -957,7 +957,7 @@ uv.lock: pyproject.toml
 lock: uv.lock
 
 # format is not a prerequisite: it rewrites the sources, which would make the
-# `black --check` inside lint pass unconditionally.
+# `ruff format --check` inside lint pass unconditionally.
 ## Validate the code
 validate: uv.lock lint spell_check pip-audit-all pip-audit unit-tests quick-demo-gif
 

@@ -141,7 +141,7 @@ def parse_rules(
             if provider not in providers_factory:
                 errors.append(
                     (
-                        f"{format_ruleref(rule)}: " f"Invalid os-sandbox {provider!r}.",
+                        f"{format_ruleref(rule)}: Invalid os-sandbox {provider!r}.",
                         rule.path,
                         rule.ln,
                     )
@@ -159,7 +159,7 @@ def parse_rules(
             else:
                 errors.append(
                     (
-                        f"{format_ruleref(rule)}: " f"Invalid value {value!r} for py-sandbox. Use true or false.",
+                        f"{format_ruleref(rule)}: Invalid value {value!r} for py-sandbox. Use true or false.",
                         rule.path,
                         rule.ln,
                     )
@@ -174,8 +174,7 @@ def parse_rules(
             else:
                 errors.append(
                     (
-                        f"{format_ruleref(rule)}: "
-                        f"Invalid value {value!r} for remote-result-guard. Use true or false.",
+                        f"{format_ruleref(rule)}: Invalid value {value!r} for remote-result-guard. Use true or false.",
                         rule.path,
                         rule.ln,
                     )
@@ -227,9 +226,7 @@ def parse_rules(
             if value.lower() in ("true", "false", "0", "1"):
                 errors.append(
                     (
-                        f"{format_ruleref(rule)}: "
-                        f"Invalid value {value!r} for 'learn'. "
-                        f"Use the filename instead.",
+                        f"{format_ruleref(rule)}: Invalid value {value!r} for 'learn'. Use the filename instead.",
                         rule.path,
                         rule.ln,
                     )
@@ -246,9 +243,7 @@ def parse_rules(
                 if not learning_path.parent.exists():
                     errors.append(
                         (
-                            f"{format_ruleref(rule)}: "
-                            f"Invalid value {value!r} for 'learn'. "
-                            f"The parent path must exist.",
+                            f"{format_ruleref(rule)}: Invalid value {value!r} for 'learn'. The parent path must exist.",
                             rule.path,
                             rule.ln,
                         )
@@ -272,7 +267,7 @@ def parse_rules(
                 all_error_lines = [format_ruleref(rule) for _, rule in s]
                 errors.append(
                     (
-                        f"{format_error_list(all_error_lines)}: " f"Multiple {k} parameters.",
+                        f"{format_error_list(all_error_lines)}: Multiple {k} parameters.",
                         Path(""),
                         0,
                     )

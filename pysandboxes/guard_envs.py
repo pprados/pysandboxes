@@ -95,7 +95,7 @@ def parse_rules(
             if "=" not in rule.rule:
                 errors.append(
                     (
-                        f"{format_ruleref(orule)}: " f"Detect a missing '=' in rule: {orule.rule}.",
+                        f"{format_ruleref(orule)}: Detect a missing '=' in rule: {orule.rule}.",
                         rule.path,
                         rule.ln,
                     )

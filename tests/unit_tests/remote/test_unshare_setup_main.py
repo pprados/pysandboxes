@@ -373,7 +373,6 @@ class TestFirewall:
 
 
 class TestMounts:
-
     def test_the_current_directory_is_writable_and_user_mounts_follow_their_mode(
         self, harness: _Run, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
     ) -> None:

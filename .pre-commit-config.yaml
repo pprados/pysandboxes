@@ -8,13 +8,14 @@ repos:
         stages: [commit]
     -   id: trailing-whitespace
         stages: [commit]
--   repo: https://github.com/psf/black
-    rev: 22.10.0
-    hooks:
-    -   id: black
-        stages: [commit]
 -   repo: local
     hooks:
+    -   id: ruff-format
+        name: Format code with ruff
+        entry: uvx ruff format
+        language: system
+        types: [python]
+        stages: [commit]
     -   id: gh-test
         name: Run Github tests
         entry: make gh-test

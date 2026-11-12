@@ -528,14 +528,14 @@ def parse_rules(
             _add_error(
                 errors,
                 rule,
-                "expected the form 'ACTION:target', " f"with ACTION in {sorted(_ACTIONS)}.",
+                f"expected the form 'ACTION:target', with ACTION in {sorted(_ACTIONS)}.",
             )
             continue
         if action.strip() not in _ACTIONS:
             _add_error(
                 errors,
                 rule,
-                f"unknown action {action.strip()!r}, " f"expected one of {sorted(_ACTIONS)}.",
+                f"unknown action {action.strip()!r}, expected one of {sorted(_ACTIONS)}.",
             )
             continue
         allow = _ACTIONS[action.strip()]
@@ -563,7 +563,7 @@ def parse_rules(
                 _add_error(
                     errors,
                     rule,
-                    f"unknown category {target!r}, " f"expected one of {sorted(CATEGORIES)}.",
+                    f"unknown category {target!r}, expected one of {sorted(CATEGORIES)}.",
                 )
                 failed = True
                 break
@@ -571,7 +571,7 @@ def parse_rules(
                 _add_error(
                     errors,
                     rule,
-                    f"{target!r} is not a registered sensitive " "function.",
+                    f"{target!r} is not a registered sensitive function.",
                 )
                 failed = True
                 break
