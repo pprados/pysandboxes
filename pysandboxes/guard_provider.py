@@ -1,6 +1,7 @@
 # Copyright (c) 2026, Carbon-It, Philippe Prados (pprados)
 # License: Apache V2
 import logging
+import os
 from collections import defaultdict
 from pathlib import Path
 from typing import Any, List, Tuple, cast
@@ -102,6 +103,20 @@ def check_net_resolve_provider(net_resolve: str, os_sandbox: str, config_path: P
                 0,
             )
         )
+
+
+def effective_net_resolve(net_resolve: str, os_sandbox: str) -> str:
+    """The mode a provider can honour: ``firejail`` without root has a static firewall, so ``runtime`` is ``pinned``.
+
+    Only root can enter the network namespace of a jail to open an address while the program runs.
+    """
+    if net_resolve == "runtime" and os_sandbox == "firejail" and os.geteuid() != 0:
+        logger.warning(
+            "net-resolve=runtime under firejail needs root (only root may join the network namespace of a jail): "
+            "falling back to net-resolve=pinned, the names are resolved once, at start."
+        )
+        return "pinned"
+    return net_resolve
 
 
 def parse_rules(

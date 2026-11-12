@@ -9,7 +9,7 @@ import pytest  # type: ignore[import-untyped]
 
 from pysandboxes import guard_socket
 from pysandboxes.egress_filter import DEFAULT_NET_RESOLVE, NameRule
-from pysandboxes.guard_provider import check_net_resolve_provider, parse_net_resolve
+from pysandboxes.guard_provider import check_net_resolve_provider, effective_net_resolve, parse_net_resolve
 from pysandboxes.guard_socket import parse_name_rules
 from pysandboxes.sb_types import ConfigLine
 
@@ -73,6 +73,29 @@ def test_runtime_is_accepted_by_the_providers_with_an_enforcer(provider: str) ->
     check_net_resolve_provider("runtime", provider, Path("p"), errors)
 
     assert errors == []
+
+
+@pytest.mark.parametrize(
+    ("provider", "euid", "expected"),
+    [
+        ("firejail", 1000, "pinned"),
+        ("firejail", 0, "runtime"),
+        ("unshare", 1000, "runtime"),
+        ("bwrap", 1000, "runtime"),
+    ],
+)
+def test_firejail_without_root_falls_back_to_pinned(
+    provider: str, euid: int, expected: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr("os.geteuid", lambda: euid, raising=False)
+
+    assert effective_net_resolve("runtime", provider) == expected
+
+
+def test_pinned_stays_pinned_whatever_the_provider(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr("os.geteuid", lambda: 1000, raising=False)
+
+    assert effective_net_resolve("pinned", "firejail") == "pinned"
 
 
 @pytest.mark.parametrize("provider", ["none"])

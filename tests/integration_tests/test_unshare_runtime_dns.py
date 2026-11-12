@@ -26,12 +26,9 @@ ROOT_DIR = Path(__file__).resolve().parent.parent.parent
 PROVIDERS = ("unshare", "bwrap", "gvisor", "qemu", "qemu-microvm", "firejail")
 
 
-def _exact_kernel(provider: str) -> bool:
-    """Whether the firewall of the sandbox opens addresses one by one: not under firejail without root."""
-    return not (provider == "firejail" and os.geteuid() != 0)
-
-
 def _skip_reason(provider: str) -> str | None:
+    if provider == "firejail" and os.geteuid() != 0:
+        return "net-resolve=runtime under firejail needs root, and without it the mode is pinned"
     return (
         unsupported_platform_reason(provider)
         or provider_skip_reason(provider)
@@ -107,11 +104,7 @@ def test_a_one_shot_python_sb_run_leaves_no_resolver_behind(
     assert one_shot[1]["resolver_started"] is True and one_shot[1]["resolver_port_free"] is True
 
 
-def test_an_address_nobody_resolved_is_refused_even_when_the_listener_is_there(
-    outcome: dict[str, Any], provider: str, layers: str
-) -> None:
-    if layers == "kernel" and not _exact_kernel(provider):
-        pytest.skip("the firewall opens the port of the name to any host: only the Python guard refuses")
+def test_an_address_nobody_resolved_is_refused_even_when_the_listener_is_there(outcome: dict[str, Any]) -> None:
     assert outcome["result"]["literal_before_resolution"] == "REFUSED"
 
 
@@ -134,9 +127,7 @@ def test_a_resolver_the_program_names_itself_is_refused(outcome: dict[str, Any])
     assert outcome["result"]["hard_coded_resolver"] == "REFUSED"
 
 
-def test_the_address_is_closed_when_its_ttl_is_over(outcome: dict[str, Any], provider: str) -> None:
-    if not _exact_kernel(provider):
-        pytest.skip("the Python guard does not know the TTL of an answer: it keeps the address for the maximum TTL")
+def test_the_address_is_closed_when_its_ttl_is_over(outcome: dict[str, Any]) -> None:
     assert outcome["result"]["after_expiry"] == "REFUSED"
 
 

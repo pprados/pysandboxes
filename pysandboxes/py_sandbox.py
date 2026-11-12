@@ -298,6 +298,7 @@ def parse_config(
     remote_endpoint, others = guard_provider.parse_remote_endpoint(others, errors)
     net_resolve, others = guard_provider.parse_net_resolve(others, errors)
     guard_provider.check_net_resolve_provider(net_resolve, os_sandbox, config_path, errors)
+    net_resolve = guard_provider.effective_net_resolve(net_resolve, os_sandbox)
 
     from pysandboxes._os_sandbox import providers_factory
 

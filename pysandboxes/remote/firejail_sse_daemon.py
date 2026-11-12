@@ -35,7 +35,6 @@ from ..all_rules import AllRules
 from ..config import DEBUG
 from ..e import SandBoxError
 from ..guard_files import FSExposeRule, IgnoreRule
-from ..guard_socket import widened_name_rules
 from ..immutable_dict import ImmutableDict
 from ..main_logger import ErrorMsg
 from ..netfilter import rule_to_netfilter, runtime_netfilter
@@ -554,11 +553,8 @@ class FireJailSSEDaemon(BaseSubProcessDaemon):
 
                 if pipe_path:  # Update rules?
                     if resolver_port is not None and gateway is not None:
-                        runtime_rules = all_rules.socket_rules
-                        if self._dns_session.widened:
-                            runtime_rules = (*runtime_rules, *widened_name_rules(all_rules.name_rules))
                         net_filter4 = runtime_netfilter(
-                            runtime_rules, resolver_port, gateway, ipaddress.IPv4Address(SLIRP_DNS)
+                            all_rules.socket_rules, resolver_port, gateway, ipaddress.IPv4Address(SLIRP_DNS)
                         )
                     else:
                         net_filter4 = rule_to_netfilter(all_rules.socket_rules, dns_servers, is_ipv6=False)

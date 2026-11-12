@@ -48,16 +48,6 @@ class _DeferredEnforcer:
             self._enforcer.revoke(ip, rule)
 
 
-class _OpenedAtStart:
-    """The enforcer of a jail that only root could edit: its firewall already opens the ports of the names."""
-
-    def allow(self, ip: IPAddress, rule: NameRule, ttl: int) -> None:
-        return None
-
-    def revoke(self, ip: IPAddress, rule: NameRule) -> None:
-        return None
-
-
 def _forward_tcp(servers: Sequence[IPv4Address], port: int, timeout: float, packet: bytes) -> bytes:
     """Ask the first resolver of ``servers`` that answers; raise ``OSError`` when none does."""
     last: Exception = OSError("no resolver of the host is known")
@@ -159,19 +149,10 @@ class RuntimeDnsSession:
         (``--join-network``, which firejail reserves to root)."""
         self._join = join
         self._dns: RuntimeDns | None = None
-        self._widened = False
 
     @property
     def running(self) -> bool:
         return self._dns is not None
-
-    @property
-    def widened(self) -> bool:
-        """Whether the firewall of the sandbox opens the ports of the names at start instead of the addresses.
-
-        Under ``firejail`` without root the host cannot enter the jail: the Python guard then judges the host.
-        """
-        return self._widened
 
     def start(self, all_rules: AllRules, bind_host: str = "127.0.0.1") -> int | None:
         """Start the resolver on ``bind_host`` and return its port; ``None`` for ``pinned``.
@@ -181,21 +162,17 @@ class RuntimeDnsSession:
         self.stop()
         if all_rules.net_resolve != "runtime":
             return None
-        self._widened = self._join == "firejail" and os.geteuid() != 0
-        if self._widened:
-            logger.warning(
-                "net-resolve=runtime under firejail without root: only root may join the network namespace of a jail, "
-                "so its firewall opens the ports of the names to any host and only the Python guard judges the host."
+        if self._join == "firejail" and os.geteuid() != 0:
+            raise SandBoxError(
+                "net-resolve=runtime under firejail needs root: only root may join the network namespace of a jail."
             )
-        for tool in () if self._join == "guest" or self._widened else (self._join, "iptables"):
+        for tool in (() if self._join == "guest" else (self._join, "iptables")):
             if not which_command(tool):
                 raise SandBoxError(f"net-resolve=runtime needs {tool} on the host.")
         servers = [ip for ip in get_upstream_dns() if isinstance(ip, IPv4Address)]
         if not servers:
             raise SandBoxError("net-resolve=runtime found no IPv4 resolver on the host to forward the names to.")
         self._dns = RuntimeDns(all_rules.name_rules, servers, host=bind_host)
-        if self._widened:
-            self._dns.attach(_OpenedAtStart())
         return self._dns.start()
 
     def attach_guest(self, port: int, token: str) -> None:
@@ -205,7 +182,7 @@ class RuntimeDnsSession:
 
     def attach(self, pid: int) -> None:
         """Let the resolver open addresses in the network namespace held by ``pid``, once that namespace exists."""
-        if self._dns is None or self._widened:
+        if self._dns is None:
             return
         joiner, iptables = which_command(self._join), which_command("iptables")
         if joiner is None or iptables is None:
