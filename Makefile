@@ -371,6 +371,9 @@ SAMPLES = \
 # run here skips them exactly as CI does. `make -C samples/<x>-demo tests` still
 # reads .env, for a deliberate live run.
 LIVE_TEST_GATES = OPENAI_API_KEY RUN_CLAUDE_TESTS
+# Runs of one sample's suite before it counts as failed. 1 locally, so a flaky suite is never masked; the CI
+# sets 3, because a hosted runner sometimes starts a guest too slowly. Only the failing sample is run again.
+SAMPLE_ATTEMPTS ?= 1
 sample-tests-%:
 	@req=$$(grep -m1 requires-python samples/$*-demo/pyproject.toml | grep -oE '3\.[0-9]+'); \
 	if [ -n "$(UV_PYTHON)" ] && \
@@ -378,7 +381,12 @@ sample-tests-%:
 		echo "skip $*-demo: requires-python >= $$req, running $(UV_PYTHON)"; \
 	else \
 		$(MAKE) -C samples/$*-demo init && \
-		cd samples/$*-demo && env $(addprefix -u ,$(LIVE_TEST_GATES)) uv run --group test pytest -p no:dotenv -v tests; \
+		cd samples/$*-demo && \
+		for attempt in $$(seq 1 $(SAMPLE_ATTEMPTS)); do \
+			env $(addprefix -u ,$(LIVE_TEST_GATES)) uv run --group test pytest -p no:dotenv -v tests && exit 0; \
+			echo "::warning::$*-demo failed, attempt $$attempt of $(SAMPLE_ATTEMPTS)"; \
+		done; \
+		exit 1; \
 	fi
 
 # mcp-client spawns the neighbouring server sample as a subprocess, through that
