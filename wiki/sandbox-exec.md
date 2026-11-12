@@ -42,6 +42,26 @@ Seatbelt's allow/deny rules do not support the same address exceptions as the Py
 overlapping denies closed by omitting the conflicting broad allow. Review the warnings whenever a profile grants
 remote access or DNS.
 
+### Why the host cannot be filtered better
+
+What this repository establishes (provider code and the macOS VM tests): Seatbelt scopes a network rule to a port, and its
+remote address is `*` or `localhost`. `net=ALLOW|TCP|203.0.113.7|443|OUT` becomes "TCP 443, any host", and with
+`net-resolve=runtime` the port of an allowed name is opened the same way. Only the Python socket guard then judges the host.
+
+Why nothing better is available to an unprivileged process (macOS platform facts, taken from Apple's documentation and not
+exercised here):
+
+| Mechanism | What it would give | Why it is out of reach |
+|---|---|---|
+| `pf` firewall | Per-address rules, matchable on a user id | `pfctl` loads rules as root, and the rules are machine-wide state |
+| Network Extension (content or DNS filter) | Per-host filtering of a process | Needs an Apple-issued entitlement, a signed application and the user's approval in System Settings |
+| Seatbelt `remote` with a real address | Per-host rules in the profile | Not supported by the SBPL syntax: only `*` and `localhost` |
+
+A route that needs no privilege exists in principle and is **not implemented**: the profile would allow outbound traffic
+only to `localhost:<port>` of a proxy that the host runs (SOCKS5 covers all TCP), and the proxy would filter by name.
+Native code that connects directly would be refused by the kernel instead of bypassing a guard. Its limits: UDP is not
+covered, and the client has to go through the proxy (the Python guard could route `connect()` there).
+
 ## Example
 
 ```ini

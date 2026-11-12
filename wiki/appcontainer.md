@@ -54,6 +54,25 @@ icacls <runtime-directory> /grant *<pysandboxesRuntime-SID>:(OI)(CI)RX /T
 Every ACL operation must be checked. A failed grant is fatal; do not use `icacls /C`, which can silently skip
 errors.
 
+### Why the host cannot be filtered better
+
+What this repository establishes (provider code and the Windows VM tests): the token carries network *capabilities*
+(`internetClient`, `internetClientServer`, `privateNetworkClientServer`), and a capability opens a whole class of traffic.
+No capability names a host or a port, and AppContainer blocks loopback whatever the capability. With `net-resolve=runtime`
+the name rules are widened to the capability of their class, and only the Python socket guard judges the host.
+
+Why nothing better is available without administrator rights (Windows platform facts, taken from Microsoft's documentation
+and not exercised here):
+
+| Mechanism | What it would give | Why it is out of reach |
+|---|---|---|
+| Windows Filtering Platform filter on the package SID | Per-address, per-port rules for this AppContainer only | Adding filters needs administrator rights |
+| Loopback exemption of the package (`CheckNetIsolation LoopbackExempt`) | Lets the container reach a local proxy that filters by name | Needs an elevated prompt, per package |
+| Windows Firewall rules | Per-address rules | Need administrator rights and are machine-wide |
+
+The provider is designed to run as a standard user, so none of these can be part of it. An administrator who wants an exact
+filter can install a WFP filter on the package SID once; the provider does not do it and does not detect it.
+
 ## Requirements and local validation
 
 The provider requires Windows 8 or later (`userenv.CreateAppContainerProfile`) and targets a Windows host. This
