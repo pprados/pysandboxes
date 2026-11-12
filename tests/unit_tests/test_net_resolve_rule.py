@@ -82,6 +82,7 @@ def test_runtime_is_accepted_by_the_providers_with_an_enforcer(provider: str) ->
         ("firejail", 0, "runtime"),
         ("unshare", 1000, "runtime"),
         ("bwrap", 1000, "runtime"),
+        ("none", 0, "pinned"),
     ],
 )
 def test_firejail_without_root_falls_back_to_pinned(
@@ -98,14 +99,21 @@ def test_pinned_stays_pinned_whatever_the_provider(monkeypatch: pytest.MonkeyPat
     assert effective_net_resolve("pinned", "firejail") == "pinned"
 
 
-@pytest.mark.parametrize("provider", ["none"])
-def test_runtime_is_an_error_for_a_provider_without_an_enforcer(provider: str) -> None:
+def test_none_ignores_the_key_without_an_error_or_a_warning(caplog: pytest.LogCaptureFixture) -> None:
     errors: list = []
 
-    check_net_resolve_provider("runtime", provider, Path("p"), errors)
+    check_net_resolve_provider("runtime", "none", Path("p"), errors)
+
+    assert errors == [] and effective_net_resolve("runtime", "none") == "pinned" and caplog.records == []
+
+
+def test_runtime_is_an_error_for_an_unknown_provider() -> None:
+    errors: list = []
+
+    check_net_resolve_provider("runtime", "other", Path("p"), errors)
 
     assert len(errors) == 1
-    assert provider in errors[0][0] and "unshare" in errors[0][0] and "net-resolve=pinned" in errors[0][0]
+    assert "other" in errors[0][0] and "unshare" in errors[0][0] and "net-resolve=pinned" in errors[0][0]
 
 
 def _names(*rules: str) -> tuple[tuple[NameRule, ...], list[str], list]:

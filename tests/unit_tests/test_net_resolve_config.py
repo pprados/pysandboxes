@@ -60,11 +60,22 @@ def test_runtime_keeps_the_name_and_resolves_nothing_at_parse_time(no_resolution
     assert [str(r.mask.network) for r in rules.socket_rules] == ["203.0.113.0/24"]  # type: ignore[attr-defined]
 
 
-def test_runtime_on_a_provider_without_an_enforcer_is_a_config_error() -> None:
-    with pytest.raises(ConfigSyntaxError) as raised:
-        _parse("os-sandbox=none", "net-resolve=runtime", NAMED)
+@pytest.mark.parametrize("key", ["net-resolve=runtime", "net-resolve=pinned", "py-sandbox=true"])
+def test_none_warns_that_it_adds_no_os_boundary_whatever_net_resolve_says(
+    key: str, caplog: pytest.LogCaptureFixture
+) -> None:
+    _parse("os-sandbox=none", key)
 
-    assert "net-resolve=runtime is not supported by the 'none' provider" in " ".join(raised.value.errors)
+    assert [r.getMessage() for r in caplog.records if "os-sandbox=none" in r.getMessage()] == [
+        "os-sandbox=none adds no OS boundary: the net= rules are not enforced by the kernel."
+    ]
+
+
+def test_none_ignores_net_resolve_runtime_and_keeps_the_pinned_behaviour(no_resolution: list[str]) -> None:
+    rules = _parse("os-sandbox=none", "net-resolve=runtime", NAMED)
+
+    assert rules.net_resolve == "pinned"  # type: ignore[attr-defined]
+    assert rules.name_rules == () and no_resolution == ["api.example.com"]  # type: ignore[attr-defined]
 
 
 def test_an_unknown_mode_is_a_config_error() -> None:
