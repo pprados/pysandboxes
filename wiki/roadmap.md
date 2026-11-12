@@ -45,11 +45,11 @@ Planned work, in no committed order:
     - [X] [QEMU-microvm](qemu-microvm.md) (Linux x86_64; eight virtio-mmio transports)
     - [X] [Smolvm](https://korben.info/smolvm-microvm-portable-rust.html)
     - [ ] [Cloud Hypervisor](https://github.com/cloud-hypervisor/cloud-hypervisor) (Rust-based VMM with native virtio-fs and vsock)
-    - [ ] [Firecracker](https://firecracker-microvm.github.io/)
+    - [X] ~~[Firecracker](https://firecracker-microvm.github.io/)~~ (rejected: it has no virtio-fs or 9p, only block devices, a tap network device and vsock, so `expose-ro` and `expose-rw` cannot map host directories as `qemu-microvm` and `smolvm` do; enforcing the file rules would need a disk image rebuilt and copied for every call; its isolation is already covered by `qemu-microvm` and `smolvm`)
   - [ ] Others strategies
     - [ ] [container2wasm](https://github.com/container2wasm/container2wasm)
-    - [ ] [Cloud morph](https://cloud.morph.so/)
-    - [ ] [Agent sandbox](https://agent-sandbox.sigs.k8s.io/docs/getting_started/)
+    - [X] ~~[Cloud morph](https://cloud.morph.so/)~~ (rejected: a hosted paid service, so the code and its data leave the machine, and the rules would be applied by a third party instead of locally; incompatible with the local SSE channel and the `.py-sandboxes` rules)
+    - [X] ~~[Agent sandbox](https://agent-sandbox.sigs.k8s.io/docs/getting_started/)~~ (rejected: a Kubernetes orchestrator, not an isolation technology; it needs a cluster and delegates isolation to the pod runtime, so it adds nothing over the `kubernetes` entry and the providers that run in a pod)
   - [ ] Apple
     - [X] ~~App Sandbox~~ (rejected: not compatible with the approach)
     - [X] sandbox-exec
