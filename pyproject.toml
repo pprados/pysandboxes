@@ -117,6 +117,7 @@ test = [
     "pyyaml>=6.0",
     "speckit>=1.0.1",
     "pytestarch>=4.0.1",
+    "pytest-rerunfailures>=16.7",
 ]
 lint = [
     "mypy>=1.8",
