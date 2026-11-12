@@ -18,6 +18,12 @@ from pysandboxes.remote.parameters import (
 )
 
 
+@pytest.fixture(autouse=True)
+def no_environment_timeout(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The defaults are measured without a QEMU_START_TIMEOUT left in the developer's environment."""
+    monkeypatch.delenv("QEMU_START_TIMEOUT", raising=False)
+
+
 @pytest.fixture
 def with_kvm(monkeypatch: pytest.MonkeyPatch) -> None:
     """Pretend the host offers /dev/kvm, so the default does not follow this machine."""
@@ -52,3 +58,29 @@ def test_spaces_around_the_value_do_not_matter() -> None:
 def test_a_value_that_is_not_a_positive_duration_falls_back(value: str, with_kvm: None) -> None:
     """Waiting forever, or not at all, would be worse than ignoring the rule."""
     assert qemu_start_timeout({"start_timeout": value}) == float(TIMEOUT_FOR_START_DAEMON_QEMU)
+
+
+def test_the_environment_sets_the_default_when_the_profile_has_no_rule(
+    with_kvm: None, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A CI job gives every profile a slower runner's budget without editing each one."""
+    monkeypatch.setenv("QEMU_START_TIMEOUT", "180")
+    assert qemu_start_timeout({}) == 180.0
+
+
+def test_the_environment_applies_without_kvm_too(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("QEMU_START_TIMEOUT", "400")
+    assert qemu_start_timeout({"use_kvm": "false"}) == 400.0
+
+
+def test_the_profile_rule_wins_over_the_environment(with_kvm: None, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("QEMU_START_TIMEOUT", "180")
+    assert qemu_start_timeout({"start_timeout": "45"}) == 45.0
+
+
+@pytest.mark.parametrize("value", ["", "soon", "0", "-30"])
+def test_an_environment_value_that_is_not_a_positive_duration_is_ignored(
+    value: str, with_kvm: None, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("QEMU_START_TIMEOUT", value)
+    assert qemu_start_timeout({}) == float(TIMEOUT_FOR_START_DAEMON_QEMU)

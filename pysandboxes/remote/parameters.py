@@ -10,6 +10,7 @@ All timing values are in seconds unless otherwise specified.
 """
 
 import logging
+import os
 from typing import Any, Mapping
 
 from .qemu_image import qemu_accel_args
@@ -45,8 +46,13 @@ def qemu_start_timeout(os_sandbox_params: Mapping[str, Any]) -> float:
 
     The condition is ``qemu_accel_args``, the very function that decides whether QEMU is
     given ``-enable-kvm``, so the delay cannot disagree with how the VM really runs.
+
+    ``QEMU_START_TIMEOUT`` stands in for a profile without the rule, so a CI job can give every
+    profile the budget of a slow runner without editing each of them.
     """
     raw = os_sandbox_params.get("start_timeout")
+    if raw is None:
+        raw = os.environ.get("QEMU_START_TIMEOUT") or None
     default = float(
         TIMEOUT_FOR_START_DAEMON_QEMU if qemu_accel_args(os_sandbox_params) else TIMEOUT_FOR_START_DAEMON_QEMU_TCG
     )
