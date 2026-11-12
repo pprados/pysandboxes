@@ -43,6 +43,26 @@ def test_microvm_command_and_capacity(monkeypatch: pytest.MonkeyPatch) -> None:
         instance._machine_command(rules, assets, 1234)
 
 
+def test_microvm_pcie_lifts_the_mmio_limit_on_9p_shares(monkeypatch: pytest.MonkeyPatch) -> None:
+    probe = Mock(return_value=2)
+    monkeypatch.setattr(daemon, "microvm_mmio_capacity", probe)
+    monkeypatch.setattr(daemon, "qemu_accel_args", lambda *_: [])
+    monkeypatch.setattr(daemon, "ensure_microvm_boot_artifacts", lambda *_: (Path("kernel"), Path("initrd")))
+    rules = EmptyRules._replace(os_sandbox_params=ImmutableDict({"microvm_pcie": "true"}))
+    shares = [(f"share{i}", Path("/tmp"), f"/share{i}") for i in range(12)]
+    assets = daemon._QemuLaunchAssets(Path("root.raw"), Path("seed.iso"), shares)
+    instance = object.__new__(daemon.QemuMicrovmSSEDaemon)
+    instance.endpoint = None
+    instance._resolver_port = None
+
+    cmd = instance._machine_command(rules, assets, 1234)
+
+    probe.assert_not_called()
+    assert "microvm,acpi=on,pcie=on,rtc=off" in cmd
+    assert sum(arg.startswith("virtio-9p-pci,") for arg in cmd) == 12
+    assert not any(arg.startswith("virtio-9p-device") for arg in cmd)
+
+
 @pytest.mark.parametrize(("write", "security"), [(False, "none"), (True, "mapped-xattr")])
 def test_microvm_preserves_interpreter_symlinks_without_changing_writable_shares(
     write: bool, security: str, monkeypatch: pytest.MonkeyPatch, tmp_path: Path

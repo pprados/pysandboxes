@@ -1028,6 +1028,11 @@ def _microvm_readonly_tags(all_rules: AllRules, mounts: list[tuple[str, Path, st
     return readonly
 
 
+def _microvm_pcie(all_rules: AllRules) -> bool:
+    """Whether the profile asks for a PCIe bus, which lifts the MMIO limit on 9p shares."""
+    return str(all_rules.os_sandbox_params.get("microvm_pcie", "")).strip().lower() in ("1", "true", "yes", "on")
+
+
 def _microvm_security_model(host: Path, readonly: bool, configured: str) -> str:
     if readonly:
         return "none"
@@ -1131,7 +1136,7 @@ def _prepare_qemu_launch(
             for path in _microvm_path_list(all_rules, "microvm_empty_paths", "QEMU_MICROVM_EMPTY_PATHS", mounted)
             if path not in optional_paths
         ]
-        if optional_paths or empty_paths:
+        if (optional_paths or empty_paths) and not _microvm_pcie(all_rules):
             params = all_rules.os_sandbox_params
             capacity = microvm_mmio_capacity(_qemu_binary(), qemu_accel_args(params))
             try:
@@ -1645,11 +1650,13 @@ class QemuMicrovmSSEDaemon(QemuSSEDaemon):
     def _machine_command(self, all_rules: AllRules, assets: _QemuLaunchAssets, port: int) -> Args:
         image, seed, mounts = assets
         binary = _qemu_binary()
-        required = 2 + len(mounts)
+        pcie = _microvm_pcie(all_rules)
         accel_args = qemu_accel_args(all_rules.os_sandbox_params)
-        capacity = microvm_mmio_capacity(binary, accel_args)
-        if required > capacity:
-            raise SandBoxError(f"QEMU microvm needs {required} MMIO devices but supports {capacity}")
+        if not pcie:
+            required = 2 + len(mounts)
+            capacity = microvm_mmio_capacity(binary, accel_args)
+            if required > capacity:
+                raise SandBoxError(f"QEMU microvm needs {required} MMIO devices but supports {capacity}")
         kernel, initrd = ensure_microvm_boot_artifacts(image, all_rules.os_sandbox_params)
         memory = normalize_qemu_m_memory_arg(all_rules.os_sandbox_params.get("memory", "2048").strip())
         image_format = "qcow2" if image.suffix == ".qcow2" or "cloudimg" in image.name else "raw"
@@ -1660,7 +1667,7 @@ class QemuMicrovmSSEDaemon(QemuSSEDaemon):
             binary,
             *accel_args,
             "-machine",
-            "microvm,acpi=off,pcie=off,rtc=off",
+            "microvm,acpi=on,pcie=on,rtc=off" if pcie else "microvm,acpi=off,pcie=off,rtc=off",
             "-cpu",
             "max",
             "-nodefaults",
@@ -1706,7 +1713,7 @@ class QemuMicrovmSSEDaemon(QemuSSEDaemon):
                     "-fsdev",
                     f"local,id={tag},path={host},security_model={security}{readonly}",
                     "-device",
-                    f"virtio-9p-device,fsdev={tag},mount_tag={tag}",
+                    f"virtio-9p-{'pci' if pcie else 'device'},fsdev={tag},mount_tag={tag}",
                 ]
             )
         return cmd

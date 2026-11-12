@@ -43,6 +43,11 @@ The current microvm machine exposes eight virtio-mmio transports. One is used by
 the network device, leaving at most six 9p shares. Configuration data is carried on the read-only NoCloud ISO. The
 provider may merge nested mounts only when host path, read/write access, and security model remain equivalent.
 
+`qemu.microvm_pcie=true` lifts that limit: the machine starts with `acpi=on,pcie=on` and the 9p shares go through
+`virtio-9p-pci`, so the number of shares is no longer bound by the MMIO transports (SCSI and network keep two of
+them). `pcie=on` alone does nothing, QEMU creates the PCIe bus only with ACPI. The cost is a larger device model than
+the PCI-free default, which is why the option is off by default; the optional and empty paths below are then not needed.
+
 `qemu.microvm_optional_paths=/etc/ssl,/etc/pki` marks exact guest mount paths as optional. The provider drops these
 host shares in the listed order only when the profile exceeds the MMIO limit. The guest then uses its own existing
 path; startup fails closed if that path is absent or another share overlaps it. Under capacity, the host shares stay
