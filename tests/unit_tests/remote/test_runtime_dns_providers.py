@@ -228,6 +228,23 @@ class TestFirejail:
 
         assert session.calls == [("attach", 99)]
 
+    def test_the_public_hook_of_a_one_shot_run_lets_the_resolver_join_the_jail(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        from pysandboxes.remote import firejail_sse_daemon as fsd
+
+        class Running(FakeSession):
+            running = True
+
+        daemon = fsd.FireJailSSEDaemon("tok")
+        session = Running()
+        daemon._dns_session = session  # type: ignore[assignment]
+        monkeypatch.setattr(fsd, "parse_firejail_net_print", lambda pid: IPv4Address("172.17.0.2"))
+
+        daemon.on_process_launched(99)
+
+        assert session.calls == [("attach", 99)]
+
 
 class TestQemu:
     @staticmethod

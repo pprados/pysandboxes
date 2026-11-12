@@ -653,6 +653,11 @@ class FireJailSSEDaemon(BaseSubProcessDaemon):
             time.sleep(0.05)
         self._dns_session.attach(pid)
 
+    @override
+    def on_process_launched(self, process_pid: int) -> None:
+        """The hook a one-shot ``python-sb`` run calls: same as the daemon's."""
+        self._on_process_launched(process_pid)
+
     def _kill_slirp(self) -> None:
         """End of a one-shot ``python-sb`` run, which calls this hook by name: stop the filtering resolver."""
         self._dns_session.stop()
