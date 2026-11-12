@@ -59,7 +59,7 @@ Planned work, in no committed order:
     - [X] ~~Windows Sandbox~~ (rejected: a single sandbox can run at a time on a host, incompatible with concurrent or nested `sandboxes()`)
   - [ ] Network strategies
     - [X] local netfilter and pin DNS
-    - [ ] drives a runtime DNS and hostname filter, which resolves addresses at connection time rather than freezing static IP snapshots when the sandbox is created.
+    - [X] drives a runtime DNS and hostname filter, which resolves addresses at connection time rather than freezing static IP snapshots when the sandbox is created (`net-resolve=runtime`, see [DNS and iptables](dns.md)).
     - [ ] Proxy (SOCKS/HTTP over a Unix socket bound into the sandbox, relayed by socat: 
     filtering by domain, not only by IP)
   - [ ] Host/guest channel (`remote-endpoint=auto|tcp|unix`, `auto` by default and falling back to TCP: the host binds a 0600 Unix socket and hands the descriptor down, so the sandbox needs no file or network rule for it)
