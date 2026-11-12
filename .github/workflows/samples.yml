@@ -134,6 +134,8 @@ jobs:
       SAMPLE_ATTEMPTS: "3"
       # A hosted runner sometimes boots a guest in more than the 90s that KVM gets by default.
       QEMU_START_TIMEOUT: "180"
+      # The first call of the crewai sample imports crewai inside the guest: about 60s with KVM on a fast host.
+      PYSANDBOXES_RPC_TIMEOUT: "900"
       PYSANDBOXES_QEMU_TCG: "1"
       QEMU_USE_KVM: "true"
       QEMU_MICROVM_OPTIONAL_PATHS: /etc/ssl,/etc/ca-certificates,/usr/share/ca-certificates
