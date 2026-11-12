@@ -33,7 +33,7 @@ from pathlib import Path
 
 from ..all_rules import AllRules
 from ..guard_files import FSExposeRule, IgnoreRule
-from ..guard_socket import Action, Direction, Kind, SocketRules
+from ..guard_socket import Action, Direction, Kind, SocketRules, widened_name_rules
 from ..override_compat import override
 from ..sb_types import Args, Envs
 from ..tools import Environ
@@ -505,7 +505,9 @@ class LandlockSSEDaemon(SubProcessDaemon):
             sys.exit(-1)
         try:
             _set_no_new_privs()
-            net_ports = _collect_landlock_net_ports(all_rules.socket_rules)
+            net_ports = _collect_landlock_net_ports(
+                (*all_rules.socket_rules, *widened_name_rules(all_rules.name_rules))
+            )
             cwd = os.getcwd()
             temp_dir = Path(tempfile.gettempdir())
             path_tuples = _collect_landlock_paths(all_rules, temp_dir, cwd)

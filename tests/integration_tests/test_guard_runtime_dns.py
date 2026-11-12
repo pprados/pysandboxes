@@ -21,7 +21,7 @@ import pytest
 from ._env import provider_skip_reason
 
 ROOT_DIR = Path(__file__).resolve().parent.parent.parent
-PROVIDERS = ("subprocess", "sandbox-exec")
+PROVIDERS = ("subprocess", "landlock", "sandbox-exec")
 NAME = "localhost"
 
 SCRIPT = """

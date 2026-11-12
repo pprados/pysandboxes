@@ -57,6 +57,7 @@ NET_RESOLVE_RUNTIME_PROVIDERS = (
     "qemu",
     "qemu-microvm",
     "subprocess",
+    "landlock",
     "sandbox-exec",
     "appcontainer",
 )

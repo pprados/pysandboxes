@@ -85,7 +85,7 @@ def test_runtime_under_firejail_is_an_error_without_root(monkeypatch: pytest.Mon
     assert len(errors) == 1 and "needs root" in errors[0][0]
 
 
-@pytest.mark.parametrize("provider", ["landlock", "none"])
+@pytest.mark.parametrize("provider", ["none"])
 def test_runtime_is_an_error_for_a_provider_without_an_enforcer(provider: str) -> None:
     errors: list = []
 

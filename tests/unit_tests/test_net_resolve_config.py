@@ -62,9 +62,9 @@ def test_runtime_keeps_the_name_and_resolves_nothing_at_parse_time(no_resolution
 
 def test_runtime_on_a_provider_without_an_enforcer_is_a_config_error() -> None:
     with pytest.raises(ConfigSyntaxError) as raised:
-        _parse("os-sandbox=landlock", "net-resolve=runtime", NAMED)
+        _parse("os-sandbox=none", "net-resolve=runtime", NAMED)
 
-    assert "net-resolve=runtime is not supported by the 'landlock' provider" in " ".join(raised.value.errors)
+    assert "net-resolve=runtime is not supported by the 'none' provider" in " ".join(raised.value.errors)
 
 
 def test_an_unknown_mode_is_a_config_error() -> None:
