@@ -75,9 +75,9 @@ class FakeAuthority:
 class Listener:
     """A TCP listener on the host loopback, accepting and closing every connection."""
 
-    def __init__(self) -> None:
+    def __init__(self, host: str = "127.0.0.1") -> None:
         self._server = socket.socket()
-        self._server.bind(("127.0.0.1", 0))
+        self._server.bind((host, 0))
         self._server.listen()
         self._server.settimeout(0.2)
         self.port: int = self._server.getsockname()[1]
@@ -172,10 +172,24 @@ def _resolver_state(started: list[RuntimeDns]) -> dict:
     return {"resolver_started": True, "resolver_port_free": True}
 
 
+def _firejail_gateway() -> str:
+    """The address of the host bridge that firejail reaches the host through: the one the daemon selects."""
+    from pysandboxes.remote.firejail_sse_daemon import _interface_ipv4
+    from pysandboxes.remote.tools import get_bridge_interfaces
+
+    bridges = get_bridge_interfaces()
+    bridge = next((name for name in bridges if name.startswith("docker")), bridges[0])
+    return str(_interface_ipv4(bridge))
+
+
 def main() -> int:
     work, layers = Path(sys.argv[1]), sys.argv[2]
     provider = sys.argv[3] if len(sys.argv) > 3 else "unshare"
-    authority, allowed, other = FakeAuthority(), Listener(), Listener()
+    global GATEWAY
+    if provider == "firejail":
+        GATEWAY = _firejail_gateway()
+    host = GATEWAY if provider == "firejail" else "127.0.0.1"
+    authority, allowed, other = FakeAuthority(), Listener(host), Listener(host)
     egress_filter.MIN_LEARNED_TTL = egress_filter.MAX_LEARNED_TTL = TTL
     runtime_dns.get_upstream_dns = lambda: [IPv4Address("127.0.0.1")]
     real = runtime_dns.RuntimeDns
@@ -202,7 +216,16 @@ def main() -> int:
         if layers == "python-sb":
             sys.argv = ["python-sb", f"--pysandboxes-config={profile}", "-c", _script(allowed.port, other.port)]
             code = python_sb.main()
-            print(json.dumps({"exit_code": code, "questions": len(authority.questions), **_resolver_state(started)}))
+            print(
+                json.dumps(
+                    {
+                        "exit_code": code,
+                        "gateway": GATEWAY,
+                        "questions": len(authority.questions),
+                        **_resolver_state(started),
+                    }
+                )
+            )
             return 0
         with sandboxes(sandboxes_config=str(profile)):
             result = _probe(ALLOWED_NAME, DENIED_NAME, GATEWAY, allowed.port, other.port, TTL)
@@ -210,7 +233,11 @@ def main() -> int:
         authority.close()
         allowed.close()
         other.close()
-    print(json.dumps({"result": result, "questions": len(authority.questions), **_resolver_state(started)}))
+    print(
+        json.dumps(
+            {"result": result, "gateway": GATEWAY, "questions": len(authority.questions), **_resolver_state(started)}
+        )
+    )
     return 0
 
 

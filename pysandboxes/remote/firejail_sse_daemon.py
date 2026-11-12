@@ -13,9 +13,9 @@ Key components:
 - Firejail profile generation and rule translation
 """
 
-import importlib
 import asyncio
 import fcntl
+import importlib
 import ipaddress
 import logging
 import os
@@ -35,6 +35,7 @@ from ..all_rules import AllRules
 from ..config import DEBUG
 from ..e import SandBoxError
 from ..guard_files import FSExposeRule, IgnoreRule
+from ..guard_socket import widened_name_rules
 from ..immutable_dict import ImmutableDict
 from ..main_logger import ErrorMsg
 from ..netfilter import rule_to_netfilter, runtime_netfilter
@@ -478,7 +479,7 @@ class FireJailSSEDaemon(BaseSubProcessDaemon):
             args.append(f"--mkdir={str(pipe_path)}")
             args.append(f"--read-only={str(pipe_path)}")
 
-        if all_rules.socket_rules:
+        if all_rules.socket_rules or all_rules.name_rules:
             # Without 'restricted-network no' a regular user only gets --net=none, which
             # would also cut the host from the daemon's SSE port. A missing line is refused.
             if restricted_network and not restricted_network_explicit_yes:
@@ -553,8 +554,11 @@ class FireJailSSEDaemon(BaseSubProcessDaemon):
 
                 if pipe_path:  # Update rules?
                     if resolver_port is not None and gateway is not None:
+                        runtime_rules = all_rules.socket_rules
+                        if self._dns_session.widened:
+                            runtime_rules = (*runtime_rules, *widened_name_rules(all_rules.name_rules))
                         net_filter4 = runtime_netfilter(
-                            all_rules.socket_rules, resolver_port, gateway, ipaddress.IPv4Address(SLIRP_DNS)
+                            runtime_rules, resolver_port, gateway, ipaddress.IPv4Address(SLIRP_DNS)
                         )
                     else:
                         net_filter4 = rule_to_netfilter(all_rules.socket_rules, dns_servers, is_ipv6=False)

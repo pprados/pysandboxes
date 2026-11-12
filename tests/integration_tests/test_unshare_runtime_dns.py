@@ -26,9 +26,12 @@ ROOT_DIR = Path(__file__).resolve().parent.parent.parent
 PROVIDERS = ("unshare", "bwrap", "gvisor", "qemu", "qemu-microvm", "firejail")
 
 
+def _exact_kernel(provider: str) -> bool:
+    """Whether the firewall of the sandbox opens addresses one by one: not under firejail without root."""
+    return not (provider == "firejail" and os.geteuid() != 0)
+
+
 def _skip_reason(provider: str) -> str | None:
-    if provider == "firejail" and os.geteuid() != 0:
-        return "net-resolve=runtime under firejail needs root: only root may join the network namespace of a jail"
     return (
         unsupported_platform_reason(provider)
         or provider_skip_reason(provider)
@@ -94,7 +97,7 @@ def test_a_one_shot_python_sb_run_opens_the_address_of_an_allowed_name(
 
     assert probe["exit_code"] == 0 and probe["questions"] >= 1
     assert seen["literal_before_resolution"] == "REFUSED"
-    assert seen["resolved"] == ["10.0.2.2"] and seen["allowed_port"] == "CONNECTED"
+    assert seen["resolved"] == [probe["gateway"]] and seen["allowed_port"] == "CONNECTED"
     assert seen["other_port"] == "REFUSED"
 
 
@@ -104,12 +107,16 @@ def test_a_one_shot_python_sb_run_leaves_no_resolver_behind(
     assert one_shot[1]["resolver_started"] is True and one_shot[1]["resolver_port_free"] is True
 
 
-def test_an_address_nobody_resolved_is_refused_even_when_the_listener_is_there(outcome: dict[str, Any]) -> None:
+def test_an_address_nobody_resolved_is_refused_even_when_the_listener_is_there(
+    outcome: dict[str, Any], provider: str, layers: str
+) -> None:
+    if layers == "kernel" and not _exact_kernel(provider):
+        pytest.skip("the firewall opens the port of the name to any host: only the Python guard refuses")
     assert outcome["result"]["literal_before_resolution"] == "REFUSED"
 
 
 def test_the_address_of_an_allowed_name_is_opened_when_the_name_resolves(outcome: dict[str, Any]) -> None:
-    assert outcome["result"]["resolved"] == ["10.0.2.2"]
+    assert outcome["result"]["resolved"] == [outcome["gateway"]]
     assert outcome["result"]["allowed_port"] == "CONNECTED"
     assert outcome["questions"] >= 1
 
@@ -127,7 +134,9 @@ def test_a_resolver_the_program_names_itself_is_refused(outcome: dict[str, Any])
     assert outcome["result"]["hard_coded_resolver"] == "REFUSED"
 
 
-def test_the_address_is_closed_when_its_ttl_is_over(outcome: dict[str, Any]) -> None:
+def test_the_address_is_closed_when_its_ttl_is_over(outcome: dict[str, Any], provider: str) -> None:
+    if not _exact_kernel(provider):
+        pytest.skip("the Python guard does not know the TTL of an answer: it keeps the address for the maximum TTL")
     assert outcome["result"]["after_expiry"] == "REFUSED"
 
 

@@ -152,15 +152,37 @@ class TestFirejail:
 
         assert enforcer._prefix == ["/usr/bin/firejail", "--join-network=4242", "/usr/sbin/iptables"]
 
-    def test_a_session_that_joins_with_firejail_refuses_to_start_without_root(
+    def test_a_session_that_joins_with_firejail_without_root_leaves_the_opening_to_the_firewall(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         from pysandboxes.remote import runtime_dns as rd
 
-        monkeypatch.setattr(rd.os, "geteuid", lambda: 1000)
+        attached: list[Any] = []
 
-        with pytest.raises(SandBoxError, match="needs root"):
-            rd.RuntimeDnsSession(join="firejail").start(RUNTIME)
+        class FakeDns:
+            def __init__(self, rules: Any, servers: Any, **kwargs: Any) -> None:
+                pass
+
+            def start(self) -> int:
+                return 15353
+
+            def attach(self, enforcer: Any) -> None:
+                attached.append(enforcer)
+
+            def stop(self) -> None:
+                pass
+
+        monkeypatch.setattr(rd.os, "geteuid", lambda: 1000)
+        monkeypatch.setattr(rd, "RuntimeDns", FakeDns)
+        monkeypatch.setattr(rd, "which_command", lambda name: None)
+        monkeypatch.setattr(rd, "get_upstream_dns", lambda: [IPv4Address("198.51.100.53")])
+        session = rd.RuntimeDnsSession(join="firejail")
+
+        assert session.start(RUNTIME, "172.17.0.1") == 15353
+        session.attach(99)
+
+        assert session.widened
+        assert len(attached) == 1 and attached[0].allow(IPv4Address("203.0.113.9"), RUNTIME.name_rules[0], 60) is None
 
     def test_a_session_as_root_starts_on_the_bridge_address_and_joins_with_firejail(
         self, monkeypatch: pytest.MonkeyPatch
