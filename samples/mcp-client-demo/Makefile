@@ -32,11 +32,11 @@ lint_diff format_diff: PYTHON_FILES=$(shell git diff --relative=libs/experimenta
 # does not read as NoReturn and nothing narrows after it.
 lint lint_diff:
 	uvx --with pytest mypy $(PYTHON_FILES)
-	uvx black $(PYTHON_FILES) --check
+	uvx ruff format $(PYTHON_FILES) --check
 	uvx ruff check $(PYTHON_FILES)
 
 format format_diff:
-	uvx black $(PYTHON_FILES)
+	uvx ruff format $(PYTHON_FILES)
 	uvx ruff check --select I --fix $(PYTHON_FILES)
 
 spell_check:

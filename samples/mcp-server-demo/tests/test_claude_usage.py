@@ -78,7 +78,7 @@ def _init_mcp_server(protocol: str, os_sandbox: str, pysandboxes_mode: str) -> P
         if pysandboxes_mode == "complete":
             # Start the MCP server with python-sb
             run(
-                "claude mcp add mcp_demo -- " "uv run -m pysandboxes.python_sb -m mcp_server.main -t stdio",
+                "claude mcp add mcp_demo -- uv run -m pysandboxes.python_sb -m mcp_server.main -t stdio",
                 capture_output=True,
                 text=True,
                 check=True,
@@ -172,7 +172,6 @@ def test_claude_resource_version(protocol: str, os_sandbox: str, mode: str) -> N
 def test_claude_fetch_webpage(protocol: str, os_sandbox: str, mode: str) -> None:
     process = _init_mcp_server(protocol, os_sandbox, mode)
     try:
-
         cmd = (
             "claude",
             "-d",
@@ -215,7 +214,6 @@ def test_claude_fetch_webpage(protocol: str, os_sandbox: str, mode: str) -> None
 def test_claude_prompt(protocol: str, os_sandbox: str, mode: str) -> None:
     process = _init_mcp_server(protocol, os_sandbox, mode)
     try:
-
         cmd = (
             "claude",
             "--debug",
@@ -253,7 +251,6 @@ def test_claude_prompt(protocol: str, os_sandbox: str, mode: str) -> None:
 def test_claude_evaluate_expression(protocol: str, os_sandbox: str, mode: str) -> None:
     process = _init_mcp_server(protocol, os_sandbox, mode)
     try:
-
         cmd = (
             "claude",
             "--debug",

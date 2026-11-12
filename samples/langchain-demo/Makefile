@@ -32,11 +32,11 @@ learn:
 lint format: PYTHON_FILES=langchain_demo tests
 lint:
 	uvx mypy $(PYTHON_FILES)
-	uvx black $(PYTHON_FILES) --check
+	uvx ruff format $(PYTHON_FILES) --check
 	uvx ruff check $(PYTHON_FILES)
 
 format:
-	uvx black $(PYTHON_FILES)
+	uvx ruff format $(PYTHON_FILES)
 	uvx ruff check --select I --fix $(PYTHON_FILES)
 
 ## Clean caches
