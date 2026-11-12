@@ -22,7 +22,7 @@ from ..sb_types import Envs
 from ..tools import get_callable_info, is_in_sandbox
 from .endpoint import Endpoint
 from .endpoint_connector import ENDPOINT_URL, make_session
-from .parameters import INTERVAL_FOR_RETRY_CONNECTION, TIMEOUT_FOR_RPC_CALL
+from .parameters import INTERVAL_FOR_RETRY_CONNECTION, TIMEOUT_FOR_RPC_CALL, rpc_call_timeout
 from .tools import (
     SSE_READ_BUFSIZE,
     descriptor_predicate,
@@ -340,12 +340,14 @@ class BaseSSESandbox(BaseDaemon):
         future = asyncio.run_coroutine_threadsafe(
             self.async_call_in_sandbox(func, _force_incomming, *args, **kwargs), loop
         )
+        rpc_timeout = rpc_call_timeout(TIMEOUT_FOR_RPC_CALL)
         try:
-            return future.result(timeout=TIMEOUT_FOR_RPC_CALL)
+            return future.result(timeout=rpc_timeout)
         except FutureTimeoutError:
             raise SandBoxProtocolError(
-                f"Sandbox RPC did not respond within {TIMEOUT_FOR_RPC_CALL}s. "
-                "Check that the guest is reachable (e.g. QEMU hostfwd, firewall)."
+                f"Sandbox RPC did not respond within {rpc_timeout:g}s. "
+                "Check that the guest is reachable (e.g. QEMU hostfwd, firewall), "
+                "or raise PYSANDBOXES_RPC_TIMEOUT when the first call imports a heavy library."
             ) from None
 
     def update_rules_and_activate(

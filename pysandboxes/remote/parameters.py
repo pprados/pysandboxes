@@ -75,6 +75,28 @@ def qemu_start_timeout(os_sandbox_params: Mapping[str, Any]) -> float:
 # RPC call timeout (prevents infinite block if guest never responds)
 TIMEOUT_FOR_RPC_CALL = 120  # seconds
 
+
+def rpc_call_timeout(default: float = TIMEOUT_FOR_RPC_CALL) -> float:
+    """Seconds a call into the sandbox may take, from ``PYSANDBOXES_RPC_TIMEOUT``, else ``default``.
+
+    The first call of a program that imports a heavy library runs the import inside the guest, which a slow
+    runner needs far longer than the default for. A value that is not a positive finite number is ignored.
+    """
+    raw = os.environ.get("PYSANDBOXES_RPC_TIMEOUT")
+    if raw is None:
+        return float(default)
+    try:
+        timeout = float(raw.strip())
+    except ValueError:
+        timeout = 0.0
+    if not 0 < timeout < float("inf"):
+        logger.warning(
+            "Ignoring PYSANDBOXES_RPC_TIMEOUT=%r: expected a positive number of seconds; using %ss", raw, default
+        )
+        return float(default)
+    return timeout
+
+
 # Shutdown and lifecycle timing
 TIMEOUT_GRACEFUL_SHUTDOWN = 2  # Graceful shutdown timeout
 TIMEOUT_FOR_STOP_DAEMON = TIMEOUT_GRACEFUL_SHUTDOWN * 2  # Daemon stop timeout
