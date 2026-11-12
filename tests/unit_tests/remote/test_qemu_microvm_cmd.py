@@ -38,29 +38,51 @@ def test_microvm_command_and_capacity(monkeypatch: pytest.MonkeyPatch) -> None:
     assert "stdio" in cmd
     assert not any("pci" in arg and "pcie=off" not in arg for arg in cmd)
     assert sum(arg.startswith("virtio-") for arg in cmd) == 3
+    strict = rules._replace(os_sandbox_params=ImmutableDict({"accel": "tcg", "microvm_pcie": "false"}))
     monkeypatch.setattr(daemon, "microvm_mmio_capacity", lambda *_: 2)
     with pytest.raises(Exception, match="3.*2"):
-        instance._machine_command(rules, assets, 1234)
+        instance._machine_command(strict, assets, 1234)
 
 
-def test_microvm_pcie_lifts_the_mmio_limit_on_9p_shares(monkeypatch: pytest.MonkeyPatch) -> None:
-    probe = Mock(return_value=2)
+def _pcie_command(
+    monkeypatch: pytest.MonkeyPatch, params: dict[str, str], shares: int, capacity: int
+) -> tuple[list, Mock]:
+    probe = Mock(return_value=capacity)
     monkeypatch.setattr(daemon, "microvm_mmio_capacity", probe)
     monkeypatch.setattr(daemon, "qemu_accel_args", lambda *_: [])
     monkeypatch.setattr(daemon, "ensure_microvm_boot_artifacts", lambda *_: (Path("kernel"), Path("initrd")))
-    rules = EmptyRules._replace(os_sandbox_params=ImmutableDict({"microvm_pcie": "true"}))
-    shares = [(f"share{i}", Path("/tmp"), f"/share{i}") for i in range(12)]
-    assets = daemon._QemuLaunchAssets(Path("root.raw"), Path("seed.iso"), shares)
+    rules = EmptyRules._replace(os_sandbox_params=ImmutableDict(params))
+    mounts = [(f"share{i}", Path("/tmp"), f"/share{i}") for i in range(shares)]
+    assets = daemon._QemuLaunchAssets(Path("root.raw"), Path("seed.iso"), mounts)
     instance = object.__new__(daemon.QemuMicrovmSSEDaemon)
     instance.endpoint = None
     instance._resolver_port = None
+    return instance._machine_command(rules, assets, 1234), probe
 
-    cmd = instance._machine_command(rules, assets, 1234)
+
+def test_microvm_pcie_true_always_uses_9p_pci(monkeypatch: pytest.MonkeyPatch) -> None:
+    cmd, probe = _pcie_command(monkeypatch, {"microvm_pcie": "true"}, shares=12, capacity=2)
 
     probe.assert_not_called()
     assert "microvm,acpi=on,pcie=on,rtc=off" in cmd
     assert sum(arg.startswith("virtio-9p-pci,") for arg in cmd) == 12
     assert not any(arg.startswith("virtio-9p-device") for arg in cmd)
+
+
+def test_microvm_pcie_auto_falls_back_only_when_mmio_is_full(monkeypatch: pytest.MonkeyPatch) -> None:
+    cmd, _ = _pcie_command(monkeypatch, {}, shares=12, capacity=8)
+    assert "microvm,acpi=on,pcie=on,rtc=off" in cmd
+    assert sum(arg.startswith("virtio-9p-pci,") for arg in cmd) == 12
+
+    cmd, _ = _pcie_command(monkeypatch, {"microvm_pcie": "auto"}, shares=6, capacity=8)
+    assert "microvm,acpi=off,pcie=off,rtc=off" in cmd
+    assert sum(arg.startswith("virtio-9p-device,") for arg in cmd) == 6
+    assert not any("9p-pci" in arg for arg in cmd)
+
+
+def test_microvm_pcie_rejects_an_unknown_value(monkeypatch: pytest.MonkeyPatch) -> None:
+    with pytest.raises(Exception, match="auto, true or false"):
+        _pcie_command(monkeypatch, {"microvm_pcie": "maybe"}, shares=1, capacity=8)
 
 
 @pytest.mark.parametrize(("write", "security"), [(False, "none"), (True, "mapped-xattr")])
