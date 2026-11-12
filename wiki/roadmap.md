@@ -27,7 +27,7 @@ Planned work, in no committed order:
     - [X] sub process
     - [X] ~~sub interpreter~~ (rejected: isolating one interpreter from another is not possible)
     - [X] Landlock
-  - [ ] Sandbox utilities
+  - [X] Sandbox utilities
     - [X] firejail
     - [X] unshare
     - [X] bwrap
@@ -43,12 +43,9 @@ Planned work, in no committed order:
     - [X] ~~vagrant~~ (rejected: developer environment orchestrator on top of third-party hypervisors, not a runtime sandbox; multi-second startup latency and heavy dependencies)
   - [ ] micro-VM
     - [X] [QEMU-microvm](qemu-microvm.md) (Linux x86_64; eight virtio-mmio transports)
-    - [ ] [Smolvm](https://korben.info/smolvm-microvm-portable-rust.html)
-    - [ ] [libkrun](https://github.com/containers/libkrun) (lightweight VMM library designed for process isolation with virtio-fs) - **Waiting release v2**
+    - [X] [Smolvm](https://korben.info/smolvm-microvm-portable-rust.html)
     - [ ] [Cloud Hypervisor](https://github.com/cloud-hypervisor/cloud-hypervisor) (Rust-based VMM with native virtio-fs and vsock)
     - [ ] [Firecracker](https://firecracker-microvm.github.io/)
-    - [ ] [Fargate](https://aws.amazon.com/fr/fargate/)
-    - [ ] [Kata Containers](https://katacontainers.io/) (compatible classical containers management)
   - [ ] Others strategies
     - [ ] [container2wasm](https://github.com/container2wasm/container2wasm)
     - [ ] [Cloud morph](https://cloud.morph.so/)
