@@ -48,7 +48,10 @@ _LINUX_ONLY_TESTS = [
 ]
 
 _MACOS_ONLY_TESTS = ["integration_tests/remote/test_sandbox_exec.py"]
-_WINDOWS_ONLY_TESTS = ["integration_tests/remote/test_appcontainer.py"]
+_WINDOWS_ONLY_TESTS = [
+    "integration_tests/remote/test_appcontainer.py",
+    "integration_tests/test_guard_runtime_dns_online.py",
+]
 
 # Modules that run the release scripts (bash, git) the maintainer and the CI use, and the import layering check,
 # whose parser reads the sources with the platform encoding. None of them depends on what Windows runs. Also the tests
