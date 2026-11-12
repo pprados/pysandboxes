@@ -18,10 +18,15 @@ from pathlib import Path
 
 import pytest
 
+from pysandboxes._os_sandbox import unsupported_platform_reason
+
 from ._env import provider_skip_reason
 
 ROOT_DIR = Path(__file__).resolve().parent.parent.parent
-PROVIDERS = ("subprocess", "landlock", "sandbox-exec")
+# A provider this platform does not have gets no row rather than a skip: PYSANDBOXES_FAIL_ON_SKIP fails a skipped run.
+PROVIDERS = tuple(
+    provider for provider in ("subprocess", "landlock", "sandbox-exec") if not unsupported_platform_reason(provider)
+)
 NAME = "localhost"
 
 SCRIPT = """

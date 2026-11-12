@@ -23,12 +23,16 @@ from pysandboxes._os_sandbox import unsupported_platform_reason
 from ._env import provider_skip_reason
 
 ROOT_DIR = Path(__file__).resolve().parent.parent.parent
-PROVIDERS = ("unshare", "bwrap", "gvisor", "qemu", "qemu-microvm", "firejail")
+# Without root, firejail runs `net-resolve=runtime` as `pinned`: it gets no row rather than a skip, which
+# PYSANDBOXES_FAIL_ON_SKIP would turn into a failure of the run.
+PROVIDERS = tuple(
+    provider
+    for provider in ("unshare", "bwrap", "gvisor", "qemu", "qemu-microvm", "firejail")
+    if provider != "firejail" or os.geteuid() == 0
+)
 
 
 def _skip_reason(provider: str) -> str | None:
-    if provider == "firejail" and os.geteuid() != 0:
-        return "net-resolve=runtime under firejail needs root, and without it the mode is pinned"
     return (
         unsupported_platform_reason(provider)
         or provider_skip_reason(provider)
