@@ -74,9 +74,9 @@ def test_the_trailing_separator_of_a_directory_rule_is_dropped(tmp_path: Path) -
 def test_a_path_missing_on_the_host_is_not_exposed(tmp_path: Path) -> None:
     ro, rw = _exposures(tmp_path, _expose(tmp_path / "absent"), _expose(tmp_path / "gone", write=True))
 
-    assert not any(
-        "absent" in p or "gone" in p for p in ro + rw
-    ), "runsc refuses to start on a bind of a missing source"
+    assert not any("absent" in p or "gone" in p for p in ro + rw), (
+        "runsc refuses to start on a bind of a missing source"
+    )
 
 
 def test_a_device_is_not_exposed_and_the_rule_is_reported(tmp_path: Path, caplog: pytest.LogCaptureFixture) -> None:

@@ -180,7 +180,7 @@ class TestRuleToNetfilter:
         # Currently, UDP rules are not generated due to implementation bug
         # This test documents the current behavior rather than expected behavior
         udp_rule_found = any(
-            "-A OUTPUT -p udp -d 8.8.8.8/32 " "-m multiport --dports 53 -j ACCEPT" in rule for rule in result
+            "-A OUTPUT -p udp -d 8.8.8.8/32 -m multiport --dports 53 -j ACCEPT" in rule for rule in result
         )
         assert udp_rule_found  # Should be False due to bug
 
@@ -201,8 +201,7 @@ class TestRuleToNetfilter:
 
         # Check that the REJECT rule was added
         reject_rule_found = any(
-            "-A OUTPUT -p tcp -m conntrack --ctstate NEW " "-m multiport --dports 22 -j REJECT" in rule
-            for rule in result
+            "-A OUTPUT -p tcp -m conntrack --ctstate NEW -m multiport --dports 22 -j REJECT" in rule for rule in result
         )
         assert reject_rule_found
 

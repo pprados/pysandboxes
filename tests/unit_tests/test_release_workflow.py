@@ -123,8 +123,7 @@ def test_the_published_wheel_is_checked_only_after_a_publication() -> None:
     job = _jobs()["verify-published"]
     assert _needs(job) >= {"publish-testpypi", "publish-pypi"}
     assert _condition_of("verify-published") == (
-        "${{ !cancelled() "
-        "&& (needs.publish-testpypi.result == 'success' || needs.publish-pypi.result == 'success') }}"
+        "${{ !cancelled() && (needs.publish-testpypi.result == 'success' || needs.publish-pypi.result == 'success') }}"
     )
 
 

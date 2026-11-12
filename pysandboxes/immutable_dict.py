@@ -221,7 +221,7 @@ class ImmutableDict(
         Returns:
             String representation in ImmutableDict format.
         """
-        return f"ImmutableDict({dict(zip(self._keys, self._values,strict=True))})"
+        return f"ImmutableDict({dict(zip(self._keys, self._values, strict=True))})"
 
     # Keep Mapping's default .keys(), .items(), .values()
     def keys(self) -> KeysView[KeyType]:

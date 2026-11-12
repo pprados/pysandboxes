@@ -60,7 +60,7 @@ def extract_port_forwards(
         if isinstance(ports, range) and len(ports) > 1000:
             if log_wildcard:
                 logger.warning(
-                    "Cannot forward wildcard port range from rule '%s'. " "Use explicit ports instead.",
+                    "Cannot forward wildcard port range from rule '%s'. Use explicit ports instead.",
                     rule.config.rule,
                 )
             continue

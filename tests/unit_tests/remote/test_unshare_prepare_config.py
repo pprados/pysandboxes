@@ -33,7 +33,9 @@ def _rules(*, net: tuple[str, ...] = (), files: tuple[str, ...] = (), envs: dict
     sockets, _, _ = parse_socket_rules([_line(n) for n in net], [])
     file_rules, _ = parse_file_rules([_line(f) for f in files], [])
     return EmptyRules._replace(
-        socket_rules=tuple(sockets), file_rules=tuple(file_rules), envs=Envs(envs or {})  # type: ignore[arg-type]
+        socket_rules=tuple(sockets),
+        file_rules=tuple(file_rules),
+        envs=Envs(envs or {}),  # type: ignore[arg-type]
     )
 
 

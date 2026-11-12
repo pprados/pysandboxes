@@ -57,7 +57,7 @@ def work(tmp_path: Path) -> Path:
 def _fake_make(work: Path, code: int) -> None:
     make = work.parent / "bin" / "make"
     make.parent.mkdir(exist_ok=True)
-    make.write_text(f"#!/bin/sh\necho \"$@\" >>{work.parent / 'make-calls'}\nexit {code}\n")
+    make.write_text(f'#!/bin/sh\necho "$@" >>{work.parent / "make-calls"}\nexit {code}\n')
     make.chmod(0o755)
 
 

@@ -54,8 +54,16 @@ class TestSentinelState:
     def test_the_start_sentinel_may_sit_inside_a_longer_line(self) -> None:
         assert self._feed([f"noise {START} noise", "out"]) == [False, True]
 
-    def test_after_the_end_nothing_is_forwarded_even_if_the_start_comes_back(self) -> None:
-        assert self._feed([START, "a", END, START, "b"]) == [False, True, False, False, False]
+    def test_after_the_end_nothing_is_forwarded_even_if_the_start_comes_back(
+        self,
+    ) -> None:
+        assert self._feed([START, "a", END, START, "b"]) == [
+            False,
+            True,
+            False,
+            False,
+            False,
+        ]
 
     def test_the_end_sentinel_before_the_start_does_not_matter(self) -> None:
         state = [console._FORWARD_STATE_WAITING]
@@ -143,7 +151,9 @@ class TestEmit:
 
         assert state == [console._FORWARD_STATE_FORWARDING]
 
-    async def test_the_tee_receives_the_raw_text_even_when_the_line_is_filtered(self) -> None:
+    async def test_the_tee_receives_the_raw_text_even_when_the_line_is_filtered(
+        self,
+    ) -> None:
         tee = io.StringIO()
         flushed: list[bool] = []
         tee.flush = lambda: flushed.append(True)  # type: ignore[method-assign]
@@ -167,7 +177,11 @@ class TestEmit:
 
     async def test_a_filtered_line_is_not_mirrored(self, caplog: pytest.LogCaptureFixture) -> None:
         with caplog.at_level(logging.DEBUG, logger="mirror-test"):
-            await _emit(b"hello\n", [console._FORWARD_STATE_WAITING], mirror_logger=logging.getLogger("mirror-test"))
+            await _emit(
+                b"hello\n",
+                [console._FORWARD_STATE_WAITING],
+                mirror_logger=logging.getLogger("mirror-test"),
+            )
 
         assert caplog.records == []
 
@@ -181,7 +195,13 @@ def _stream(*chunks: bytes, eof: bool = True) -> asyncio.StreamReader:
     return reader
 
 
-async def _forward(stream: Any, *, is_stderr: bool = False, state: list[int] | None = None, **kwargs: Any) -> str:
+async def _forward(
+    stream: Any,
+    *,
+    is_stderr: bool = False,
+    state: list[int] | None = None,
+    **kwargs: Any,
+) -> str:
     import sys
     from unittest.mock import patch
 
@@ -189,7 +209,10 @@ async def _forward(stream: Any, *, is_stderr: bool = False, state: list[int] | N
     target = "stderr" if is_stderr else "stdout"
     with patch.object(sys, target, out):
         await console._qemu_read_and_forward(
-            stream, is_stderr, state if state is not None else [console._FORWARD_STATE_FORWARDING], **kwargs
+            stream,
+            is_stderr,
+            state if state is not None else [console._FORWARD_STATE_FORWARDING],
+            **kwargs,
         )
     return out.getvalue()
 
@@ -212,7 +235,9 @@ class TestReadAndForward:
 
         assert await _forward(_stream(data), state=[console._FORWARD_STATE_WAITING]) == "visible\r\n"
 
-    async def test_a_progress_line_ending_in_a_carriage_return_is_printed_as_is(self) -> None:
+    async def test_a_progress_line_ending_in_a_carriage_return_is_printed_as_is(
+        self,
+    ) -> None:
         out = await _forward(_stream(b"progress 1\rprogress 2\rdone\n"), forward_all=True)
 
         assert out == "progress 1\rprogress 2\rdone\r\n"
@@ -229,7 +254,11 @@ class TestReadAndForward:
         self, caplog: pytest.LogCaptureFixture, data: bytes, lines: list[str]
     ) -> None:
         with caplog.at_level(logging.DEBUG, logger="mirror-test"):
-            await _forward(_stream(data), forward_all=True, mirror_logger=logging.getLogger("mirror-test"))
+            await _forward(
+                _stream(data),
+                forward_all=True,
+                mirror_logger=logging.getLogger("mirror-test"),
+            )
 
         assert [r.getMessage() for r in caplog.records] == [f"[qemu-serial] {line}" for line in lines]
 
@@ -238,7 +267,9 @@ class TestReadAndForward:
 
         with caplog.at_level(logging.DEBUG, logger="mirror-test"):
             out = await _forward(
-                _stream(data), state=[console._FORWARD_STATE_WAITING], mirror_logger=logging.getLogger("mirror-test")
+                _stream(data),
+                state=[console._FORWARD_STATE_WAITING],
+                mirror_logger=logging.getLogger("mirror-test"),
             )
 
         assert out == "progress 1\rprogress 2\r\n"
@@ -251,7 +282,9 @@ class TestReadAndForward:
 
         assert out == "12345678" + "9\r\n"
 
-    async def test_a_reset_connection_ends_the_drain_and_keeps_what_was_read(self) -> None:
+    async def test_a_reset_connection_ends_the_drain_and_keeps_what_was_read(
+        self,
+    ) -> None:
         class Reset:
             def __init__(self) -> None:
                 self.calls = 0
@@ -294,7 +327,10 @@ class TestDrainTasks:
         tasks = console.start_qemu_serial_drain_tasks(process, forward_all=False)  # type: ignore[arg-type]
         await asyncio.gather(*tasks)
 
-        assert [t.get_name() for t in tasks] == ["qemu-serial-stdout", "qemu-serial-stderr"]
+        assert [t.get_name() for t in tasks] == [
+            "qemu-serial-stdout",
+            "qemu-serial-stderr",
+        ]
         assert capsys.readouterr().out == ""
 
     async def test_a_tee_file_gets_a_lock_and_the_raw_output(self) -> None:
@@ -338,13 +374,18 @@ class TestWaitAndFilter:
             return 1
 
         process = SimpleNamespace(
-            stdout=_stream(f"{START}\n".encode()), stderr=_stream(), stdin=object(), wait=wait, terminate=stopped.set
+            stdout=_stream(f"{START}\n".encode()),
+            stderr=_stream(),
+            stdin=object(),
+            wait=wait,
+            terminate=stopped.set,
         )
         monkeypatch.setattr(console, "_qemu_forward_stdin", fail)
 
         with pytest.raises(OSError, match="stdin forwarding failed"):
             await asyncio.wait_for(
-                console.qemu_wait_and_filter_console(process, forward_stdin=True), timeout=1  # type: ignore[arg-type]
+                console.qemu_wait_and_filter_console(process, forward_stdin=True),  # type: ignore[arg-type]
+                timeout=1,
             )
 
         assert stopped.is_set()
@@ -511,7 +552,10 @@ class TestExitCode:
         import inspect
 
         parameters = inspect.signature(console.read_qemu_guest_exitcode).parameters
-        assert (parameters["max_wait_s"].default, parameters["interval_s"].default) == (3.0, 0.05)
+        assert (parameters["max_wait_s"].default, parameters["interval_s"].default) == (
+            3.0,
+            0.05,
+        )
         assert SimpleNamespace(**{k: v.default for k, v in parameters.items() if k != "exitcode_file"})
 
 
@@ -534,7 +578,10 @@ async def _lines(data: list[bytes], caplog: pytest.LogCaptureFixture, **kwargs: 
 
 class TestLineRebuilding:
     async def test_chunks_are_joined_into_whole_lines(self, caplog: pytest.LogCaptureFixture) -> None:
-        assert await _lines([b"hel", b"lo wor", b"ld\nnext\n"], caplog) == ["hello world", "next"]
+        assert await _lines([b"hel", b"lo wor", b"ld\nnext\n"], caplog) == [
+            "hello world",
+            "next",
+        ]
 
     async def test_a_newline_at_the_very_start_ends_an_empty_line(self, caplog: pytest.LogCaptureFixture) -> None:
         assert await _lines([b"\nx\n"], caplog) == ["x"]
@@ -585,7 +632,10 @@ class TestTeeLock:
         process = _Process(_stream(b"a\n"), _stream())
 
         await console.qemu_wait_and_filter_console(
-            process, forward_all=True, tee_file=io.StringIO(), tee_lock=lock  # type: ignore[arg-type]
+            process,  # type: ignore[arg-type]
+            forward_all=True,
+            tee_file=io.StringIO(),
+            tee_lock=lock,  # type: ignore[arg-type]
         )
 
         assert lock.entered == 1

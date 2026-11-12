@@ -157,13 +157,7 @@ def rule_to_netfilter(socket_rules: SocketRules, dns_server: list[IPv4Address], 
                         f"-j {_map_action[action]}"
                     )
                 elif kind == Kind.UDP:  # pragma: no mutate
-                    ip_rule = (
-                        f"-A {_map_direction[direction]} "
-                        f"-p udp "
-                        f"{s_network}"
-                        f"{multiport}"
-                        f"-j {_map_action[action]}"
-                    )
+                    ip_rule = f"-A {_map_direction[direction]} -p udp {s_network}{multiport}-j {_map_action[action]}"
                 else:
                     assert "Internal error"
                     ip_rule = ""

@@ -53,10 +53,6 @@ asyncio_mode = "auto"
 pysandboxes = { path = "../..", editable = true }
 #pysandboxes = { path = "../../dist/pysandboxes-0.0.0-py3-none-any.whl" }
 
-[tool.black]
-line-length = 120
-target-version = ["py311"]
-
 [tool.ruff]
 line-length = 120
 target-version = "py311"

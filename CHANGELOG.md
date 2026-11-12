@@ -27,7 +27,7 @@
 
 - Add the smolvm provider (`os-sandbox=smolvm`): the sandboxed code runs in a hardware-isolated micro-VM with its own kernel, with file, network and environment rules enforced by the host side of smolvm, and a dedicated `python-sb-smolvm` image.
 - A `qemu-microvm` profile can now share more than six host directories with the guest instead of failing at start; `qemu.microvm_pcie=auto|true|false` (default `auto`, only when needed) forces or forbids the PCIe bus that makes it possible.
-- `net-resolve=pinned|runtime` chooses when the host names of `net=` rules are resolved: `pinned` (the current behaviour) freezes their addresses at start, `runtime` (`unshare`, `bwrap`, `gvisor`, `qemu`, `qemu-microvm`, `subprocess`, `landlock`, `sandbox-exec` and `appcontainer` (Python guard only) and `firejail` (as root; without root it falls back to `pinned`)) resolves them when the program asks, through a filtering resolver that opens the addresses of an allowed name for their TTL and refuses every other name and resolver.
+- `net-resolve=runtime|pinned` chooses when the host names of `net=` rules are resolved: `runtime` (`unshare`, `bwrap`, `gvisor`, `qemu`, `qemu-microvm`, `subprocess`, `landlock`, `sandbox-exec` and `appcontainer` (Python guard only) and `firejail` (as root; without root it falls back to `pinned`)) resolves them when the program asks, through a filtering resolver that opens the addresses of an allowed name for their TTL and refuses every other name and resolver, so a name whose addresses rotate keeps working, while `pinned` (what applies without the key) freezes their addresses at start.
 
 ### Fixed
 

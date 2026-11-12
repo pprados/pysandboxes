@@ -78,7 +78,7 @@ def test_posix_open_is_refused_like_builtin_open(tmp_path: Path) -> None:
     secret = tmp_path / "secret.txt"
     secret.write_text("classified\n")
     (work / ".py-sandboxes").write_text(
-        "py-sandbox=true\nos-sandbox=subprocess\npython-import=*\n" f"expose-rw={work}\nexpose-ro={Path.cwd()}\n"
+        f"py-sandbox=true\nos-sandbox=subprocess\npython-import=*\nexpose-rw={work}\nexpose-ro={Path.cwd()}\n"
     )
     (work / "probe.py").write_text(
         "import os\n"

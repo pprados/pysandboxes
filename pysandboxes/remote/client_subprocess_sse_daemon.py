@@ -699,7 +699,7 @@ class BaseSubProcessDaemon(BaseSSESandbox):
                         logger.info("Pinging subprocess daemon at %s", ping_url)
                     if count_loop > LOOP_FOR_PING:
                         logger.error(
-                            "Is not possible to connect " "to the sandbox daemon (%s)",
+                            "Is not possible to connect to the sandbox daemon (%s)",
                             ping_url,
                         )
                         # SandBoxError, not SystemExit: the latter is a BaseException,

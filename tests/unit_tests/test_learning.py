@@ -412,9 +412,9 @@ class TestExposeRoGranularity:
 
             rules = file_generate_rules({LearnFileRule(root / "readme.txt", False)})
 
-        assert any(
-            rule.startswith("expose-ro=") and root.name in rule for rule in rules
-        ), "reading one file exposes its whole parent directory"
+        assert any(rule.startswith("expose-ro=") and root.name in rule for rule in rules), (
+            "reading one file exposes its whole parent directory"
+        )
 
 
 def test_atomic_write_never_follows_a_planted_temporary_link(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:

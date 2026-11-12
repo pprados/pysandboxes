@@ -179,13 +179,12 @@ def parse_python_cmd_line(
         "-?",
         "--help",
         action="store_true",
-        help="Print a short description of all command line options and "
-        "corresponding environment variables and exit.",
+        help="Print a short description of all command line options and corresponding environment variables and exit.",
     )
     parser.add_argument(
         "--help-env",
         action="store_true",
-        help="Print a short description of Python-specific environment " "variables and exit.",
+        help="Print a short description of Python-specific environment variables and exit.",
     )
     parser.add_argument(
         "--help-xoptions",
@@ -230,7 +229,7 @@ def parse_python_cmd_line(
     parser.add_argument(
         "-E",
         action="store_true",
-        help="Ignore all PYTHON* environment variables, e.g. PYTHONPATH and " "PYTHONHOME, that might be set.",
+        help="Ignore all PYTHON* environment variables, e.g. PYTHONPATH and PYTHONHOME, that might be set.",
     )
 
     parser.add_argument("-i", action="store_true", help="Enter interactive mode after execution.")
@@ -238,7 +237,7 @@ def parse_python_cmd_line(
     parser.add_argument(
         "-O",
         action="store_true",
-        help="Remove assert statements and any code conditional on " "the value of __debug__.",
+        help="Remove assert statements and any code conditional on the value of __debug__.",
     )
     parser.add_argument("-OO", action="store_true", help="Do -O and also discard docstrings. ")
     parser.add_argument(
@@ -249,7 +248,7 @@ def parse_python_cmd_line(
     parser.add_argument(
         "-q",
         action="store_true",
-        help="Don’t display the copyright and version messages " "even in interactive mode.",
+        help="Don’t display the copyright and version messages even in interactive mode.",
     )
     parser.add_argument("-R", action="store_true", help="Turn on hash randomization.")
     parser.add_argument(
@@ -260,8 +259,7 @@ def parse_python_cmd_line(
     parser.add_argument(
         "-S",
         action="store_true",
-        help="Disable the import of the module site and the site-dependent "
-        "manipulations of sys.path that it entails. ",
+        help="Disable the import of the module site and the site-dependent manipulations of sys.path that it entails. ",
     )
     parser.add_argument(
         "-u",
@@ -279,7 +277,7 @@ def parse_python_cmd_line(
         action="append",
         metavar="arg",
         dest="warnings",
-        help="Warning control. Python’s warning machinery by default prints " "warning messages to sys.stderr.",
+        help="Warning control. Python’s warning machinery by default prints warning messages to sys.stderr.",
     )
     parser.add_argument(
         "-x",

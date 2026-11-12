@@ -11,7 +11,10 @@ SLIRP_DNS = IPv4Address("10.0.2.3")
 
 def socket_rule(action: Action, network: str, port: int) -> SocketRule:
     return SocketRule(
-        action, SocketMask((Kind.TCP,), IPv4Network(network), (port,)), (Direction.OUT,), None  # type: ignore[arg-type]
+        action,
+        SocketMask((Kind.TCP,), IPv4Network(network), (port,)),
+        (Direction.OUT,),
+        None,  # type: ignore[arg-type]
     )
 
 

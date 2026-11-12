@@ -43,11 +43,11 @@ lint_diff format_diff: PYTHON_FILES=$(shell git diff --relative=libs/experimenta
 
 lint lint_diff:
 	uvx mypy $(PYTHON_FILES)
-	uvx black $(PYTHON_FILES) --check
+	uvx ruff format $(PYTHON_FILES) --exclude '*.md' --check
 	uvx ruff check .
 
 format format_diff:
-	uvx black $(PYTHON_FILES)
+	uvx ruff format $(PYTHON_FILES) --exclude '*.md'
 	uvx ruff check --select I --fix $(PYTHON_FILES)
 
 spell_check:

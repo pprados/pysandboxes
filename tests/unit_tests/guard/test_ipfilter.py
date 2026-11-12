@@ -113,7 +113,7 @@ def check_iptables_rules_syntax(rules_content: str, is_ipv6: bool = False) -> tu
             responses.pop()
         if not len(responses):
             return True, "Rules syntax checked successfully."
-        error_message: str = f"Syntax error detected:\n" f"{e.stderr.strip()}"
+        error_message: str = f"Syntax error detected:\n{e.stderr.strip()}"
         return False, error_message
 
 

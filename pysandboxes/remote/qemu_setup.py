@@ -389,7 +389,7 @@ def _create_nocloud_iso(
     )
     debug_block = "debug:\n  verbosity: 2\n\n" if bootstrap_verbose else ""
     bootcmd_banner = (
-        ("  - echo '[pysandbox] cloud-init bootcmd (early)' " "| tee /dev/ttyS0 /dev/console >/dev/null 2>&1 || true\n")
+        ("  - echo '[pysandbox] cloud-init bootcmd (early)' | tee /dev/ttyS0 /dev/console >/dev/null 2>&1 || true\n")
         if bootstrap_verbose
         else ""
     )

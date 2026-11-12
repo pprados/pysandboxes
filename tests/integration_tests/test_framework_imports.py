@@ -75,7 +75,8 @@ NAME = json.__name__
 # What the daemon may import for itself: keep in step with the list in wiki/weaknesses.md.
 # The union over 3.11-3.14: which private companion of a listed module the daemon loads afresh depends on
 # what the interpreter already loaded at startup -- _thread on 3.11 and 3.12, _socket and reprlib on 3.13.
-FRAMEWORK_IMPORTS = frozenset("""
+FRAMEWORK_IMPORTS = frozenset(
+    """
     __future__ _hashlib _hmac _multiprocessing _queue _socket _thread abc annotated_doc annotated_types
     annotationlib anyio array ast asyncio base64 binascii click codecs collections colorsys concurrent configparser
     contextlib contextvars copy copyreg dataclasses datetime decimal email enum errno fastapi fractions functools
@@ -83,7 +84,8 @@ FRAMEWORK_IMPORTS = frozenset("""
     math mimetypes multiprocessing operator os pathlib pickle platform pydantic pydantic_core pysandboxes queue
     random re reprlib secrets selectors shlex signal socket socketserver ssl starlette stat struct tempfile textwrap
     threading time traceback types typing typing_extensions typing_inspection urllib uuid uvicorn weakref zoneinfo
-    """.split())
+    """.split()
+)
 
 if sys.platform == "win32":
     # The daemon reaches the operating system through these where it uses posix elsewhere.
@@ -123,14 +125,17 @@ def _run(tmp_path: Path, imports: str, mode: str, *calls: str) -> tuple["subproc
     (tmp_path / "driver.py").write_text(DRIVER)
     paths = sysconfig.get_paths()
     profile = tmp_path / ".py-sandboxes"
-    profile.write_text(textwrap.dedent(f"""\
+    profile.write_text(
+        textwrap.dedent(f"""\
             py-sandbox=true
             os-sandbox=subprocess
             expose-rw={tmp_path}
             expose-ro={paths["stdlib"]}
             expose-ro={paths["purelib"]}
             expose-ro={Path(__file__).parents[2]}
-            """) + (f"python-import={imports}\n" if imports else ""))
+            """)
+        + (f"python-import={imports}\n" if imports else "")
+    )
     done = subprocess.run(
         [sys.executable, "driver.py", str(profile), mode, *calls],
         cwd=tmp_path,

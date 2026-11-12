@@ -166,7 +166,7 @@ class RuntimeDnsSession:
             raise SandBoxError(
                 "net-resolve=runtime under firejail needs root: only root may join the network namespace of a jail."
             )
-        for tool in (() if self._join == "guest" else (self._join, "iptables")):
+        for tool in () if self._join == "guest" else (self._join, "iptables"):
             if not which_command(tool):
                 raise SandBoxError(f"net-resolve=runtime needs {tool} on the host.")
         servers = [ip for ip in get_upstream_dns() if isinstance(ip, IPv4Address)]

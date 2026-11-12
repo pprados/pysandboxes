@@ -207,17 +207,11 @@ class ChatSession:
         all_resources = await self.client.list_resources()
         all_resource_templates = await self.client.list_resource_templates()
         tools_description = "\n".join(
-            [
-                f"Tool: {tool.name}\n" f"Description: {tool.description}\n" f"Arguments: {tool.inputSchema}"
-                for tool in all_tools
-            ]
+            [f"Tool: {tool.name}\nDescription: {tool.description}\nArguments: {tool.inputSchema}" for tool in all_tools]
         )
         resources_list = "\n".join(
             [
-                f"Resource URI: {res.uri}\n"
-                f"Name: {res.name}\n"
-                f"Description: {res.description}\n"
-                f"MIME Type: {res.mimeType}"
+                f"Resource URI: {res.uri}\nName: {res.name}\nDescription: {res.description}\nMIME Type: {res.mimeType}"
                 for res in all_resources
             ]
         )
@@ -230,7 +224,7 @@ class ChatSession:
                 for res in all_resource_templates
             ]
         )
-        system_message = "You are a helpful assistant with access to tools " "and resources.\n\n"
+        system_message = "You are a helpful assistant with access to tools and resources.\n\n"
         if tools_description:
             system_message += f"Available tools:\n{tools_description}\n\n"
         if resources_list:
@@ -282,7 +276,6 @@ async def run(args: argparse.Namespace) -> None:
     logging.getLogger("mcp").setLevel(logging.WARNING)
     client = Client(server_config, roots=[str(Path("./resources").resolve().as_uri())])
     async with client:
-
         llm_client = LLMClient(config.llm_api_key)
         chat_session = ChatSession(client, llm_client)
         if args.print:

@@ -405,7 +405,7 @@ def _parse_rule(rule: ConfigLine, errors: list[tuple[str, Path, int]], pin_dns: 
     if not kind_input:
         errors.append(
             (
-                f"{format_ruleref(rule)}: " f"{rule.rule!r} " f"has empty socket specs.",
+                f"{format_ruleref(rule)}: {rule.rule!r} has empty socket specs.",
                 rule.path,
                 rule.ln,
             )
@@ -445,7 +445,7 @@ def _parse_rule(rule: ConfigLine, errors: list[tuple[str, Path, int]], pin_dns: 
     if not isinstance(network_str, str) or not network_str.strip():
         errors.append(
             (
-                f"{format_ruleref(rule)}: " f"In {rule.rule!r}, " f"network part must be set.",
+                f"{format_ruleref(rule)}: In {rule.rule!r}, network part must be set.",
                 rule.path,
                 rule.ln,
             )
@@ -453,7 +453,7 @@ def _parse_rule(rule: ConfigLine, errors: list[tuple[str, Path, int]], pin_dns: 
     if not isinstance(port_spec_str, str):
         errors.append(
             (
-                f"{format_ruleref(rule)}: " f"In {rule.rule!r}, " f"port spec part is not valid.",
+                f"{format_ruleref(rule)}: In {rule.rule!r}, port spec part is not valid.",
                 rule.path,
                 rule.ln,
             )
@@ -484,7 +484,7 @@ def _parse_rule(rule: ConfigLine, errors: list[tuple[str, Path, int]], pin_dns: 
     except ValueError:
         errors.append(
             (
-                f"{format_ruleref(rule)}: " f"In {rule.rule!r}, " f"invalid port list.",
+                f"{format_ruleref(rule)}: In {rule.rule!r}, invalid port list.",
                 rule.path,
                 rule.ln,
             )
@@ -735,15 +735,13 @@ def _convert_ports_range(syntax: str) -> tuple[int, ...] | range:
             if len(limits) == 2:
                 start_str, end_str = limits[0].strip(), limits[1].strip()
                 if not start_str:
-                    raise ValueError(f"Invalid range format: {element!r}. " f"Range _start cannot be empty.")
+                    raise ValueError(f"Invalid range format: {element!r}. Range _start cannot be empty.")
                 try:
                     start = int(start_str)
                 except ValueError as e:
-                    raise ValueError(f"Invalid _start port number {start_str!r} " f"in range {element!r}.") from e
+                    raise ValueError(f"Invalid _start port number {start_str!r} in range {element!r}.") from e
                 if not (0 <= start <= max_port):
-                    raise ValueError(
-                        f"Start port {start} in range {element!r} is out of " f"valid range (0-{max_port})."
-                    )
+                    raise ValueError(f"Start port {start} in range {element!r} is out of valid range (0-{max_port}).")
 
                 if end_str == "":  # Handles open-ended ranges like "8000-"
                     end = max_port
@@ -753,9 +751,7 @@ def _convert_ports_range(syntax: str) -> tuple[int, ...] | range:
                     except ValueError as e:
                         raise ValueError(f"Invalid end port number {end_str!r} in range {element!r}.") from e
                     if not (0 <= end <= max_port):
-                        raise ValueError(
-                            f"End port {end} in range {element!r} is out of " f"valid range (0-{max_port})."
-                        )
+                        raise ValueError(f"End port {end} in range {element!r} is out of valid range (0-{max_port}).")
                 if start == end:
                     ports.add(start)
                 elif start <= end:
@@ -767,7 +763,7 @@ def _convert_ports_range(syntax: str) -> tuple[int, ...] | range:
                             ports.add(p)
                 else:
                     raise ValueError(
-                        f"Invalid range: _start port {start} is greater than " f"end port {end} in {element!r}."
+                        f"Invalid range: _start port {start} is greater than end port {end} in {element!r}."
                     )
             else:
                 raise ValueError(f"Invalid range format: {element!r}. Unexpected hyphen usage.")
@@ -775,7 +771,7 @@ def _convert_ports_range(syntax: str) -> tuple[int, ...] | range:
             try:
                 port = int(element)
                 if not (0 <= port <= max_port):
-                    raise ValueError(f"Port number {port} in {element!r} is out of " f"valid range (0-{max_port}).")
+                    raise ValueError(f"Port number {port} in {element!r} is out of valid range (0-{max_port}).")
                 ports.add(port)
             except ValueError as e:
                 raise ValueError(f"Invalid port number {element!r}.") from e
@@ -955,7 +951,7 @@ def _check_address_with_rules(
                                     if use_hostname:
                                         if log:
                                             pysandboxes_logger.error(
-                                                "Connection to '%s' (%s:%s) " "DENIED by explicit rule " "'%s' from %s",
+                                                "Connection to '%s' (%s:%s) DENIED by explicit rule '%s' from %s",
                                                 hostname,
                                                 ip_host,
                                                 destination_port,
@@ -973,7 +969,7 @@ def _check_address_with_rules(
                                     else:
                                         if log:
                                             pysandboxes_logger.error(
-                                                "Connection to [%s]:%s " "DENIED by explicit rule " "'%s' from %s",
+                                                "Connection to [%s]:%s DENIED by explicit rule '%s' from %s",
                                                 ip_host,
                                                 destination_port,
                                                 config.rule,
@@ -991,9 +987,7 @@ def _check_address_with_rules(
                                     if pysandboxes_logger.isEnabledFor(logging.DEBUG):
                                         if use_hostname:
                                             pysandboxes_logger.debug(
-                                                "Connection to '%s' ([%s]:%s) "
-                                                "ALLOW by explicit rule "
-                                                "'%s' from %s",
+                                                "Connection to '%s' ([%s]:%s) ALLOW by explicit rule '%s' from %s",
                                                 hostname,
                                                 ip_host,
                                                 destination_port,
@@ -1002,7 +996,7 @@ def _check_address_with_rules(
                                             )
                                         else:
                                             pysandboxes_logger.debug(
-                                                "Connection to [%s]:%s " "ALLOW by explicit rule " "'%s' from %s",
+                                                "Connection to [%s]:%s ALLOW by explicit rule '%s' from %s",
                                                 ip_host,
                                                 destination_port,
                                                 config.rule,
@@ -1028,9 +1022,9 @@ def _refuse_by_default_policy(
         )
 
     if log:
-        pysandboxes_logger.error("Connection to '%s' " "DENIED by implicit default policy.", target)
+        pysandboxes_logger.error("Connection to '%s' DENIED by implicit default policy.", target)
     raise RuleSocketConnectionRefusedError(
-        f"Guard network connection to {str(target)!r} " f"DENIED by implicit default policy."
+        f"Guard network connection to {str(target)!r} DENIED by implicit default policy."
     )
 
 
@@ -1073,8 +1067,7 @@ def _check_unix_socket(address: str, *, write: bool, operation: str) -> None:
             address,
         )
         raise RuleSocketConnectionRefusedError(
-            f"Guard {operation} to AF_UNIX socket {address!r} DENIED: no "
-            f"expose-ro=/expose-rw= rule covers this path."
+            f"Guard {operation} to AF_UNIX socket {address!r} DENIED: no expose-ro=/expose-rw= rule covers this path."
         )
 
 
@@ -1473,7 +1466,7 @@ def _wrap_socket_bind(func: Callable) -> Callable:
             # Deny by default: an address shape we cannot interpret must not
             # reach the real syscall unchecked.
             raise RuleSocketConnectionRefusedError(
-                f"Guard bind to {address!r} DENIED: unsupported address " f"format, no rule can be evaluated."
+                f"Guard bind to {address!r} DENIED: unsupported address format, no rule can be evaluated."
             )
         func(self, address)
 
@@ -1549,7 +1542,7 @@ def _wrap_socket_connect(func: Callable) -> Callable:
             # Was an ``assert False``, which vanishes under ``python -O``:
             # a security check must raise unconditionally.
             raise RuleSocketConnectionRefusedError(
-                f"Guard connect to {address!r} DENIED: unsupported address " f"format, no rule can be evaluated."
+                f"Guard connect to {address!r} DENIED: unsupported address format, no rule can be evaluated."
             )
         return func(self, address)
 
@@ -1585,7 +1578,7 @@ def _wrap_socket_connect_ex(func: Callable) -> Callable:
             _check_unix_socket(address, write=True, operation="connect_ex")
         else:
             raise RuleSocketConnectionRefusedError(
-                f"Guard connect_ex to {address!r} DENIED: unsupported " f"address format, no rule can be evaluated."
+                f"Guard connect_ex to {address!r} DENIED: unsupported address format, no rule can be evaluated."
             )
         return func(self, address)
 
@@ -1627,7 +1620,7 @@ def _check_send_address(self: Any, address: _Address, operation: str) -> _Addres
         _check_unix_socket(address, write=True, operation=operation)
         return address
     raise RuleSocketConnectionRefusedError(
-        f"Guard {operation} to {address!r} DENIED: unsupported address " f"format, no rule can be evaluated."
+        f"Guard {operation} to {address!r} DENIED: unsupported address format, no rule can be evaluated."
     )
 
 
@@ -1913,7 +1906,7 @@ def generate_rules(
             out_ports = {
                 key_for_port.get(rule.port, str(rule.port)) for rule in out_rules_for_dest
             }  # Can not be a range
-            rule_str = f"net=ALLOW|{kind.name}|" f"{destination}|" f"{','.join(out_ports)}|" f"{Direction.OUT.name}"
+            rule_str = f"net=ALLOW|{kind.name}|{destination}|{','.join(out_ports)}|{Direction.OUT.name}"
             result.add(rule_str)
     return sorted(list(result))
 

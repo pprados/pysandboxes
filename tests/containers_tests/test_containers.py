@@ -107,8 +107,7 @@ always_env: dict[str, str] = {
     # linker closure adds three shares. Exercise direct 9p here (including its
     # overlay/mmap compatibility), with only CA data opting into guest-native paths.
     "qemu-microvm": (
-        "QEMU_VIRTFS=off "
-        "QEMU_MICROVM_OPTIONAL_PATHS=/etc/ssl,/etc/pki,/etc/ca-certificates,/usr/share/ca-certificates"
+        "QEMU_VIRTFS=off QEMU_MICROVM_OPTIONAL_PATHS=/etc/ssl,/etc/pki,/etc/ca-certificates,/usr/share/ca-certificates"
     ),
 }
 
@@ -1025,9 +1024,7 @@ def _run_kubernetes_test(os_sandbox: str, py_sandbox: bool, privileged: bool) ->
                     f"python-sb {py_sandbox_args} {PYTHON_SB_ARGS} -m tests.integration_tests.tst_usage"
                 )
 
-                logger.info(
-                    f"Executing tests inside the pod (timeout: {exec_timeout}s, " f"os_sandbox={os_sandbox})..."
-                )
+                logger.info(f"Executing tests inside the pod (timeout: {exec_timeout}s, os_sandbox={os_sandbox})...")
                 logger.info(
                     "kubectl exec output streams below (no pipe capture — avoids deadlock "
                     "and long QEMU/TCG silence). Nested qemu can take many minutes.",
@@ -1043,7 +1040,7 @@ def _run_kubernetes_test(os_sandbox: str, py_sandbox: bool, privileged: bool) ->
                         _terminal_newline_before_log()
                         elapsed = time.monotonic() - start
                         logger.debug(
-                            "k8s-test: kubectl exec still running " "(os_sandbox=%s, elapsed=%.0fs, timeout=%ss)",
+                            "k8s-test: kubectl exec still running (os_sandbox=%s, elapsed=%.0fs, timeout=%ss)",
                             os_sandbox,
                             elapsed,
                             exec_timeout,
@@ -1079,7 +1076,7 @@ def _run_kubernetes_test(os_sandbox: str, py_sandbox: bool, privileged: bool) ->
                         )
                 except subprocess.TimeoutExpired:
                     logger.debug(
-                        f"ERROR: Test execution timed out after {exec_timeout}s " f"(os_sandbox={os_sandbox})",
+                        f"ERROR: Test execution timed out after {exec_timeout}s (os_sandbox={os_sandbox})",
                     )
                     rc = 1
                 finally:

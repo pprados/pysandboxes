@@ -24,7 +24,7 @@ from tests.integration_tests.sample import run_in_sandbox
 def _bootstrap_profile(tmp_path: Path, learned: Path) -> Path:
     """A profile that whitelists nothing: everything has to come from learning."""
     profile = tmp_path / "bootstrap.profile"
-    profile.write_text("py-sandbox=true\n" "os-sandbox=subprocess\n" f"learn={learned}\n")
+    profile.write_text(f"py-sandbox=true\nos-sandbox=subprocess\nlearn={learned}\n")
     return profile
 
 
