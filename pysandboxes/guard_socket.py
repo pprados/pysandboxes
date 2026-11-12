@@ -1131,6 +1131,28 @@ def _learned_rule(ip: IPv4Address | IPv6Address, rule: NameRule) -> SocketRule:
     )
 
 
+def widened_name_rules(name_rules: tuple[NameRule, ...]) -> SocketRules:
+    """The kernel-side rules of a provider that cannot filter a host: each ALLOW name opens any address on its ports."""
+    widened = []
+    for rule in name_rules:
+        if not rule.allow:
+            continue
+        kinds = tuple(Kind[kind.upper()] for kind in rule.kinds)
+        ports: tuple[int, ...] | range = (
+            tuple(port for low, high in rule.ports for port in range(low, high + 1)) if rule.ports else range(65536)
+        )
+        text = f"net=ALLOW|{','.join(k.name for k in kinds)}|*|{_ports_text(rule)}|OUT (name {rule.pattern})"
+        widened.append(
+            SocketRule(
+                Action.ALLOW,
+                SocketMask(kinds, ip_network("0.0.0.0/0"), ports),
+                (Direction.OUT,),
+                ConfigLine(text, _LEARNED_CONFIG_PATH, 0),
+            )
+        )
+    return tuple(widened)
+
+
 def _ports_text(rule: NameRule) -> str:
     return ",".join(str(low) if low == high else f"{low}-{high}" for low, high in rule.ports) or "*"
 

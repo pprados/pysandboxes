@@ -21,7 +21,7 @@ import pytest
 from ._env import provider_skip_reason
 
 ROOT_DIR = Path(__file__).resolve().parent.parent.parent
-PROVIDERS = ("subprocess",)
+PROVIDERS = ("subprocess", "sandbox-exec")
 NAME = "localhost"
 
 SCRIPT = """
@@ -74,7 +74,7 @@ def test_the_guard_opens_the_addresses_of_an_allowed_name_only_once_resolved(
     script = SCRIPT.format(port=port, other=other, name=NAME)
     code = (
         "import sys; from pysandboxes import python_sb; "
-        f"sys.argv = ['python-sb', '--pysandboxes-config={profile}', '-c', {script!r}]; "
+        f"sys.argv = ['python-sb', {f'--pysandboxes-config={profile}'!r}, '-c', {script!r}]; "
         "sys.exit(python_sb.main())"
     )
 

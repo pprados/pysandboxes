@@ -63,9 +63,12 @@ def test_pinned_is_accepted_by_every_provider() -> None:
     assert errors == []
 
 
-@pytest.mark.parametrize("provider", ["unshare", "bwrap", "gvisor", "firejail", "qemu", "qemu-microvm", "subprocess"])
+@pytest.mark.parametrize(
+    "provider",
+    ["unshare", "bwrap", "gvisor", "firejail", "qemu", "qemu-microvm", "subprocess", "sandbox-exec", "appcontainer"],
+)
 def test_runtime_is_accepted_by_the_providers_with_an_enforcer(provider: str, monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr("os.geteuid", lambda: 0)
+    monkeypatch.setattr("os.geteuid", lambda: 0, raising=False)
     errors: list = []
 
     check_net_resolve_provider("runtime", provider, Path("p"), errors)
@@ -74,7 +77,7 @@ def test_runtime_is_accepted_by_the_providers_with_an_enforcer(provider: str, mo
 
 
 def test_runtime_under_firejail_is_an_error_without_root(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr("os.geteuid", lambda: 1000)
+    monkeypatch.setattr("os.geteuid", lambda: 1000, raising=False)
     errors: list = []
 
     check_net_resolve_provider("runtime", "firejail", Path("p"), errors)
@@ -82,7 +85,7 @@ def test_runtime_under_firejail_is_an_error_without_root(monkeypatch: pytest.Mon
     assert len(errors) == 1 and "needs root" in errors[0][0]
 
 
-@pytest.mark.parametrize("provider", ["landlock", "none", "sandbox-exec", "appcontainer"])
+@pytest.mark.parametrize("provider", ["landlock", "none"])
 def test_runtime_is_an_error_for_a_provider_without_an_enforcer(provider: str) -> None:
     errors: list = []
 

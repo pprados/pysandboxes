@@ -59,7 +59,7 @@
 - Raise `oauthlib` in the CrewAI sample to 4.0.1, which fixes a published advisory.
 - A QEMU guest now refuses to run when one of its mounts fails, instead of continuing with partial isolation.
 - Code run under `qemu-microvm` is now held to the same isolation guarantees as the other providers.
-- `net-resolve=pinned|runtime` chooses when the host names of `net=` rules are resolved: `pinned` (the current behaviour) freezes their addresses at start, `runtime` (`unshare`, `bwrap`, `gvisor`, `qemu`, `qemu-microvm`, `subprocess` (Python guard only) and `firejail` (as root)) resolves them when the program asks, through a filtering resolver that opens the addresses of an allowed name for their TTL and refuses every other name and resolver.
+- `net-resolve=pinned|runtime` chooses when the host names of `net=` rules are resolved: `pinned` (the current behaviour) freezes their addresses at start, `runtime` (`unshare`, `bwrap`, `gvisor`, `qemu`, `qemu-microvm`, `subprocess`, `sandbox-exec` and `appcontainer` (Python guard only) and `firejail` (as root)) resolves them when the program asks, through a filtering resolver that opens the addresses of an allowed name for their TTL and refuses every other name and resolver.
 
 ## [0.10.0] - 2026-11-05
 
