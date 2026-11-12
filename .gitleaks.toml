@@ -1,0 +1,6 @@
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Placeholders in example environment files"
+paths = ['''(^|/)\.env\.example$''']
