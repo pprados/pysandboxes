@@ -1044,6 +1044,13 @@ def _microvm_pcie_mode(all_rules: AllRules) -> str:
     return value
 
 
+def _microvm_acpi_memory(memory: str) -> str:
+    """Return ``memory`` for the ACPI machine: exactly 2 GiB corrupts an ACPI table and the guest kernel hangs."""
+    unit = "m" if memory[-1].isdigit() else memory[-1].lower()
+    size = int(memory.rstrip("kKmMgGtTpPeE")) * 1024 ** " kmgtpe".index(unit)
+    return "2049" if size == 2 * 1024**3 else memory
+
+
 def _microvm_security_model(host: Path, readonly: bool, configured: str) -> str:
     if readonly:
         return "none"
@@ -1679,6 +1686,8 @@ class QemuMicrovmSSEDaemon(QemuSSEDaemon):
                 pcie = True
         kernel, initrd = ensure_microvm_boot_artifacts(image, all_rules.os_sandbox_params)
         memory = normalize_qemu_m_memory_arg(all_rules.os_sandbox_params.get("memory", "2048").strip())
+        if pcie:
+            memory = _microvm_acpi_memory(memory)
         image_format = "qcow2" if image.suffix == ".qcow2" or "cloudimg" in image.name else "raw"
         forward = f"unix:{self.endpoint.path}-:{port}" if self.endpoint is not None else f"tcp:127.0.0.1:{port}-:{port}"
         if self._resolver_port is not None:

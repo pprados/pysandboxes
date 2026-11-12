@@ -80,6 +80,32 @@ def test_microvm_pcie_auto_falls_back_only_when_mmio_is_full(monkeypatch: pytest
     assert not any("9p-pci" in arg for arg in cmd)
 
 
+@pytest.mark.parametrize(
+    ("memory", "expected"),
+    [
+        ("2048", "2049"),
+        ("2G", "2049"),
+        ("2048M", "2049"),
+        ("2097152k", "2049"),
+        ("2047", "2047"),
+        ("2049", "2049"),
+        ("1024", "1024"),
+        ("4G", "4G"),
+    ],
+)
+def test_acpi_machine_avoids_exactly_two_gib_of_guest_memory(memory: str, expected: str) -> None:
+    assert daemon._microvm_acpi_memory(memory) == expected
+
+
+@pytest.mark.parametrize(("pcie", "memory"), [("true", "2049"), ("false", "2048")])
+def test_microvm_only_shifts_the_default_memory_on_the_acpi_machine(
+    pcie: str, memory: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    cmd, _ = _pcie_command(monkeypatch, {"microvm_pcie": pcie}, shares=1, capacity=8)
+
+    assert cmd[cmd.index("-m") + 1] == memory
+
+
 def test_microvm_pcie_rejects_an_unknown_value(monkeypatch: pytest.MonkeyPatch) -> None:
     with pytest.raises(Exception, match="auto, true or false"):
         _pcie_command(monkeypatch, {"microvm_pcie": "maybe"}, shares=1, capacity=8)
