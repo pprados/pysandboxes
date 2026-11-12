@@ -8,14 +8,14 @@
 | ✅ 3.14   | ✅ bwrap        | ✅ Windows | ✅ Import  |
 | ☐ 3.15   | ✅ firejail     |            | ✅ API     |
 |          | ✅ unshare       |            | ✅ Eval    |
-|          | ✅ qemu          |            | ☐ Source  |
+|          | ✅ qemu          |            |   |
 |          | ✅ qemu-microvm  |            |           |
-|          | ✅ sandbox-exec  |            | ☐ Regexp  |
-|          | ✅ Docker¹       |            | ☐ DoS     |
-|          | ✅ Podman¹       |            |           |
+|          | ✅ sandbox-exec  |            |   |
 |          | ✅ gVisor        |            |           |
 |          | ✅ smolvm        |            |           |
 |          | ✅ appcontainer  |            |           |
+|          | ✅ Docker¹       |            |     |
+|          | ✅ Podman¹       |            |           |
 
 ¹ Docker and Podman are not providers of their own: a container runs the
 `unshare` provider, with `--privileged` for Docker.
