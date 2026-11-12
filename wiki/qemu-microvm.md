@@ -43,6 +43,27 @@ The current microvm machine exposes eight virtio-mmio transports. One is used by
 the network device, leaving at most six 9p shares. Configuration data is carried on the read-only NoCloud ISO. The
 provider may merge nested mounts only when host path, read/write access, and security model remain equivalent.
 
+### PCIe fallback
+
+`qemu.microvm_pcie=auto|true|false` (default `auto`) decides whether the 9p shares may leave the MMIO transports:
+
+| Value | Behaviour |
+|-------|-----------|
+| `auto` | The PCI-free machine is kept while the shares fit the MMIO transports. When they do not fit, and the optional/empty paths below cannot make them fit, the machine starts with a PCIe bus instead of failing. |
+| `true` | Always starts with a PCIe bus; every share goes through `virtio-9p-pci` and the optional/empty paths below are ignored (all host shares stay mounted). |
+| `false` | Never uses PCIe: a profile that does not fit fails closed before user code runs. |
+
+With a PCIe bus the machine starts with `acpi=on,pcie=on` and the shares use `virtio-9p-pci`, so their number is no
+longer bound by the MMIO transports (SCSI and network keep two of them). `pcie=on` alone does nothing: QEMU creates the
+PCIe bus only with ACPI. The fallback adds ACPI and a PCIe bus to the device model, which the PCI-free default avoids;
+set `false` to keep the strict machine. Measured with KVM, a nine-share profile boots and runs a program in 12 to 13
+seconds, like a four-share profile on the PCI-free machine. With ACPI, QEMU 10.2.1 corrupts an ACPI table when the
+guest has exactly 2 GiB of RAM and the guest kernel then hangs at `ACPI: Core revision` (2047 and 2049 MiB, 1 GiB and
+3 GiB boot): on the PCIe machine the provider therefore starts a guest asking for exactly 2 GiB (the default) with
+2049 MiB. A profile that lists `qemu.microvm_optional_paths` or `qemu.microvm_empty_paths` keeps its current behaviour
+under `auto`: those host shares are dropped first, and PCIe is used only if that is still not enough. Use `true` to keep
+them mounted.
+
 `qemu.microvm_optional_paths=/etc/ssl,/etc/pki` marks exact guest mount paths as optional. The provider drops these
 host shares in the listed order only when the profile exceeds the MMIO limit. The guest then uses its own existing
 path; startup fails closed if that path is absent or another share overlaps it. Under capacity, the host shares stay

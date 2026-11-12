@@ -164,6 +164,37 @@ def test_a_path_both_optional_and_empty_must_still_exist_in_the_guest(
     assert cloud_init_mounts == [("project", "/project"), ("__pysb_native__", "/etc/pki")]
 
 
+@pytest.mark.parametrize(
+    ("pcie", "kept"),
+    [("auto", 3), ("true", 3), ("false", None)],
+)
+def test_microvm_keeps_every_share_for_pcie_when_optional_paths_cannot_make_them_fit(
+    pcie: str, kept: int | None, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    mounts = [
+        ("project", tmp_path / "project", "/project"),
+        ("ssl", Path("/etc/ssl"), "/etc/ssl"),
+        ("pki", Path("/etc/pki"), "/etc/pki"),
+    ]
+    monkeypatch.setattr(daemon, "ensure_image", lambda _: None)
+    monkeypatch.setattr(daemon, "_file_rules_mounts", lambda *args, **kwargs: (mounts, [(a, c) for a, _, c in mounts]))
+    monkeypatch.setattr(daemon, "_qemu_binary", lambda: "qemu")
+    monkeypatch.setattr(daemon, "qemu_accel_args", lambda _: [])
+    monkeypatch.setattr(daemon, "microvm_mmio_capacity", lambda *_: 3)
+    monkeypatch.setattr(daemon, "prepare_guest_env", lambda *args, **kwargs: tmp_path / "seed.iso")
+    params = {"microvm_optional_paths": "/etc/ssl", "microvm_pcie": pcie}
+    rules = EmptyRules._replace(os_sandbox_params=ImmutableDict(params))
+    process_config = DaemonParameters(rules, 20, "", False, "token", 1234, "")
+
+    if kept is None:
+        with pytest.raises(daemon.SandBoxError, match="needs 5 MMIO devices but supports 3"):
+            daemon._prepare_qemu_launch(rules, tmp_path, process_config, tmp_path / "pipe", microvm=True)
+        return
+    assets = daemon._prepare_qemu_launch(rules, tmp_path, process_config, tmp_path / "pipe", microvm=True)
+
+    assert assets.mount_specs == mounts
+
+
 def test_execution_mount_is_readonly_but_explicit_write_grant_is_not(monkeypatch: pytest.MonkeyPatch) -> None:
     from pysandboxes.guard_files import FSExposeRule
     from pysandboxes.sb_types import ConfigLine

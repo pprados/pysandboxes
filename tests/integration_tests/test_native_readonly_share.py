@@ -96,7 +96,7 @@ else:
 
 @pytest.mark.parametrize("provider", [row for row in _PROVIDERS if row.startswith("qemu-microvm")])
 def test_microvm_rejects_distinct_exposes_beyond_its_transport_capacity(provider: str, tmp_path: Path) -> None:
-    """A distinct readonly export cannot be dropped to make a profile boot."""
+    """With PCIe off, a distinct readonly export cannot be dropped to make a profile boot."""
     if reason := provider_skip_reason(provider):
         pytest.skip(reason)
     readonly, writable = tmp_path / "readonly", tmp_path / "writable"
@@ -104,7 +104,7 @@ def test_microvm_rejects_distinct_exposes_beyond_its_transport_capacity(provider
     writable.mkdir()
     profile = tmp_path / "capacity.profile"
     profile.write_text(
-        f"py-sandbox=false\nos-sandbox=qemu-microvm\n{row_profile_lines(provider)}"
+        f"py-sandbox=false\nos-sandbox=qemu-microvm\n{row_profile_lines(provider)}qemu.microvm_pcie=false\n"
         f"expose-ro=.\nexpose-ro=/etc\nexpose-ro={sys.base_prefix}/lib\n"
         f"expose-ro={readonly}\nexpose-rw={writable}\n"
     )
@@ -126,3 +126,35 @@ def test_microvm_rejects_distinct_exposes_beyond_its_transport_capacity(provider
     assert result.returncode != 0, result.stdout + result.stderr
     assert "needs 9 MMIO devices but supports 8" in result.stderr, result.stderr
     assert "MUST_NOT_RUN" not in result.stdout
+
+
+@pytest.mark.parametrize("provider", [row for row in _PROVIDERS if row.startswith("qemu-microvm")])
+def test_microvm_falls_back_to_pcie_beyond_its_transport_capacity(provider: str, tmp_path: Path) -> None:
+    """By default the same profile boots over a PCIe bus, and the guest reads and writes through every share."""
+    if reason := provider_skip_reason(provider):
+        pytest.skip(reason)
+    readonly, writable = tmp_path / "readonly", tmp_path / "writable"
+    readonly.mkdir()
+    writable.mkdir()
+    (readonly / "sentinel.txt").write_text("ro-ok\n")
+    profile = tmp_path / "pcie.profile"
+    profile.write_text(
+        f"py-sandbox=false\nos-sandbox=qemu-microvm\n{row_profile_lines(provider)}"
+        f"expose-ro=.\nexpose-ro=/etc\nexpose-ro={sys.base_prefix}/lib\n"
+        f"expose-ro={readonly}\nexpose-rw={writable}\n"
+    )
+    code = (
+        f"print(open({str(readonly / 'sentinel.txt')!r}).read().strip());"
+        f"open({str(writable / 'guest.txt')!r}, 'w').write('guest-ok')"
+    )
+    result = subprocess.run(
+        [sys.executable, "-m", "pysandboxes.python_sb", f"--pysandboxes-config={profile}", "-c", code],
+        cwd=ROOT_DIR,
+        capture_output=True,
+        text=True,
+        timeout=900,
+        check=False,
+    )
+    assert result.returncode == 0, result.stderr[-3000:]
+    assert "ro-ok" in result.stdout
+    assert (writable / "guest.txt").read_text() == "guest-ok"

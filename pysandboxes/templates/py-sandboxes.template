@@ -353,6 +353,8 @@ remote-result-guard=true
 # from the root image with 7zip. Set both overrides to bypass extraction:
 # qemu.microvm_kernel=/path/to/vmlinuz
 # qemu.microvm_initrd=/path/to/initrd.img
+# qemu.microvm_pcie=auto|true|false (default auto): use a PCIe bus (acpi=on, virtio-9p-pci) for the 9p shares when
+# they do not fit the MMIO transports; true always, false never (fails closed instead)
 # qemu.microvm_optional_paths=/etc/ssl,/etc/pki
 # The machine exposes eight virtio-mmio transports: SCSI and network use two, leaving at most
 # six 9p shares. Optional paths are dropped only when needed to fit; the guest must already
