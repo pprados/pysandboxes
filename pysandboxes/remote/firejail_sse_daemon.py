@@ -13,15 +13,20 @@ Key components:
 - Firejail profile generation and rule translation
 """
 
+import asyncio
+import fcntl
 import importlib
 import ipaddress
 import logging
 import os
 import re
 import shlex
+import socket
+import struct
 import subprocess
 import sys
 import threading
+import time
 from ipaddress import IPv4Address
 from pathlib import Path
 from typing import Any, Iterator, MutableSet, cast
@@ -32,7 +37,7 @@ from ..e import SandBoxError
 from ..guard_files import FSExposeRule, IgnoreRule
 from ..immutable_dict import ImmutableDict
 from ..main_logger import ErrorMsg
-from ..netfilter import rule_to_netfilter
+from ..netfilter import rule_to_netfilter, runtime_netfilter
 from ..override_compat import override
 from ..sb_types import Args, ConfigLines, Envs
 from ..tools import (
@@ -42,6 +47,8 @@ from ..tools import (
     substitute_env_vars,
 )
 from .client_subprocess_sse_daemon import BaseSubProcessDaemon
+from .runtime_dns import RuntimeDnsSession
+from .slirp4netns_common import SLIRP_DNS
 from .tools import (
     get_bridge_interfaces,
     get_upstream_dns,
@@ -54,6 +61,20 @@ logger = logging.getLogger(__name__)
 DEBUG_NETFILTER = DEBUG or False
 
 FIREJAIL_CONFIG = Path("/etc/firejail/firejail.config")
+
+
+_SIOCGIFADDR = 0x8915
+_JOIN_TIMEOUT = 10.0
+
+
+def _interface_ipv4(name: str) -> ipaddress.IPv4Address:
+    """The IPv4 address of the host interface ``name``: where a jail on that bridge reaches the host."""
+    with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as probe:
+        try:
+            packed = fcntl.ioctl(probe.fileno(), _SIOCGIFADDR, struct.pack("256s", name.encode()[:15]))[20:24]
+        except OSError as error:
+            raise SandBoxError(f"net-resolve=runtime needs an IPv4 address on the bridge {name!r}: {error}") from error
+    return ipaddress.IPv4Address(packed)
 
 
 class AllowList(MutableSet[str]):
@@ -215,6 +236,10 @@ class FireJailSSEDaemon(BaseSubProcessDaemon):
     """
 
     supports_unix_endpoint = True
+
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        super().__init__(*args, **kwargs)
+        self._dns_session = RuntimeDnsSession(join="firejail")
 
     @classmethod
     @override
@@ -453,7 +478,7 @@ class FireJailSSEDaemon(BaseSubProcessDaemon):
             args.append(f"--mkdir={str(pipe_path)}")
             args.append(f"--read-only={str(pipe_path)}")
 
-        if all_rules.socket_rules:
+        if all_rules.socket_rules or all_rules.name_rules:
             # Without 'restricted-network no' a regular user only gets --net=none, which
             # would also cut the host from the daemon's SSE port. A missing line is refused.
             if restricted_network and not restricted_network_explicit_yes:
@@ -474,10 +499,18 @@ class FireJailSSEDaemon(BaseSubProcessDaemon):
                     repr(str(firejail_config)),
                 )
 
+            runtime = all_rules.net_resolve == "runtime"
+            if runtime and skip_network_setup:
+                raise SandBoxError(
+                    "net-resolve=runtime needs a network namespace: 'restricted-network yes' keeps the host's."
+                )
             if not skip_network_setup:
                 dns_servers = [ip for ip in get_upstream_dns() if isinstance(ip, IPv4Address)]
 
-                if dns_servers:
+                if runtime:
+                    # The sandbox asks a DNS address that nothing owns; the jail's nat table sends it to the resolver.
+                    args.append(f"--dns={SLIRP_DNS}")
+                elif dns_servers:
                     for dns in dns_servers:
                         if not dns.is_loopback:
                             # Change to other, because inside the firejail, the loopback is not accessible
@@ -506,6 +539,12 @@ class FireJailSSEDaemon(BaseSubProcessDaemon):
                         bridge = bridges[0]
                     logger.debug(f"Select bridge {bridges}")
                     args.append(f"--net={bridge}")
+                resolver_port: int | None = None
+                gateway: ipaddress.IPv4Address | None = None
+                if runtime:
+                    net_name = str(all_rules.os_sandbox_params.get("net") or bridge)  # type: ignore[attr-defined]
+                    gateway = _interface_ipv4(net_name)
+                    resolver_port = self._dns_session.start(all_rules, str(gateway))
 
                 # The sandbox now owns a network namespace, so firejail accepts
                 # --x11=none, which also closes the abstract X11 socket that the
@@ -513,7 +552,12 @@ class FireJailSSEDaemon(BaseSubProcessDaemon):
                 args.append("--x11=none")
 
                 if pipe_path:  # Update rules?
-                    net_filter4 = rule_to_netfilter(all_rules.socket_rules, dns_servers, is_ipv6=False)
+                    if resolver_port is not None and gateway is not None:
+                        net_filter4 = runtime_netfilter(
+                            all_rules.socket_rules, resolver_port, gateway, ipaddress.IPv4Address(SLIRP_DNS)
+                        )
+                    else:
+                        net_filter4 = rule_to_netfilter(all_rules.socket_rules, dns_servers, is_ipv6=False)
 
                     if DEBUG_NETFILTER:
                         Path("tmp").mkdir(parents=True, exist_ok=True)
@@ -595,3 +639,32 @@ class FireJailSSEDaemon(BaseSubProcessDaemon):
         cmd_parameters, _ = self._firejail_args(all_rules=all_rules, envs=envs, pipe_path=pipe_path, temp=temp)
         cmd_parameters.extend(run_daemon_cmd)
         return cmd_parameters, {}
+
+    @override
+    def _on_process_launched(self, pid: int) -> None:
+        """Let the filtering resolver of ``net-resolve=runtime`` enter the jail, once its network exists."""
+        if not self._dns_session.running:
+            return
+        deadline = time.monotonic() + _JOIN_TIMEOUT
+        while parse_firejail_net_print(pid) is None:
+            if time.monotonic() > deadline:
+                self._dns_session.stop()
+                raise SandBoxError("the firejail network never came up, the resolver cannot join it")
+            time.sleep(0.05)
+        self._dns_session.attach(pid)
+
+    @override
+    def on_process_launched(self, process_pid: int) -> None:
+        """The hook a one-shot ``python-sb`` run calls: same as the daemon's."""
+        self._on_process_launched(process_pid)
+
+    def _kill_slirp(self) -> None:
+        """End of a one-shot ``python-sb`` run, which calls this hook by name: stop the filtering resolver."""
+        self._dns_session.stop()
+
+    @override
+    async def _shutdown(self, graceful_shutdown: bool = True) -> None:
+        try:
+            await super()._shutdown(graceful_shutdown)
+        finally:
+            await asyncio.to_thread(self._dns_session.stop)

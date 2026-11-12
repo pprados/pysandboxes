@@ -50,12 +50,15 @@ PySandboxes runs Python under a deny-by-default policy stored in `.py-sandboxes`
 
 - [Provider comparison](os-providers.md): which provider for which situation, enforcement mechanisms, prerequisites, compatibility, and trade-offs.
 - [AppContainer for Windows](appcontainer.md): provider implementation, validation status, and limits.
+- [Subprocess](subprocess.md): process separation, no OS boundary.
 - [Landlock](landlock.md)
 - [Bubblewrap (`bwrap`)](bwrap.md)
 - [Firejail](firejail.md)
 - [Unshare](unshare.md)
 - [QEMU](qemu.md)
+- [QEMU microvm](qemu-microvm.md)
 - [gVisor](gvisor.md)
+- [smolvm](smolvm.md)
 - [libkrun](libkrun.md)
 - [macOS `sandbox-exec` (Seatbelt)](sandbox-exec.md)
 - [DNS and network filtering](dns.md): DNS resolution and `iptables` behavior.

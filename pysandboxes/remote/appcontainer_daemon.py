@@ -10,6 +10,7 @@ import uuid
 from pathlib import Path
 
 from ..all_rules import AllRules
+from ..guard_socket import widened_name_rules
 from ..sb_types import Args, Envs
 from ..tools import Environ
 from .appcontainer_acl import (
@@ -74,7 +75,9 @@ class AppContainerSSEDaemon(BaseSubProcessDaemon):
             "env": child_process_env,
             "shared_socket_path": str(shared_socket_path),
             "port": self.port,
-            "capabilities": network_capabilities(all_rules.socket_rules, self.port),
+            "capabilities": network_capabilities(
+                (*all_rules.socket_rules, *widened_name_rules(all_rules.name_rules)), self.port
+            ),
             "grants": [
                 {"path": str(grant.path), "rights": grant.rights, "sid_kind": grant.sid_kind}
                 for grant in build_acl_plan(all_rules, temp)

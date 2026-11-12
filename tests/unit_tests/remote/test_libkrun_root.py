@@ -3,7 +3,7 @@
 
 from pathlib import Path
 
-from pysandboxes.all_rules import EmptyRules
+from pysandboxes.all_rules import AllRules, EmptyRules
 from pysandboxes.guard_files import FSExposeRule, IgnoreRule
 from pysandboxes.remote.libkrun_root import exposures, mask_targets
 from pysandboxes.sb_types import ConfigLine
@@ -11,7 +11,7 @@ from pysandboxes.sb_types import ConfigLine
 _LINE = ConfigLine("", Path(), 0)
 
 
-def _rules(*file_rules):
+def _rules(*file_rules: FSExposeRule | IgnoreRule) -> AllRules:
     return EmptyRules._replace(file_rules=tuple(file_rules))
 
 

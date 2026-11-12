@@ -5,6 +5,8 @@
 import subprocess
 from pathlib import Path
 
+import pytest
+
 from pysandboxes.all_rules import AllRules
 from pysandboxes.immutable_dict import ImmutableDict
 from pysandboxes.remote.qemu_guest_console_io import GUEST_STDERR_FILE
@@ -91,3 +93,55 @@ def test_a_fatal_bootstrap_error_reaches_the_run_dir_stderr(tmp_path: Path) -> N
 def test_the_python_probe_failure_is_fatal_with_its_stderr() -> None:
     script = _bootstrap_script_content([], "/mnt/pysandbox_run", "3.12")
     assert '_pysb_fatal "Python probe rc=$PY_PROBE_RC from $PYTHON_EXE: $(cat "$PROBE_ERR")"' in script
+
+
+@pytest.mark.parametrize("failure", ["cidata", "run", "readonly", "writable", "ignore", "chmod", "none"])
+def test_required_mount_failure_blocks_guest_execution(tmp_path: Path, failure: str) -> None:
+    """A masked mount status must never reach the consumer after guest setup."""
+    cidata = tmp_path / "cidata"
+    cidata.mkdir()
+    mounts = [(tag, str(tmp_path / tag)) for tag in ("run", "readonly", "writable")]
+    (cidata / "9p_mounts").write_text("\n".join(f"{tag} {path}" for tag, path in mounts) + "\n")
+    ignored = tmp_path / "secret"
+    ignored.write_text("secret")
+    (cidata / "ignore_overlays").write_text(str(ignored) + "\n")
+    script = _bootstrap_script_content(mounts, str(tmp_path), "3.12")
+    # Run the generated mount phase without touching host DNS, mounts or shutdown.
+    start = script.index("# Mount NoCloud")
+    end = script.index("PYTHON_VERSION=$(cat")
+    phase = script[start:end].replace("/mnt/cidata", str(cidata))
+    side_effect = tmp_path / "user-code"
+    snippet = "\n".join(
+        [
+            "set -e",
+            _shell_function(script, "_pysb_fatal"),
+            "_pysb_halt_guest() { :; }",
+            "modprobe() { return 0; }",
+            "mount() {",
+            f'  case "{failure}:$*" in',
+            "    cidata:*) return 1;;",
+            "    run:*' run '*) return 1;;",
+            "    readonly:*' readonly '*) return 1;;",
+            "    writable:*' writable '*) return 1;;",
+            "    ignore:--bind*) return 1;;",
+            "  esac",
+            "  return 0",
+            "}",
+            "chmod() { " + ("return 1;" if failure == "chmod" else 'command chmod "$@";') + " }",
+            # Keep placeholder files inside pytest's temporary directory.
+            f"export TMPDIR='{tmp_path}'",
+            phase,
+            "echo SSE_READY",
+            f"touch '{side_effect}'",
+        ]
+    )
+    result = subprocess.run(["bash", "-c", snippet], text=True, capture_output=True)
+    if failure == "none":
+        assert result.returncode == 0, result.stderr
+        assert "SSE_READY" in result.stdout
+        assert side_effect.exists()
+    else:
+        assert result.returncode != 0, result.stderr
+        assert "ERROR:" in result.stderr
+        assert "SSE_READY" not in result.stdout
+        assert not side_effect.exists()

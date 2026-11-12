@@ -1,11 +1,12 @@
 """Smoke tests for CLI wiring without live LLM calls."""
 
+import os
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
 
-from crewai_demo.main import _normalize_chat_model_spec, main
+from crewai_demo.main import _ensure_runtime_directories, _normalize_chat_model_spec, main
 
 
 def test_normalize_chat_model_colon_or_slash() -> None:
@@ -29,10 +30,11 @@ def test_main_kickoff_prints(
     mock_result.raw = "Task complete."
     mock_crew.kickoff.return_value = mock_result
     mock_crew_cls.return_value = mock_crew
+    vm_images = os.environ.get("PYSANDBOXES_VM_IMAGES_DIR", str(Path.home() / ".local/share/vm-images"))
+    monkeypatch.setenv("PYSANDBOXES_VM_IMAGES_DIR", vm_images)
     monkeypatch.setenv("HOME", str(tmp_path))
     monkeypatch.setenv("USERPROFILE", str(tmp_path))
     monkeypatch.setenv("LOCALAPPDATA", str(tmp_path / "AppData/Local"))
-
     code = main(["--task", "Use tools to add 1 and 1 via evaluate_expression only."])
 
     assert code == 0
@@ -41,3 +43,14 @@ def test_main_kickoff_prints(
     assert (tmp_path / ".local/share/crewai/credentials").is_dir()
     assert (tmp_path / "AppData/Local/CrewAI/crewai-demo").is_dir()
     assert (tmp_path / "AppData/Local/crewai/credentials").is_dir()
+
+
+def test_macos_runtime_directories_are_created(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.setenv("LOCALAPPDATA", str(tmp_path / "AppData/Local"))
+    monkeypatch.setattr("crewai_demo.main.sys.platform", "darwin")
+
+    _ensure_runtime_directories()
+
+    assert (tmp_path / "Library/Application Support/crewai-demo").is_dir()
+    assert (tmp_path / "Library/Application Support/crewai/credentials").is_dir()

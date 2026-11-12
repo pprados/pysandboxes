@@ -10,6 +10,7 @@ configuration object.
 from pathlib import Path
 from typing import Any, NamedTuple
 
+from pysandboxes.egress_filter import DEFAULT_NET_RESOLVE, NameRule
 from pysandboxes.eval_rules import EvalProfiles
 from pysandboxes.guard_api import ApiRules
 from pysandboxes.guard_envs import EnvsRules
@@ -64,6 +65,11 @@ class AllRules(NamedTuple):
         remote_endpoint: How the host reaches the sandbox: ``auto`` (the default: a Unix socket the host binds and
             hands down when the provider and the platform allow it, a local TCP port otherwise), ``tcp``, or ``unix``
             (an error when impossible). Set by ``remote-endpoint`` in the profile.
+        net_resolve: How the host names of the ``net=`` rules are resolved: ``pinned`` (once, at start, into
+            ``pin_dns`` and the static ruleset) or ``runtime`` (when the sandboxed program asks, through a filtering
+            resolver). Set by ``net-resolve`` in the profile; ``DEFAULT_NET_RESOLVE`` when absent.
+        name_rules: The ``net=`` rules that name a host, kept as names in ``runtime`` mode, DENY first. Empty in
+            ``pinned`` mode, where those rules are in ``socket_rules`` and ``pin_dns``.
     """
 
     root_path: Path
@@ -86,6 +92,8 @@ class AllRules(NamedTuple):
     remote_result_data_only: bool = True
     config_files: frozenset[Path] = frozenset()
     remote_endpoint: str = "auto"
+    net_resolve: str = DEFAULT_NET_RESOLVE
+    name_rules: tuple[NameRule, ...] = ()
 
 
 EmptyRules = AllRules(

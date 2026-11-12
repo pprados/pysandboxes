@@ -16,7 +16,7 @@ from typing import Iterable
 
 from ..all_rules import AllRules
 from ..guard_files import FSExposeRule, IgnoreRule
-from ..guard_socket import Action, Direction, Kind, SocketRule
+from ..guard_socket import Action, Direction, Kind, SocketRule, widened_name_rules
 from ..override_compat import override
 from ..tools import Environ
 from .client_subprocess_sse_daemon import BaseSubProcessDaemon
@@ -159,8 +159,9 @@ def _deny_overlaps(allow: SocketRule, deny: SocketRule, scope: str, port: str, k
 def _network_rules(rules: AllRules) -> list[str]:
     """Translate expressible socket rules to port-scoped Seatbelt network actions."""
     rendered: set[str] = set()
-    allows = [rule for rule in rules.socket_rules if rule.action == Action.ALLOW]
-    denies = [rule for rule in rules.socket_rules if rule.action == Action.DENY]
+    socket_rules = (*rules.socket_rules, *widened_name_rules(rules.name_rules))
+    allows = [rule for rule in socket_rules if rule.action == Action.ALLOW]
+    denies = [rule for rule in socket_rules if rule.action == Action.DENY]
     for rule in allows:
         scope = _network_scope(rule)
         if scope == "*" and rule.mask.network.prefixlen != 0:

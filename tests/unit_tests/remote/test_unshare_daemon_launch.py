@@ -182,7 +182,7 @@ class TestSubprocessCmd:
             assert daemon._slirp_api_socket_for_watcher == daemon._slirp_api_socket
             assert daemon._slirp_pipe_r != daemon._slirp_pipe_w
             assert len(daemon._chroot_dirs) == 1
-            self.prepare.assert_called_once_with(EmptyRules, tmp_path / "pipe", daemon._chroot_dirs[0])
+            self.prepare.assert_called_once_with(EmptyRules, tmp_path / "pipe", daemon._chroot_dirs[0], None)
         finally:
             self._clean(daemon)
 

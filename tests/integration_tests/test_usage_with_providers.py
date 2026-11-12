@@ -50,7 +50,7 @@ def _run_tst_usage(os_sandbox: str) -> subprocess.CompletedProcess:
     # The shared profile reads it as qemu.use_kvm; the "qemu-tcg" row is the same
     # backend with acceleration refused, which is what a container without /dev/kvm
     # gets. Set for every row, so the value never leaks in from the caller's shell.
-    env["QEMU_USE_KVM"] = "false" if os_sandbox == "qemu-tcg" else "true"
+    env["QEMU_USE_KVM"] = "false" if os_sandbox in ("qemu-tcg", "qemu-microvm-tcg") else "true"
     env.setdefault("TERM", "dumb")
     env["My_ENV"] = "1"
     # No rule whitelists this, so tst_usage fails if the sandbox can see it.
@@ -65,7 +65,7 @@ def _run_tst_usage(os_sandbox: str) -> subprocess.CompletedProcess:
         "tests.integration_tests.tst_usage",
     ]
     # qemu needs time for VM boot + cloud-init + bootstrap
-    timeout = 600 if backend == "qemu" else 120
+    timeout = 600 if backend in ("qemu", "qemu-microvm") else 120
 
     return subprocess.run(
         cmd,
@@ -121,7 +121,7 @@ def _partial_mode_params() -> list:
     for os_sandbox in all_os_sandbox:
         if unsupported_platform_reason(backend_of(os_sandbox)):
             continue  # No row for a backend of another platform, as in os_sandbox_params
-        marks = [pytest.mark.slow] if os_sandbox == "qemu-tcg" else []
+        marks = [pytest.mark.slow] if os_sandbox in ("qemu-tcg", "qemu-microvm-tcg") else []
         rows.append(pytest.param(os_sandbox, marks=marks))
     return rows
 
@@ -131,12 +131,12 @@ def _run_partial_mode(os_sandbox: str) -> subprocess.CompletedProcess:
     env = os.environ.copy()
     backend = backend_of(os_sandbox)
     env["OS_SANDBOX"] = backend.lower()
-    env["QEMU_USE_KVM"] = "false" if os_sandbox == "qemu-tcg" else "true"
+    env["QEMU_USE_KVM"] = "false" if os_sandbox in ("qemu-tcg", "qemu-microvm-tcg") else "true"
     env.setdefault("TERM", "dumb")
     env["My_ENV"] = "1"
     env["SECRET_TOKEN"] = PARTIAL_MODE_SECRET
 
-    timeout = 600 if backend == "qemu" else 120
+    timeout = 600 if backend in ("qemu", "qemu-microvm") else 120
 
     return subprocess.run(
         [sys.executable, "-m", "tests.integration_tests.tst_env_leak"],

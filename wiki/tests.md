@@ -6,8 +6,8 @@ it does not mean the row ran successfully on every host.
 
 ## At a glance
 
-- The host integration suite exercises six runtime guard families over six
-  distinct OS providers (gvisor included). QEMU has one row, under KVM when the host has it; the forced TCG emulation row (`qemu-tcg`) exists only when `PYSANDBOXES_QEMU_TCG=1` asks for it.
+- The host integration suite exercises six runtime guard families over seven
+  distinct Linux OS providers (gvisor included). QEMU and microvm have KVM rows; their forced TCG rows exist only when `PYSANDBOXES_QEMU_TCG=1` asks for them.
 - macOS adds a separate `sandbox-exec` row with direct Seatbelt, network-only,
   provider usage, and guard coverage. It does not change the Linux container counts.
 - Container scenarios exercise file, socket, and environment behavior. They do
@@ -44,6 +44,7 @@ workflows. See [test workflow](../.github/workflows/test.yml),
 | Integration | `make integration-tests` | [`tests/integration_tests/`](../tests/integration_tests/) — real `python-sb` child processes |
 | Containers | `make container-tests` | [`tests/containers_tests/`](../tests/containers_tests/) — Docker, Podman, Kubernetes (minikube) |
 | Samples | `make sample-tests` | each sample's own test suite |
+| VM samples | `make sample-tests-vm` | QEMU providers; separate, costly lane |
 
 `make all-tests` chains all four.
 
@@ -73,7 +74,7 @@ of it:
 | [`test.yml`](../.github/workflows/test.yml) | Unit | 3.11, 3.12, 3.13, 3.14 | ~15160 | every push and pull request |
 | [`integration.yml`](../.github/workflows/integration.yml) | Integration | 3.11, 3.12, 3.13, 3.14 | ~1310 | `full-gate.yml` (nightly, release tag) or dispatch |
 | [`containers.yml`](../.github/workflows/containers.yml) | Containers | 3.13 | ~60 | `full-gate.yml` (nightly, release tag) or dispatch |
-| [`samples.yml`](../.github/workflows/samples.yml) | Samples | 3.11, 3.12, 3.13, 3.14 × subprocess, landlock, bwrap, firejail, unshare, gvisor | ~4460 | `full-gate.yml` (nightly, release tag) or dispatch |
+| [`samples.yml`](../.github/workflows/samples.yml) | Samples | 3.11, 3.12, 3.13, 3.14 × subprocess, landlock, bwrap, firejail, unshare, gvisor; VM lane uses qemu-microvm | ~4460 plus VM boots | `full-gate.yml` (nightly, release tag) or dispatch |
 | **Total** | | | **~20990** | |
 
 The samples row is not a clean multiplication: a sample whose `requires-python`
@@ -164,9 +165,12 @@ Twelve entries are registered in `pysandboxes/_os_sandbox.py`: eleven providers,
 | `unshare` | yes | yes | yes (2 modes) | yes (2 modes) | yes (privileged) | yes (privileged) | yes (privileged) |
 | `landlock` | yes | yes | yes (ABI v4) | yes (2 modes) | yes | yes | yes |
 | `qemu` | yes | yes | yes (KVM) | yes (2 modes) | yes | yes | yes |
+| `qemu-microvm` | yes | yes | yes (KVM) | yes (2 modes) | wired | wired | wired |
 | `gvisor` | yes | yes | yes | yes | yes | yes | yes |
+| `smolvm` | yes | yes | yes (2 modes, on the address of the host) | yes (2 modes) | yes (as the user of the caller, with `/dev/kvm`) | yes (`--userns=keep-id`) | yes (device plugin, no `securityContext`) |
 | `libkrun` | yes | yes | yes (needs `/dev/kvm`) | yes (2 modes) | not tested | not tested | not tested |
 | `qemu-tcg` (on demand) | yes | yes | — | yes (2 modes) | — | — | — |
+| `qemu-microvm-tcg` (on demand) | yes | yes | — | yes (2 modes) | — | — | — |
 | `sandbox-exec` | yes (macOS only) | yes (macOS only) | yes (2 modes, macOS only) | yes (2 modes, macOS only) | **excluded** | **excluded** | **excluded** |
 | `appcontainer` | yes (Windows only) | yes (Windows only) | — | — | **excluded** | **excluded** | **excluded** |
 
@@ -177,9 +181,9 @@ Twelve entries are registered in `pysandboxes/_os_sandbox.py`: eleven providers,
 `PYSANDBOXES_FAIL_ON_SKIP=1`: a skipped Windows scenario is not a pass); `make windows-tests` runs the same steps in
 a local Windows VM. See [AppContainer](appcontainer.md) for the validation setup and security limits.
 
-"Host: guards" is `test_guards_with_providers`. `qemu-tcg` is not a backend but
-a second host row for `qemu` with `qemu.use_kvm=false` (`ALL_OS_SANDBOX` in
-`tests/integration_tests/_env.py`). It exists only when `PYSANDBOXES_QEMU_TCG=1` asks for it (`PYSANDBOXES_QEMU_TCG=1 make integration-tests`), and then carries the `slow` marker: a green `qemu` row under KVM is enough, and no workflow asks for it.
+"Host: guards" is `test_guards_with_providers`. `qemu-tcg` and `qemu-microvm-tcg` are not backends but
+second host rows for their matching QEMU provider with `qemu.use_kvm=false` (`ALL_OS_SANDBOX` in
+`tests/integration_tests/_env.py`). They exist only when `PYSANDBOXES_QEMU_TCG=1` asks for them (`PYSANDBOXES_QEMU_TCG=1 make integration-tests`), and carry the `slow` marker. Nightly integration runs include both TCG rows; release gates exclude slow rows and require KVM.
 
 `none` is left out of the provider table. It is the no-op provider — a
 development aid, not a confinement technology — so nothing it does or fails to
@@ -208,7 +212,7 @@ network. The Python guards also refuse what the OS filter should, so a broken
 filter leaves the grid green. The
 [`test_os_netfilter.py`](../tests/integration_tests/test_os_netfilter.py)
 scenario checks OS-only network enforcement with `py-sandbox=false` for
-`bwrap`, `unshare`, `qemu`, `gvisor`, and (when Landlock ABI v4 is available) `landlock`,
+`bwrap`, `unshare`, `qemu`, `qemu-microvm`, `gvisor`, and (when Landlock ABI v4 is available) `landlock`,
 under both `python-sb` and daemon mode. It pairs a denied connection with a
 permitted control connection. [`remote/test_bwrap.py`](../tests/integration_tests/remote/test_bwrap.py)
 also exercises the bwrap daemon with the network-filtered profile.
@@ -290,11 +294,11 @@ technology, so Windows runs the Python layer over `subprocess` and macOS runs it
 | Scenario | Linux | macOS | Windows | Interpreters |
 |---|---|---|---|---|
 | Unit | whole suite | whole suite, Linux-only modules skipped | whole suite, Linux-only modules skipped | 3.11 to 3.14 |
-| Integration, per provider | `subprocess`, `firejail`, `bwrap`, `unshare`, `landlock`, `qemu` (KVM; TCG on demand) | `subprocess`, `sandbox-exec` | `subprocess` | 3.11 to 3.14 |
-| OS-only network filter | `bwrap`, `unshare`, `qemu`, `landlock` (ABI v4), `firejail` | `sandbox-exec` (port only) | — | 3.11 to 3.14 |
-| OS-only file confinement | every Linux provider, `qemu` included | `sandbox-exec` | — | 3.11 to 3.14 |
+| Integration, per provider | `subprocess`, `firejail`, `bwrap`, `unshare`, `landlock`, `qemu`, `qemu-microvm` (KVM; TCG on demand) | `subprocess`, `sandbox-exec` | `subprocess` | 3.11 to 3.14 |
+| OS-only network filter | `bwrap`, `unshare`, `qemu`, `qemu-microvm`, `landlock` (ABI v4), `firejail` | `sandbox-exec` (port only) | — | 3.11 to 3.14 |
+| OS-only file confinement | every Linux provider, `qemu` and `qemu-microvm` included | `sandbox-exec` | — | 3.11 to 3.14 |
 | Containers: Docker, Podman, Kubernetes | 48 rows on a real backend, 12 on `none` | — | — | 3.13 |
-| Samples (12 demos) | every provider | `subprocess`, `sandbox-exec` (local VM; CI runs `crewai-demo` only) | `subprocess` | 3.11 to 3.14 |
+| Samples (12 demos) | fast providers plus separate qemu-microvm VM lane | `subprocess`, `sandbox-exec` (local VM; CI runs `crewai-demo` only) | `subprocess` | 3.11 to 3.14 |
 
 - **Guards.** Every integration row arms the six families described in
   [section A](#a-guard-families): `tst_usage` for files, sockets and environment,

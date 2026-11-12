@@ -1,11 +1,11 @@
 name: Container Tests
 
 # Runs the docker, podman and kubernetes suites. Called by full-gate.yml (nightly on develop, and for a release tag
-# whose commit no nightly proved), plus on demand. They build six provider images and start a minikube cluster, so
+# whose commit no nightly proved), plus on demand. They build eight provider images and start a minikube cluster, so
 # they are not tied to every push. They have no TCG row: nested QEMU needs the host's /dev/kvm, which a step opens.
 #
 # One runner per suite: each builds its images with the one engine it tests
-# (CONTAINER_CMDS), so no runner holds two copies of the six images -- with both,
+# (CONTAINER_CMDS), so no runner holds two copies of the eight images -- with both,
 # plus the copy loaded into minikube, /var reached 99% and minikube refused to start.
 # The suites also run in parallel and report apart.
 #
@@ -24,15 +24,17 @@ jobs:
       fail-fast: false
       matrix:
         include:
+          # smolvm is left out of every suite: a hosted runner refuses the virtio-fs shares of its guest.
+          # It is run locally before a release (wiki/release.md).
           - suite: docker
             engine: docker
-            tests: test_container_runtime and docker
+            tests: test_container_runtime and docker and not smolvm
           - suite: podman
             engine: podman
-            tests: test_container_runtime and podman
+            tests: test_container_runtime and podman and not smolvm
           - suite: kubernetes
             engine: docker
-            tests: test_container_kubernetes
+            tests: test_container_kubernetes and not smolvm
     name: containers (${{ matrix.suite }})
 
     steps:
@@ -107,7 +109,7 @@ jobs:
       run: uv sync --group test
 
     # container-tests depends on build-images, which depends on .make-dist, so
-    # make builds the wheel and the six provider images on its own, with this
+    # make builds the wheel and the eight provider images on its own, with this
     # job's engine only. Where minikube is installed, it then starts it and loads
     # the images into it.
     - name: Run container tests

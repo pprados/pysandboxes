@@ -47,3 +47,9 @@ mistaken code. They are not a sandbox against arbitrary Python bytecode. Use a
 kernel-backed provider when deliberate in-process bypass is in scope, and
 verify its actual filesystem, network, process, and descriptor configuration.
 `none` and `subprocess` must be treated as having no OS security boundary.
+
+## `smolvm` against compiled code
+
+With `py-sandbox=false`, so that only the guest holds: a path no rule exposes does not exist in the guest, an `ignore=` file reads empty, a read-only mount
+refuses writes with `EROFS`, a read-write mount reaches the host, the command has no `CAP_SYS_ADMIN` and runs as the host user, and a destination outside the `net=` rules is refused by the host side of smolvm. Each is a
+test with a negative control in `tests/integration_tests/remote/test_smolvm.py`. Not held: a TCP port in a `net=` rule (see [smolvm](smolvm.md#rules)).

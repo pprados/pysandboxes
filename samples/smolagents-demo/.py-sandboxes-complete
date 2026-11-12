@@ -124,3 +124,4 @@ python-import=_ast, _ast_unparse, _hmac, annotationlib, compression
 
 
 python-import=decimal
+python-import=locale

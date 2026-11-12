@@ -7,7 +7,7 @@ Choose the protection level by threat:
 
 - **Misused trusted code:** Python rules block ungranted operations, including misuse through an LLM.
 - **Hostile code:** Python rules are insufficient. `ctypes`, native extensions, and shell commands can bypass them.
-  Use a kernel provider such as `bwrap`, `landlock`, `unshare`, `qemu`, `gvisor`, or `libkrun` ([provider guide](os-providers.md)).
+  Use a kernel provider such as `bwrap`, `landlock`, `unshare`, `qemu`, `qemu-microvm`, `libkrun`, or `gvisor` ([provider guide](os-providers.md)).
 
 ## What the rule file does not show
 

@@ -47,7 +47,7 @@ Firejail is **not** compatible with Podman, for the same reason as [Docker](#usi
 ## Using with Kubernetes
 
 Firejail is **not** supported in Kubernetes (no `python-sb-firejail` image), for the same reason as
-[Docker](#using-with-docker). Use **unshare** (`python-sb-unshare`), **bwrap** (`python-sb-bwrap`), or **qemu** (`python-sb-qemu`) and their documentation for Kubernetes.
+[Docker](#using-with-docker). Use **unshare** (`python-sb-unshare`), **bwrap** (`python-sb-bwrap`), **qemu** (`python-sb-qemu`), or **qemu-microvm** (`python-sb-qemu-microvm`) and their documentation for Kubernetes.
 
 ## Configuration parameters
 

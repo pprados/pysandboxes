@@ -25,6 +25,8 @@ from ._env import (
     default_route_available,
     profile_hosts_resolvable,
     provider_skip_reason,
+    backend_of,
+    qemu_tcg_requested,
 )
 
 ROOT_DIR = Path(__file__).resolve().parent.parent.parent
@@ -39,11 +41,21 @@ def _temp_entries() -> set[str]:
 
 
 # A provider the platform does not have gets no row: with PYSANDBOXES_FAIL_ON_SKIP a skip fails the run.
-_PROVIDERS = [name for name in ("subprocess", "unshare", "appcontainer") if not unsupported_platform_reason(name)]
+_PROVIDERS = [
+    name
+    for name in (
+        "subprocess",
+        "unshare",
+        "appcontainer",
+        "qemu-microvm",
+        *(("qemu-microvm-tcg",) if qemu_tcg_requested() else ()),
+    )
+    if not unsupported_platform_reason(backend_of(name))
+]
 
 
 @pytest.mark.parametrize("os_sandbox", _PROVIDERS)
-def test_a_sandbox_leaves_no_temporary_file_behind(os_sandbox: str) -> None:
+def test_a_sandbox_leaves_no_temporary_file_behind(os_sandbox: str, tmp_path: Path) -> None:
     """Run one sandbox to completion: the temporary directory must look untouched."""
     reason = provider_skip_reason(os_sandbox)
     if reason:
@@ -54,21 +66,41 @@ def test_a_sandbox_leaves_no_temporary_file_behind(os_sandbox: str) -> None:
         pytest.skip(NO_PROFILE_DNS_REASON)
 
     env = os.environ.copy()
-    env["OS_SANDBOX"] = os_sandbox
+    env["OS_SANDBOX"] = backend_of(os_sandbox)
+    env["QEMU_USE_KVM"] = "false" if os_sandbox.endswith("-tcg") else "true"
     env.setdefault("TERM", "dumb")
     env["My_ENV"] = "1"
 
-    before = _temp_entries()
+    microvm = os_sandbox.startswith("qemu-microvm")
+    if microvm:
+        env["TMPDIR"] = str(tmp_path)
+    before = set(os.listdir(tmp_path)) if microvm else _temp_entries()
     result = subprocess.run(
         [sys.executable, "-m", "tests.integration_tests.tst_resolve_once"],
         cwd=ROOT_DIR,
         env=env,
         capture_output=True,
         text=True,
-        timeout=_RUN_TIMEOUT,
+        timeout=900 if os_sandbox.startswith("qemu") else _RUN_TIMEOUT,
         check=False,
     )
     assert "RESOLVED" in result.stdout, f"the sandbox could not resolve a hostname:\n{result.stderr}"
 
-    left = _temp_entries() - before
+    if os_sandbox.startswith("qemu"):
+        print(f"{os_sandbox}: {result.stdout}")
+        owned = [line.split()[1:] for line in result.stdout.splitlines() if line.startswith("OWNED_QEMU ")]
+        assert len(owned) == 1, result.stdout + result.stderr
+        pid, starttime = owned[0]
+        assert not _owned_process_exists(int(pid), starttime), "Owned QEMU survived shutdown (including zombie)"
+
+    left = (set(os.listdir(tmp_path)) if microvm else _temp_entries()) - before
     assert not left, f"{os_sandbox} left {len(left)} temporary entries behind: {sorted(left)}"
+
+
+def _owned_process_exists(pid: int, starttime: str) -> bool:
+    """Match the process identity even when its executable is gone in zombie state."""
+    try:
+        stat = Path(f"/proc/{pid}/stat").read_text().rsplit(")", 1)[1].split()
+    except FileNotFoundError:
+        return False
+    return stat[19] == starttime

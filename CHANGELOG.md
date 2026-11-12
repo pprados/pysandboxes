@@ -8,13 +8,15 @@
 | ✅ 3.14   | ✅ bwrap        | ✅ Windows | ✅ Import  |
 | ☐ 3.15   | ✅ firejail     |            | ✅ API     |
 |          | ✅ unshare       |            | ✅ Eval    |
-|          | ✅ qemu          |            | ☐ Source  |
-|          | ✅ sandbox-exec  |            | ☐ Regexp  |
-|          | ✅ Docker¹       |            | ☐ DoS     |
-|          | ✅ Podman¹       |            |           |
+|          | ✅ qemu          |            |   |
+|          | ✅ qemu-microvm  |            |           |
+|          | ✅ sandbox-exec  |            |   |
 |          | ✅ gVisor        |            |           |
+|          | ✅ smolvm        |            |           |
 |          | ✅ libkrun       |            |           |
 |          | ✅ appcontainer  |            |           |
+|          | ✅ Docker¹       |            |     |
+|          | ✅ Podman¹       |            |           |
 
 ¹ Docker and Podman are not providers of their own: a container runs the
 `unshare` provider, with `--privileged` for Docker.
@@ -25,10 +27,40 @@
 ### Added
 
 - Add the libkrun provider (`os-sandbox=libkrun`): the guest runs in a KVM micro-VM that starts in about a second. Files, the environment and the network are confined by the OS: the guest sees only the system, the interpreter and what the rules name, runs without privilege, and has no network unless a rule allows it.
-- The channel between the host and the sandbox now runs over a Unix socket the host binds and hands down, instead of a
-  local TCP port, with the `subprocess`, `landlock`, `bwrap`, `firejail`, `unshare`, `qemu` and `sandbox-exec`
-  providers on Linux and macOS; it falls back to TCP when that is not possible. `remote-endpoint=tcp|unix` forces one
-  or the other.
+- Add the smolvm provider (`os-sandbox=smolvm`): the sandboxed code runs in a hardware-isolated micro-VM with its own kernel, with file, network and environment rules enforced by the host side of smolvm, and a dedicated `python-sb-smolvm` image.
+- `net-resolve=pinned|runtime` chooses when the host names of `net=` rules are resolved: `pinned` (the current behaviour) freezes their addresses at start, `runtime` (`unshare`, `bwrap`, `gvisor`, `qemu`, `qemu-microvm`, `subprocess`, `landlock`, `sandbox-exec` and `appcontainer` (Python guard only) and `firejail` (as root; without root it falls back to `pinned`)) resolves them when the program asks, through a filtering resolver that opens the addresses of an allowed name for their TTL and refuses every other name and resolver.
+
+### Fixed
+
+- Stop printing an `AssertionError` from the sandbox process when it shuts down, with every OS provider.
+- The `python-sb-qemu-microvm` image now starts its default profile, which no longer exceeds the microvm host-share capacity.
+
+## [0.11.0] - 2026-11-10
+
+### Added
+
+- The channel between the host and the sandbox now runs over a Unix socket the host binds and hands down, instead of a local TCP port, with the `subprocess`, `landlock`, `bwrap`, `firejail`, `unshare`, `qemu` and `sandbox-exec` providers on Linux and macOS; it falls back to TCP when that is not possible. `remote-endpoint=tcp|unix` forces one or the other.
+- Add the Linux x86_64 QEMU microvm provider (`os-sandbox=qemu-microvm`) with direct kernel boot and a dedicated image.
+- Allow QEMU microvm profiles to opt selected guest paths into host-share omission when MMIO capacity is exceeded.
+- Let QEMU microvm profiles list guest paths (`qemu.microvm_empty_paths`) that the guest creates empty when the host share is dropped for capacity, which lets the CrewAI sample run under `qemu-microvm`.
+- Complete the Agno sample's standard-library import whitelist for its HTTP client tests.
+
+### Fixed
+
+- Paths reached through a symbolic link loop are now handled without granting any extra access.
+- Links the system cannot resolve keep their absolute path when access rules are checked.
+- QEMU guests now expose a CPU model recent enough for NumPy to load.
+- With `remote-endpoint=auto`, the `qemu` and `qemu-microvm` providers now fall back to a local TCP port when the installed QEMU, such as 8.2, refuses a Unix socket forward, instead of leaving the guest unreachable; `remote-endpoint=unix` reports the cause.
+- The QEMU microvm provider now finds images whose boot files sit on a separate partition.
+- Several sandboxes starting at once no longer conflict while preparing the shared QEMU microvm boot files.
+- The QEMU microvm capacity check now uses the same acceleration as the real run, so its result matches what the guest gets.
+- The samples can now load the modules they need at run time under `qemu-microvm`.
+
+### Security
+
+- Raise `oauthlib` in the CrewAI sample to 4.0.1, which fixes a published advisory.
+- A QEMU guest now refuses to run when one of its mounts fails, instead of continuing with partial isolation.
+- Code run under `qemu-microvm` is now held to the same isolation guarantees as the other providers.
 
 ## [0.10.0] - 2026-11-05
 
@@ -40,6 +72,7 @@
 - Remove the provider extras (`pysandboxes[bwrap]`, `[firejail]`, `[landlock]`, `[sandbox-exec]`, `[subprocess]`, `[unshare]` and `[all]`): they installed nothing, as a provider needs system tools, not Python packages.
 
 ### Fixed
+- Preserve standard input for MCP servers launched with `python-sb` in QEMU guests.
 - Restarting a bwrap or gVisor sandbox no longer leaves the previous network helper running.
 - Code that reads its standard input no longer fails under gVisor.
 - The gVisor guest no longer sees the host's devices and processes.

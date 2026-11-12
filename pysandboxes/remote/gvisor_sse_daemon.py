@@ -35,8 +35,9 @@ from ..tools import Environ, follow_links_executable
 from .client_subprocess_sse_daemon import BaseSubProcessDaemon, get_log_formatter, use_rich_handler
 from .daemon_parameters import DaemonParameters
 from .gvisor_bundle import build_oci_spec, exposures, mask_targets
-from .gvisor_launch import launcher_script, netfilter_rules
-from .slirp4netns_common import SLIRP_WATCHER_TIMEOUT
+from .gvisor_launch import launcher_script, netfilter_rules, runtime_netfilter_rules
+from .runtime_dns import RuntimeDnsSession
+from .slirp4netns_common import SLIRP_DNS, SLIRP_WATCHER_TIMEOUT
 from .slirp4netns_common import extract_port_forwards as slirp_extract_port_forwards
 from .slirp4netns_common import remove_slirp_temp_files as slirp_remove_temp_files
 from .slirp4netns_common import run_slirp_watcher as slirp_run_watcher
@@ -97,7 +98,14 @@ def _slirp_ready(ready_fd: int, timeout: float) -> bool:
 class GVisorSSEDaemon(BaseSubProcessDaemon):
     """Runs the sandbox daemon in a gVisor guest, on a private network filtered by the host."""
 
-    __slots__ = ("_slirp_process_holder", "_slirp_shutdown_event", "_ready_file", "_api_socket", "_ports_spec")
+    __slots__ = (
+        "_slirp_process_holder",
+        "_slirp_shutdown_event",
+        "_ready_file",
+        "_api_socket",
+        "_ports_spec",
+        "_dns_session",
+    )
 
     @classmethod
     @override
@@ -158,6 +166,7 @@ class GVisorSSEDaemon(BaseSubProcessDaemon):
         self._ready_file: Path = Path()
         self._api_socket: str = ""
         self._ports_spec: str = ""
+        self._dns_session = RuntimeDnsSession()
 
     @override
     def parse_rules(
@@ -203,6 +212,19 @@ class GVisorSSEDaemon(BaseSubProcessDaemon):
         if platform == "kvm" and not os.access(_KVM_DEVICE, os.R_OK | os.W_OK):
             raise SandBoxError(f"gvisor.platform=kvm needs read-write access to {_KVM_DEVICE}")
         return platform
+
+    @staticmethod
+    def _runtime_resolv_conf(all_rules: AllRules, work: Path) -> tuple[tuple[str, str], ...]:
+        """``net-resolve=runtime``: a ``resolv.conf`` naming the slirp4netns DNS, bound over the one the guest sees.
+
+        The host file usually names a loopback stub that does not exist in the private network namespace. A symlinked
+        ``/etc/resolv.conf`` is replaced at the file it resolves to, since a mount cannot land on a link.
+        """
+        if all_rules.net_resolve != "runtime":
+            return ()
+        source = work / "resolv.conf"
+        source.write_text(f"nameserver {SLIRP_DNS}\n")
+        return ((str(source), os.path.realpath("/etc/resolv.conf")),)
 
     @staticmethod
     def _runtime_paths() -> list[str]:
@@ -255,15 +277,22 @@ class GVisorSSEDaemon(BaseSubProcessDaemon):
             masks=mask_targets(all_rules, current_dir, ro + rw),
             empty_file=str(work / "empty"),
             cwd=current_dir,
+            file_binds=self._runtime_resolv_conf(all_rules, work),
         )
         (work / "config.json").write_text(json.dumps(spec))
-        (work / "rules").write_text("\n".join(netfilter_rules(all_rules, self.port)) + "\n")
 
         self._ready_file = work / "ready"
         self._ready_file.unlink(missing_ok=True)
         self._ports_spec = slirp_extract_port_forwards(all_rules, self.port, log_wildcard=False)
         self._kill_slirp()
         self._slirp_shutdown_event.clear()
+        resolver_port = self._dns_session.start(all_rules)
+        rules = (
+            netfilter_rules(all_rules, self.port)
+            if resolver_port is None
+            else runtime_netfilter_rules(all_rules, self.port, resolver_port)
+        )
+        (work / "rules").write_text("\n".join(rules) + "\n")
         fd, api_socket = tempfile.mkstemp()
         os.close(fd)
         os.unlink(api_socket)
@@ -307,6 +336,7 @@ class GVisorSSEDaemon(BaseSubProcessDaemon):
         read_fd, write_fd = os.pipe()
         try:
             wait_for_private_netns(pid)
+            self._dns_session.attach(pid)
             threading.Thread(
                 target=slirp_run_watcher,
                 args=(self._slirp_shutdown_event, write_fd, self._api_socket),
@@ -320,6 +350,7 @@ class GVisorSSEDaemon(BaseSubProcessDaemon):
             if not _slirp_ready(read_fd, SLIRP_WATCHER_TIMEOUT):
                 raise SandBoxError("slirp4netns never brought up the gvisor sandbox network")
         except BaseException:
+            self._dns_session.stop()
             self._slirp_shutdown_event.set()
             try:
                 os.kill(pid, signal.SIGKILL)
@@ -358,7 +389,11 @@ class GVisorSSEDaemon(BaseSubProcessDaemon):
         return {"process_config": process_config, "on_launched": self._on_process_launched}
 
     def _kill_slirp(self) -> None:
-        """Stop slirp4netns, which outlives its target and keeps the forwarded host ports, and remove its socket."""
+        """Stop slirp4netns, which outlives its target and keeps the forwarded host ports, and remove its socket.
+
+        The filtering resolver of ``net-resolve=runtime`` stops with it.
+        """
+        self._dns_session.stop()
         self._slirp_shutdown_event.set()
         proc = self._slirp_process_holder[0]
         if proc is not None:

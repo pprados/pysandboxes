@@ -7,6 +7,7 @@ import json
 import os
 import socket
 import subprocess
+import sys
 from collections.abc import Mapping
 from functools import cache
 from pathlib import Path
@@ -14,6 +15,7 @@ from pathlib import Path
 import pytest  # type: ignore[import-untyped]
 
 from pysandboxes._os_sandbox import provider_unavailable_reason, unsupported_platform_reason
+from pysandboxes.remote.qemu_image import is_kvm_available
 from pysandboxes.remote.tools import get_default_interface
 
 # Hostnames from py-sandbox-test.profile that require resolution at config load time
@@ -59,17 +61,30 @@ def os_sandbox_rows(*, tcg: bool) -> tuple[str, ...]:
 
     ``none`` is excluded: it is the no-op provider, so a guard test would assert nothing there.
     """
-    rows = ["subprocess", "qemu",
-    "libkrun", "unshare", "firejail", "landlock", "bwrap", "gvisor", "sandbox-exec", "appcontainer"]
+    rows = [
+        "subprocess",
+        "qemu",
+        "qemu-microvm",
+        "libkrun",
+        "unshare",
+        "firejail",
+        "landlock",
+        "bwrap",
+        "gvisor",
+        "smolvm",
+        "sandbox-exec",
+        "appcontainer",
+    ]
     if tcg:
         rows.insert(rows.index("qemu") + 1, "qemu-tcg")
+        rows.insert(rows.index("qemu-microvm") + 1, "qemu-microvm-tcg")
     return tuple(rows)
 
 
 ALL_OS_SANDBOX: tuple[str, ...] = os_sandbox_rows(tcg=qemu_tcg_requested())
 
 # Row name -> the value `os-sandbox=` accepts.
-_ROW_TO_BACKEND = {"qemu-tcg": "qemu"}
+_ROW_TO_BACKEND = {"qemu-tcg": "qemu", "qemu-microvm-tcg": "qemu-microvm"}
 
 
 def backend_of(row: str) -> str:
@@ -79,7 +94,9 @@ def backend_of(row: str) -> str:
 
 def row_profile_lines(row: str) -> str:
     """Return the profile lines that make a row differ from its plain backend."""
-    return "qemu.use_kvm=false\n" if row == "qemu-tcg" else ""
+    if row == "qemu-microvm":
+        return "qemu.use_kvm=true\n"
+    return "qemu.use_kvm=false\n" if row in ("qemu-tcg", "qemu-microvm-tcg") else ""
 
 
 def os_sandbox_params() -> list:
@@ -95,7 +112,7 @@ def os_sandbox_params() -> list:
     gap in the environment but a structural absence.
     """
     return [
-        pytest.param(row, marks=[pytest.mark.slow] if row == "qemu-tcg" else [])
+        pytest.param(row, marks=[pytest.mark.slow] if row.endswith("-tcg") else [])
         for row in ALL_OS_SANDBOX
         if not unsupported_platform_reason(backend_of(row))
     ]
@@ -149,6 +166,8 @@ def provider_skip_reason(os_sandbox: str) -> str | None:
     Returns:
         A human-readable reason to pass to ``pytest.skip``, or None.
     """
+    if os_sandbox == "qemu-microvm" and not is_kvm_available():
+        return "The accelerated qemu-microvm row requires usable KVM"
     if reason := provider_unavailable_reason(backend_of(os_sandbox)):
         return reason
     # firejail refuses to run inside a container, but not on a trivial command: the
@@ -169,4 +188,11 @@ def provider_skip_reason(os_sandbox: str) -> str | None:
             return "firejail cannot create its sandbox here"
     if os_sandbox == "bwrap" and not _runs("bwrap", "--ro-bind", "/", "/", "--unshare-net", "true"):
         return "bwrap cannot create its namespaces here (inside a container, or user namespaces restricted)"
+    if os_sandbox == "smolvm":
+        version = f"{sys.version_info.major}.{sys.version_info.minor}"
+        image = Path(__file__).resolve().parent.parent.parent / "build" / f"smolvm-guest-{version}.tar"
+        if "PYSANDBOXES_SMOLVM_IMAGE" not in os.environ and image.exists():
+            os.environ["PYSANDBOXES_SMOLVM_IMAGE"] = str(image)
+        if "PYSANDBOXES_SMOLVM_IMAGE" not in os.environ:
+            return "no smolvm guest image: run `make build-image-smolvm` or set PYSANDBOXES_SMOLVM_IMAGE"
     return None

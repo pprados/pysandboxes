@@ -9,6 +9,7 @@ which reads the config as a regular file on its own 9p mount.
 """
 
 import asyncio
+import functools
 import gc
 import logging
 import os
@@ -23,7 +24,7 @@ import tempfile
 import time
 from ipaddress import IPv4Address
 from pathlib import Path
-from typing import Any, Callable, Mapping
+from typing import Any, Callable, Mapping, NamedTuple
 
 from ..all_rules import AllRules
 from ..config import DEBUG
@@ -31,11 +32,12 @@ from ..e import SandBoxError
 from ..guard_files import _CA_STORES, FSExposeRule, is_special_file
 from ..immutable_dict import ImmutableDict
 from ..main_logger import ErrorMsg
-from ..netfilter import rule_to_netfilter
+from ..netfilter import rule_to_netfilter, runtime_netfilter
 from ..override_compat import override
 from ..sb_types import Args, ConfigLines, Envs
 from ..tools import Environ, follow_links_executable
 from .client_subprocess_sse_daemon import (
+    find_free_port,
     get_log_formatter,
     launch_sandbox,
     use_rich_handler,
@@ -54,13 +56,17 @@ from .qemu_image import (
     normalize_qemu_m_memory_arg,
     qemu_accel_args,
 )
+from .qemu_microvm_boot import ensure_microvm_boot_artifacts
 from .qemu_setup import (
+    GUEST_CIDATA_MOUNT,
     GUEST_CONFIG_MOUNT,
     GUEST_RUN_MOUNT,
     QEMU_HOST_RUN_PREFIX,
     augment_all_rules_for_qemu_run_mount,
+    microvm_mmio_capacity,
     prepare_guest_env,
 )
+from .runtime_dns import RuntimeDnsSession
 from .tools import SSE_READ_BUFSIZE, is_transient_connection_error, which_command
 from .vm_sse_daemon import VMSSEDaemon
 
@@ -869,6 +875,7 @@ def _file_rules_mounts(
     pipe_path: Path,
     config_dir: Path | None = None,
     stage_root: Path | None = None,
+    microvm: bool = False,
 ) -> tuple[list[tuple[str, Path, str]], list[tuple[str, str]]]:
     """Build one 9p (tag, host_path, guest_path) per FSExposeRule, run dir, optional config dir, and execution dirs.
 
@@ -917,6 +924,10 @@ def _file_rules_mounts(
         mount_specs.append((tag, host_path, guest_path))
         mount_list.append((tag, guest_path))
 
+    if microvm:
+        readonly = _microvm_readonly_tags(all_rules, mount_specs)
+        configured = str(all_rules.os_sandbox_params.get("virtfs_security_model", "mapped-xattr"))
+        mount_specs = _compact_microvm_mounts(mount_specs, readonly, configured)
     if stage_exec:
         stage = stage_root or temp
         _stage_exec_virtfs_mounts(stage, mount_specs)
@@ -988,6 +999,168 @@ def _qemu_binary() -> str:
     return name  # Let subprocess fail with a clear error if not in PATH
 
 
+@functools.lru_cache(maxsize=None)
+def _qemu_accepts_unix_hostfwd(binary: str) -> bool:
+    """Tell whether ``binary`` parses a ``hostfwd=unix:`` rule: QEMU 8.2 refuses it, which TCP then has to cover."""
+    with tempfile.TemporaryDirectory(prefix="pysb_probe_", dir="/tmp" if os.path.isdir("/tmp") else None) as directory:
+        command = [binary, "-machine", "none", "-nodefaults", "-display", "none", "-monitor", "stdio"]
+        command += ["-netdev", f"user,id=probe,hostfwd=unix:{directory}/s-:1"]
+        try:
+            probe = subprocess.run(command, input=b"quit\n", capture_output=True, timeout=30, check=False)
+        except (OSError, subprocess.TimeoutExpired):
+            return False
+    return probe.returncode == 0
+
+
+def _microvm_readonly_tags(all_rules: AllRules, mounts: list[tuple[str, Path, str]]) -> set[str]:
+    exposes = [rule for rule in all_rules.file_rules if isinstance(rule, FSExposeRule)]
+    readonly = {
+        f"pysb_{i}" for i, rule in enumerate(all_rules.file_rules) if isinstance(rule, FSExposeRule) and not rule.write
+    }
+    for tag, host, _ in mounts:
+        if not tag.startswith("pysb_exec_"):
+            continue
+        covering = [rule for rule in exposes if host.is_relative_to(Path(rule.path))]
+        covering.sort(key=lambda rule: len(Path(rule.path).parts))
+        effective = covering[-1] if covering else None
+        if effective is None or not effective.write:
+            readonly.add(tag)
+    return readonly
+
+
+def _microvm_security_model(host: Path, readonly: bool, configured: str) -> str:
+    if readonly:
+        return "none"
+    return _virtfs_security_model(host, configured)
+
+
+def _compact_microvm_mounts(
+    mounts: list[tuple[str, Path, str]], readonly_tags: set[str], configured: str
+) -> list[tuple[str, Path, str]]:
+    """Remove only shares identical to the view already supplied by a parent."""
+    kept: list[tuple[str, Path, str]] = []
+    for mount in sorted(mounts, key=lambda item: len(Path(item[2]).parts)):
+        tag, host, guest = mount
+        readonly = tag in readonly_tags
+        security = _microvm_security_model(host, readonly, configured)
+        for parent_tag, parent_host, parent_guest in kept:
+            try:
+                relative = Path(guest).relative_to(parent_guest)
+            except ValueError:
+                continue
+            if (
+                host == parent_host / relative
+                and readonly == (parent_tag in readonly_tags)
+                and security == _microvm_security_model(parent_host, readonly, configured)
+            ):
+                break
+        else:
+            kept.append(mount)
+    return [mount for mount in mounts if mount in kept]
+
+
+def _microvm_path_list(all_rules: AllRules, key: str, environment: str, mounted: set[str]) -> list[str]:
+    """Read a comma list from the profile, else from the environment, keeping only mounted paths in the latter."""
+    value = str(all_rules.os_sandbox_params.get(key, "")).strip()
+    explicit = bool(value)
+    paths = [path.strip() for path in (value or os.environ.get(environment, "")).split(",") if path.strip()]
+    return paths if explicit else [path for path in paths if path in mounted]
+
+
+def _select_microvm_mounts(
+    mounts: list[tuple[str, Path, str]], optional_paths: list[str], capacity: int
+) -> tuple[list[tuple[str, Path, str]], list[str]]:
+    """Drop opted-in host shares only when required, using matching guest-native paths."""
+    optional: list[str] = []
+    for raw_path in optional_paths:
+        guest_path = str(Path(raw_path))
+        if not Path(guest_path).is_absolute() or guest_path != raw_path:
+            raise ValueError(f"qemu.microvm_optional_paths must contain normalized absolute paths: {raw_path!r}")
+        if guest_path not in optional:
+            optional.append(guest_path)
+
+    mount_paths = {guest for _, _, guest in mounts}
+    invalid = [path for path in optional if path not in mount_paths]
+    if invalid:
+        raise ValueError(f"qemu.microvm_optional_paths contains paths that are not mounts: {', '.join(invalid)}")
+
+    needed = max(0, 2 + len(mounts) - capacity)
+    if not needed:
+        return mounts, []
+
+    dropped = optional[:needed]
+    if len(dropped) != needed:
+        raise ValueError(f"QEMU microvm needs {2 + len(mounts)} MMIO devices but supports {capacity}")
+    kept = [mount for mount in mounts if mount[2] not in dropped]
+    for guest_path in dropped:
+        target = Path(guest_path)
+        if any(
+            Path(other_guest).is_relative_to(target) or target.is_relative_to(Path(other_guest))
+            for _, _, other_guest in kept
+        ):
+            raise ValueError(f"qemu.microvm_optional_paths path overlaps another mount: {guest_path}")
+    return kept, dropped
+
+
+class _QemuLaunchAssets(NamedTuple):
+    image_path: Path
+    nocloud_iso: Path
+    mount_specs: list[tuple[str, Path, str]]
+
+
+def _prepare_qemu_launch(
+    all_rules: AllRules,
+    temp: Path,
+    process_config: DaemonParameters,
+    pipe_path: Path,
+    config_dir: Path | None = None,
+    stage_root: Path | None = None,
+    microvm: bool = False,
+) -> _QemuLaunchAssets:
+    """Prepare the image, shared trees and guest bootstrap before building devices."""
+    image_path = get_default_image_path()
+    ensure_image(image_path)
+    mount_specs, mount_list = _file_rules_mounts(
+        all_rules, temp, pipe_path, config_dir=None if microvm else config_dir, stage_root=stage_root, microvm=microvm
+    )
+    if microvm:
+        mounted = {guest for _, _, guest in mount_specs}
+        optional_paths = _microvm_path_list(all_rules, "microvm_optional_paths", "QEMU_MICROVM_OPTIONAL_PATHS", mounted)
+        empty_paths = [
+            path
+            for path in _microvm_path_list(all_rules, "microvm_empty_paths", "QEMU_MICROVM_EMPTY_PATHS", mounted)
+            if path not in optional_paths
+        ]
+        if optional_paths or empty_paths:
+            params = all_rules.os_sandbox_params
+            capacity = microvm_mmio_capacity(_qemu_binary(), qemu_accel_args(params))
+            try:
+                mount_specs, native_paths = _select_microvm_mounts(mount_specs, optional_paths + empty_paths, capacity)
+            except ValueError as error:
+                raise SandBoxError(str(error)) from error
+            mount_list = [(tag, guest) for tag, _, guest in mount_specs]
+            mount_list.extend(
+                ("__pysb_empty__" if guest in empty_paths else "__pysb_native__", guest) for guest in native_paths
+            )
+    python_version = f"{sys.version_info.major}.{sys.version_info.minor}"
+    config_guest_path = f"{GUEST_CONFIG_MOUNT}/config.pkl" if config_dir else None
+    if microvm and config_dir:
+        (temp / "config.pkl").write_bytes((config_dir / "config.pkl").read_bytes())
+        config_guest_path = f"{GUEST_CIDATA_MOUNT}/config.pkl"
+    nocloud_iso = prepare_guest_env(
+        temp,
+        process_config,
+        pipe_path=pipe_path,
+        mounts=mount_list,
+        pipe_run_guest_path=GUEST_RUN_MOUNT,
+        python_version=python_version,
+        python_exe=_guest_python_exe_path(),
+        config_guest_path=config_guest_path,
+        **({"python_paths": [gp for _, _, gp in _execution_dirs_mounts()]} if microvm else {}),
+    )
+    return _QemuLaunchAssets(image_path, nocloud_iso, mount_specs)
+
+
 class QemuSSEDaemon(VMSSEDaemon):
     """SSE daemon that runs the sandbox inside a QEMU VM.
 
@@ -997,7 +1170,7 @@ class QemuSSEDaemon(VMSSEDaemon):
 
     host_run_temp_prefix = QEMU_HOST_RUN_PREFIX
 
-    __slots__ = ("_iso_config", "_qemu_console_tasks", "_stage_root")
+    __slots__ = ("_iso_config", "_qemu_console_tasks", "_stage_root", "_dns_session", "_resolver_port", "_control_port")
     supports_unix_endpoint = True
     endpoint_handed_down = False
 
@@ -1006,21 +1179,52 @@ class QemuSSEDaemon(VMSSEDaemon):
     def unavailable_reason(cls) -> str | None:
         return None if which_command(_qemu_binary()) else "QEMU not installed"
 
+    @override
+    def unix_endpoint_blocker(self) -> str | None:
+        if _qemu_accepts_unix_hostfwd(_qemu_binary()):
+            return None
+        return "this QEMU does not accept a hostfwd=unix: rule"
+
     def guest_run_dir_mount(self) -> str:
         return GUEST_RUN_MOUNT
 
     def augment_rules_for_guest_run_mount(self, all_rules: AllRules) -> AllRules:
         return augment_all_rules_for_qemu_run_mount(all_rules)
 
+    def prepare_runtime_dns(self, all_rules: AllRules, token: str) -> int:
+        """Start the filtering resolver and give it the control port of the guest, which the guest serves."""
+        resolver_port = self._dns_session.start(all_rules)
+        self._resolver_port = resolver_port
+        self._control_port = find_free_port() if resolver_port is not None else 0
+        self._dns_session.attach_guest(self._control_port, token)
+        return self._control_port
+
+    def _kill_slirp(self) -> None:
+        """End of a one-shot ``python-sb`` run, which calls this hook by name: stop the filtering resolver."""
+        self._dns_session.stop()
+
     def guest_netfilter_rules(self, all_rules: AllRules, port: int) -> tuple[str, ...]:
-        """Rules from the socket rules, DNS at 10.0.2.3, and the host (10.0.2.2 in user mode) allowed on ``port``."""
-        netfilter = list(rule_to_netfilter(all_rules.socket_rules, [IPv4Address("10.0.2.3")], is_ipv6=False))
+        """Rules from the socket rules, DNS at 10.0.2.3, and the host (10.0.2.2 in user mode) allowed on ``port``.
+
+        With ``net-resolve=runtime`` the guest asks the DNS address that its ``nat`` table sends to the resolver of
+        the host, and the host reaches the control port of the guest as it reaches the daemon.
+        """
+        if self._resolver_port is not None:
+            netfilter = list(
+                runtime_netfilter(
+                    all_rules.socket_rules, self._resolver_port, IPv4Address("10.0.2.2"), IPv4Address("10.0.2.3")
+                )
+            )
+        else:
+            netfilter = list(rule_to_netfilter(all_rules.socket_rules, [IPv4Address("10.0.2.3")], is_ipv6=False))
         if "COMMIT" in netfilter:
             idx = netfilter.index("COMMIT")
-            sse_allow = (
-                f"-A INPUT -p tcp -s 10.0.2.2/32 --dport {port} -m conntrack --ctstate NEW,ESTABLISHED -j ACCEPT"
-            )
-            netfilter = netfilter[:idx] + [sse_allow] + netfilter[idx:]
+            host_ports = [port] + ([self._control_port] if self._resolver_port is not None else [])
+            sse_allow = [
+                f"-A INPUT -p tcp -s 10.0.2.2/32 --dport {p} -m conntrack --ctstate NEW,ESTABLISHED -j ACCEPT"
+                for p in host_ports
+            ]
+            netfilter = netfilter[:idx] + sse_allow + netfilter[idx:]
         return tuple(netfilter)
 
     def __init__(self, token: str, *, python_args: list[str] | None = None, **kwargs: Any) -> None:
@@ -1034,6 +1238,9 @@ class QemuSSEDaemon(VMSSEDaemon):
         self._iso_config: DaemonParameters | None = None
         self._qemu_console_tasks: list[asyncio.Task[None]] = []
         self._stage_root: tempfile.TemporaryDirectory[str] | None = None
+        self._dns_session = RuntimeDnsSession(join="guest")
+        self._resolver_port = None
+        self._control_port = 0
 
     def _remove_stage_root(self) -> None:
         if self._stage_root is not None:
@@ -1055,6 +1262,7 @@ class QemuSSEDaemon(VMSSEDaemon):
         try:
             await super()._shutdown(graceful_shutdown)
         finally:
+            await asyncio.to_thread(self._dns_session.stop)
             self._remove_stage_root()
 
     @override
@@ -1092,23 +1300,20 @@ class QemuSSEDaemon(VMSSEDaemon):
 
         Optional config dir; ISO with 9p_mounts + pipe_name.
         """
-        image_path = get_default_image_path()
-        ensure_image(image_path)
-        mount_specs, mount_list = _file_rules_mounts(
-            all_rules, temp, pipe_path, config_dir=config_dir, stage_root=stage_root
-        )
-        python_version = f"{sys.version_info.major}.{sys.version_info.minor}"
-        config_guest_path = f"{GUEST_CONFIG_MOUNT}/config.pkl" if config_dir else None
-        nocloud_iso = prepare_guest_env(
+        assets = _prepare_qemu_launch(
+            all_rules,
             temp,
             process_config,
-            pipe_path=pipe_path,
-            mounts=mount_list,
-            pipe_run_guest_path=GUEST_RUN_MOUNT,
-            python_version=python_version,
-            python_exe=_guest_python_exe_path(),
-            config_guest_path=config_guest_path,
+            pipe_path,
+            config_dir=config_dir,
+            stage_root=stage_root,
+            microvm=isinstance(self, QemuMicrovmSSEDaemon),
         )
+        return self._machine_command(all_rules, assets, port), {}
+
+    def _machine_command(self, all_rules: AllRules, assets: _QemuLaunchAssets, port: int) -> Args:
+        """Build the existing PC-machine devices from prepared launch assets."""
+        image_path, nocloud_iso, mount_specs = assets
 
         # Keys match parse_rules: "qemu.foo=bar" → os_sandbox_params["foo"] (no "qemu." prefix)
         enable_kvm = qemu_accel_args(all_rules.os_sandbox_params)
@@ -1120,6 +1325,8 @@ class QemuSSEDaemon(VMSSEDaemon):
         # QEMU creates the socket itself; the guest keeps serving TCP behind the forward. The directory name has no
         # "-" or ",", which QEMU's forward syntax would read as separators.
         forward = f"unix:{self.endpoint.path}-:{port}" if self.endpoint is not None else f"tcp:127.0.0.1:{port}-:{port}"
+        if self._resolver_port is not None:
+            forward += f",hostfwd=tcp:127.0.0.1:{self._control_port}-:{self._control_port}"
         net = [
             "-nic",
             f"user,hostfwd={forward},model=virtio-net-pci",
@@ -1159,6 +1366,8 @@ class QemuSSEDaemon(VMSSEDaemon):
         cmd: Args = [
             _qemu_binary(),
             *enable_kvm,
+            "-cpu",
+            "max",
             "-m",
             memory,
             "-snapshot",
@@ -1166,12 +1375,17 @@ class QemuSSEDaemon(VMSSEDaemon):
             drive_image,
             "-drive",
             drive_nocloud,
-            "-nographic",
+            "-display",
+            "none",
+            "-monitor",
+            "none",
+            "-serial",
+            "stdio",
             *net,
             *virtfs_args,
             *qga,
         ]
-        return cmd, {}
+        return cmd
 
     @override
     def subprocess_cmd(
@@ -1235,6 +1449,7 @@ class QemuSSEDaemon(VMSSEDaemon):
             module, func_ref = get_callable_info(init_fn)
             init_fn_ref = f"{module}:{func_ref}"
 
+        self.prepare_runtime_dns(all_rules, self._token)
         netfilter_rules = self.guest_netfilter_rules(all_rules, port)
 
         process_config = DaemonParameters(
@@ -1246,6 +1461,7 @@ class QemuSSEDaemon(VMSSEDaemon):
             port=port,
             init_fn=init_fn_ref,
             netfilter_rules=netfilter_rules,
+            learned_control_port=self._control_port,
             guest_run_dir=GUEST_RUN_MOUNT,
             guest_working_dir=str(Path.cwd().resolve()),
             # hostfwd reaches the guest on its NIC, not on the guest loopback.
@@ -1421,3 +1637,76 @@ class QemuSSEDaemon(VMSSEDaemon):
         )
         self._is_started = True
         self._accept_incoming = True
+
+
+class QemuMicrovmSSEDaemon(QemuSSEDaemon):
+    """Run the shared guest lifecycle on the strict PCI-free microvm machine."""
+
+    def _machine_command(self, all_rules: AllRules, assets: _QemuLaunchAssets, port: int) -> Args:
+        image, seed, mounts = assets
+        binary = _qemu_binary()
+        required = 2 + len(mounts)
+        accel_args = qemu_accel_args(all_rules.os_sandbox_params)
+        capacity = microvm_mmio_capacity(binary, accel_args)
+        if required > capacity:
+            raise SandBoxError(f"QEMU microvm needs {required} MMIO devices but supports {capacity}")
+        kernel, initrd = ensure_microvm_boot_artifacts(image, all_rules.os_sandbox_params)
+        memory = normalize_qemu_m_memory_arg(all_rules.os_sandbox_params.get("memory", "2048").strip())
+        image_format = "qcow2" if image.suffix == ".qcow2" or "cloudimg" in image.name else "raw"
+        forward = f"unix:{self.endpoint.path}-:{port}" if self.endpoint is not None else f"tcp:127.0.0.1:{port}-:{port}"
+        if self._resolver_port is not None:
+            forward += f",hostfwd=tcp:127.0.0.1:{self._control_port}-:{self._control_port}"
+        cmd: Args = [
+            binary,
+            *accel_args,
+            "-machine",
+            "microvm,acpi=off,pcie=off,rtc=off",
+            "-cpu",
+            "max",
+            "-nodefaults",
+            "-no-user-config",
+            "-display",
+            "none",
+            "-monitor",
+            "none",
+            "-serial",
+            "stdio",
+            "-no-reboot",
+            "-m",
+            memory,
+            "-kernel",
+            str(kernel),
+            "-initrd",
+            str(initrd),
+            "-append",
+            "console=ttyS0 root=/dev/sda1 ro reboot=t",
+            "-snapshot",
+            "-drive",
+            f"id=root,file={image},format={image_format},if=none",
+            "-device",
+            "virtio-scsi-device,id=scsi0",
+            "-device",
+            "scsi-hd,drive=root,bus=scsi0.0,channel=0,scsi-id=0,lun=0",
+            "-drive",
+            f"id=cidata,file={seed},format=raw,if=none,readonly=on",
+            "-device",
+            "scsi-cd,drive=cidata,bus=scsi0.0,channel=0,scsi-id=1,lun=0",
+            "-netdev",
+            f"user,id=net0,hostfwd={forward}",
+            "-device",
+            "virtio-net-device,netdev=net0",
+        ]
+        readonly_tags = _microvm_readonly_tags(all_rules, mounts)
+        configured = str(all_rules.os_sandbox_params.get("virtfs_security_model", "mapped-xattr"))
+        for tag, host, _ in mounts:
+            security = _microvm_security_model(host, tag in readonly_tags, configured)
+            readonly = ",readonly=on" if tag in readonly_tags else ""
+            cmd.extend(
+                [
+                    "-fsdev",
+                    f"local,id={tag},path={host},security_model={security}{readonly}",
+                    "-device",
+                    f"virtio-9p-device,fsdev={tag},mount_tag={tag}",
+                ]
+            )
+        return cmd

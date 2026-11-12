@@ -54,7 +54,11 @@ def sandboxed_server() -> Client:
             cwd=str(SAMPLE_ROOT),
             # The stdio client passes only a few variables down: without this the profile's
             # os-sandbox=${OS_SANDBOX:-subprocess} never sees the provider under test.
-            env={name: os.environ[name] for name in ("OS_SANDBOX",) if name in os.environ},
+            env={
+                name: os.environ[name]
+                for name in ("OS_SANDBOX", "QEMU_USE_KVM", "PYSANDBOXES_SMOLVM_IMAGE")
+                if name in os.environ
+            },
         )
     )
 
@@ -76,10 +80,12 @@ async def test_the_tools_answer_under_python_sb(sandboxed_server: Client) -> Non
         assert {"fetch_webpage", "evaluate_expression"} <= tools, tools
 
         assert "14" in await _call(client, "evaluate_expression", expression="2*(3+4)")
+        assert "14" in await _call(client, "evaluate_expression", expression="2*(3+4)" + " " * 8192)
 
 
 @pytest.mark.asyncio
 async def test_an_allowed_host_is_reached_under_python_sb(sandboxed_server: Client) -> None:
+    answer = "ERROR no response"
     async with sandboxed_server as client:
         # The allowed host drops a connection now and then: three attempts, as the answer carries the error.
         for attempt in range(1, 4):

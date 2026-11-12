@@ -23,11 +23,18 @@ on:
         description: Behave as the nightly, which nightly-trigger.yml starts on develop
         type: boolean
         default: false
+      vm-sample-python-versions:
+        description: JSON list of Python minors for the costly VM sample lane
+        type: string
+        default: '["3.13"]'
   workflow_call:
     inputs:
       exclude-tcg:
         type: boolean
         default: false
+      vm-sample-python-versions:
+        type: string
+        default: '["3.13"]'
 
 permissions:
   contents: read
@@ -77,6 +84,8 @@ jobs:
     needs: changes
     if: inputs.nightly != true || needs.changes.outputs.changed == 'true'
     uses: ./.github/workflows/samples.yml
+    with:
+      vm-python-versions: ${{ inputs.vm-sample-python-versions }}
 
   containers:
     needs: changes

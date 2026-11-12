@@ -60,6 +60,10 @@ class VMSSEDaemon(BaseSubProcessDaemon, ABC):
     def guest_netfilter_rules(self, all_rules: AllRules, port: int) -> tuple[str, ...]:
         """Return the iptables rules the guest applies to itself, from the profile's socket rules."""
 
+    def prepare_runtime_dns(self, all_rules: AllRules, token: str) -> int:
+        """Start what ``net-resolve=runtime`` needs on the host; the control port of the guest, 0 for none."""
+        return 0
+
     @staticmethod
     def show_boot_console_truthy(all_rules: Any | None) -> bool:
         """Whether the profile requests full VM serial / verbose bootstrap (truthy ``show_boot_console``)."""
@@ -77,12 +81,14 @@ class VMSSEDaemon(BaseSubProcessDaemon, ABC):
         *,
         forward_all: bool = False,
         tee_file: TextIO | None = None,
+        forward_stdin: bool = False,
     ) -> int:
         """Drain VM stdout/stderr with sentinel filtering; wait for process exit."""
         return await qemu_wait_and_filter_console(
             process,
             forward_all=forward_all,
             tee_file=tee_file,
+            forward_stdin=forward_stdin,
         )
 
     def read_guest_exitcode(self, exitcode_file: Path) -> int | None:

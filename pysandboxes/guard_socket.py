@@ -42,6 +42,7 @@ import codecs
 import functools
 import logging
 import os
+import re
 import socket
 import sys
 import threading
@@ -68,6 +69,7 @@ from typing import (
 )
 
 from .e import RuleSocketConnectionRefusedError
+from .egress_filter import MAX_LEARNED_TTL, NameRule, allowing_rules
 from .guard_files import _apply_dest_to_src_rules
 from .guard_wraps import guard_wraps
 from .immutable_dict import ImmutableDict
@@ -537,6 +539,87 @@ def _parse_rule(rule: ConfigLine, errors: list[tuple[str, Path, int]], pin_dns: 
         return None
 
 
+_NAME_LABEL = r"[A-Za-z0-9_](?:[A-Za-z0-9_-]*[A-Za-z0-9_])?"
+_NAME_PATTERN = re.compile(rf"=?(?:\*\.)?{_NAME_LABEL}(?:\.{_NAME_LABEL})*")
+
+
+def _is_host_name(network: str) -> bool:
+    if network == "*":
+        return False
+    try:
+        ip_network(network, strict=False)
+    except ValueError:
+        return True
+    return False
+
+
+def _port_ranges(ports: tuple[int, ...] | range) -> tuple[tuple[int, int], ...]:
+    """Inclusive ``(low, high)`` ranges of a port set; the empty tuple stands for every port."""
+    if isinstance(ports, range):
+        return () if ports == range(65536) else ((ports.start, ports.stop - 1),)
+    ranges: list[tuple[int, int]] = []
+    for port in ports:
+        if ranges and ranges[-1][1] + 1 == port:
+            ranges[-1] = (ranges[-1][0], port)
+        else:
+            ranges.append((port, port))
+    return tuple(ranges)
+
+
+def parse_name_rules(rules: ConfigLines, errors: list[ErrorMsg]) -> tuple[tuple[NameRule, ...], ConfigLines]:
+    """Take out of ``rules`` the ``net=`` lines that name a host, for ``net-resolve=runtime``.
+
+    A name is judged when it is resolved, so these lines must never reach ``parse_rules``, which resolves it at
+    start. A line naming a network, ``*`` or no valid ``net=`` rule goes through untouched. DENY rules come first,
+    as ``parse_rules`` orders the rules it builds.
+
+    Returns:
+        The name rules and the remaining lines.
+    """
+    name_rules: list[NameRule] = []
+    others: ConfigLines = []
+    for rule in rules:
+        parts = rule.rule[len("net=") :].split("|", 4) if rule.rule.startswith("net=") else []
+        if len(parts) != 5 or not _is_host_name(parts[2].strip()):
+            others.append(rule)
+            continue
+        action, kinds_str, pattern, ports_str, directions = (part.strip() for part in parts)
+        problems: list[str] = []
+        if action not in (Action.ALLOW.name, Action.DENY.name):
+            problems.append(f"the action must be {Action.ALLOW.name!r} or {Action.DENY.name!r}")
+        if not _NAME_PATTERN.fullmatch(pattern):
+            problems.append(f"{pattern!r} is not a host name, '=name' or '*.name'")
+        kind_names = {k.strip().lower() for k in kinds_str.split(",") if k.strip()}
+        if kind_names & {"*", "any"}:
+            kind_names = {"tcp", "udp"}
+        if not kind_names or not kind_names <= {"tcp", "udp"}:
+            problems.append("the socket kinds of a host name rule are tcp, udp or *")
+        direction_names = {d.strip() for d in directions.split(",")}
+        if not direction_names <= {Direction.IN.name, Direction.OUT.name, "*"}:
+            problems.append(f"the direction is not {Direction.IN.name!r} or {Direction.OUT.name!r}")
+        elif not direction_names & {Direction.OUT.name, "*"}:
+            problems.append("a host name rule applies to OUT: the name is resolved by the sandbox")
+        ports: tuple[tuple[int, int], ...] = ()
+        no_port = False
+        try:
+            converted = _convert_ports_range(ports_str)
+            no_port = not isinstance(converted, range) and not converted
+            ports = _port_ranges(converted)
+        except ValueError:
+            problems.append("invalid port list")
+        if problems:
+            errors.append((f"{format_ruleref(rule)}: In {rule.rule!r}, {'; '.join(problems)}.", rule.path, rule.ln))
+        elif no_port and action == Action.ALLOW.name:
+            pysandboxes_logger.warning(
+                "%s: In %r, no port. Rule ignored: it allows nothing.", format_ruleref(rule), rule.rule
+            )
+        else:
+            name_rules.append(
+                NameRule(action == Action.ALLOW.name, pattern, tuple(sorted(kind_names)), () if no_port else ports)
+            )
+    return tuple(sorted(name_rules, key=lambda r: r.allow)), others
+
+
 def parse_rules(rules: ConfigLines, errors: list[ErrorMsg]) -> tuple[SocketRules, ConfigLines, PinDNS]:
     """Parse network access rules from configuration.
 
@@ -804,13 +887,15 @@ def _check_address_with_rules(
 
     unique_ips: list[IPv4Address | IPv6Address]
     use_hostname = False
+    # A name judged at runtime is resolved each time: its addresses change, and a cached answer would be stale.
+    resolve = getaddrinfo.__wrapped__ if _name_rules else getaddrinfo
     try:
         unique_ips = [ip_address(hostname)]
     except ValueError:
         try:
             # Resolve hostname to IP addresses using the socket instance's family,
             # type, and proto
-            infos = getaddrinfo(hostname, 0, family)
+            infos = resolve(hostname, 0, family)
             use_hostname = True
         except socket.gaierror:
             # Fallback if the specific proto causes issues, try with
@@ -818,7 +903,7 @@ def _check_address_with_rules(
             # This might happen if self.proto is something specific but
             # getaddrinfo needs a more general hint
             try:
-                infos = getaddrinfo(hostname, 0, family, socktype=socket_kind.value, proto=0)
+                infos = resolve(hostname, 0, family, socktype=socket_kind.value, proto=0)
             except socket.gaierror as e:
                 raise ValueError(f"Invalid hostname or IP address (resolution failed): {hostname}") from e
         # %% Analyse ips
@@ -831,6 +916,11 @@ def _check_address_with_rules(
         unique_ips = list(dict.fromkeys(ip_objects))
     if not unique_ips:
         raise ValueError(f"Invalid hostname or IP address (resolution failed): {hostname}")
+
+    if _name_rules:
+        if use_hostname:
+            _learn_from_resolution(hostname, unique_ips)
+        socket_rules = (*socket_rules, *_learned_rules())
 
     # %% Analyse rules
     for checked_ip in unique_ips:
@@ -1011,6 +1101,94 @@ def set_pin_dns(dns: ImmutableDict[str, tuple[AddrInfoType, ...]]) -> None:
     codecs.lookup("idna")
 
 
+# ``net-resolve=runtime``: the names stay names. An address the process got for an allowed name is learned as an
+# ALLOW rule of that address, with the protocols and ports of the name rule, so the judgement below stays the one of
+# every ``net=`` rule (a DENY first). The deadline is the longest TTL the resolver grants: the kernel closes the
+# address at the real TTL, and it is the stricter of the two layers.
+_name_rules: tuple[NameRule, ...] = ()
+_learned: dict[tuple[IPv4Address | IPv6Address, NameRule], tuple[float, SocketRule]] = {}
+_learned_lock = threading.Lock()
+_clock: Callable[[], float] = time.monotonic
+_LEARNED_CONFIG_PATH = Path("<net-resolve=runtime>")
+
+
+def set_name_rules(name_rules: tuple[NameRule, ...]) -> None:
+    global _name_rules
+    _name_rules = name_rules
+
+
+def _learned_rule(ip: IPv4Address | IPv6Address, rule: NameRule) -> SocketRule:
+    kinds = tuple(Kind[kind.upper()] for kind in rule.kinds)
+    ports: tuple[int, ...] | range = (
+        tuple(port for low, high in rule.ports for port in range(low, high + 1)) if rule.ports else range(65536)
+    )
+    text = f"net=ALLOW|{','.join(k.name for k in kinds)}|{ip}|{_ports_text(rule)}|OUT (learned from {rule.pattern})"
+    return SocketRule(
+        Action.ALLOW,
+        SocketMask(kinds, ip_network(ip), ports),
+        (Direction.OUT,),
+        ConfigLine(text, _LEARNED_CONFIG_PATH, 0),
+    )
+
+
+def widened_name_rules(name_rules: tuple[NameRule, ...]) -> SocketRules:
+    """The kernel-side rules of a provider that cannot filter a host: each ALLOW name opens any address on its ports."""
+    widened = []
+    for rule in name_rules:
+        if not rule.allow:
+            continue
+        kinds = tuple(Kind[kind.upper()] for kind in rule.kinds)
+        ports: tuple[int, ...] | range = (
+            tuple(port for low, high in rule.ports for port in range(low, high + 1)) if rule.ports else range(65536)
+        )
+        text = f"net=ALLOW|{','.join(k.name for k in kinds)}|*|{_ports_text(rule)}|OUT (name {rule.pattern})"
+        widened.append(
+            SocketRule(
+                Action.ALLOW,
+                SocketMask(kinds, ip_network("0.0.0.0/0"), ports),
+                (Direction.OUT,),
+                ConfigLine(text, _LEARNED_CONFIG_PATH, 0),
+            )
+        )
+    return tuple(widened)
+
+
+def _ports_text(rule: NameRule) -> str:
+    return ",".join(str(low) if low == high else f"{low}-{high}" for low, high in rule.ports) or "*"
+
+
+def _learn_from_resolution(host: str, ips: Iterable[IPv4Address | IPv6Address]) -> None:
+    """Remember the addresses ``host`` resolved to, for every ALLOW name rule that opens it."""
+    rules = allowing_rules(_name_rules, host)
+    if not rules:
+        return
+    deadline = _clock() + MAX_LEARNED_TTL
+    with _learned_lock:
+        for ip in ips:
+            for rule in rules:
+                _learned[(ip, rule)] = (deadline, _learned_rule(ip, rule))
+
+
+def _learned_rules() -> SocketRules:
+    now = _clock()
+    with _learned_lock:
+        for key in [key for key, (deadline, _) in _learned.items() if now >= deadline]:
+            del _learned[key]
+        return tuple(rule for _, rule in _learned.values())
+
+
+def _learn_addresses(host: Any, addresses: Iterable[Any]) -> None:
+    if not _name_rules or not isinstance(host, str) or not host:
+        return
+    ips = []
+    for address in addresses:
+        try:
+            ips.append(ip_address(address))
+        except ValueError:
+            continue
+    _learn_from_resolution(host, ips)
+
+
 # Not used
 def _refuse_a_name_no_rule_can_allow(name: str) -> None:
     """Refuse, before any DNS query, a name that no ALLOW rule could reach.
@@ -1020,7 +1198,7 @@ def _refuse_a_name_no_rule_can_allow(name: str) -> None:
     a provider that isolates the network, bwrap, does not resolve it at all, and its "Name or service not known"
     said nothing of the rule. No query leaves for it either.
     """
-    if not _rules_loaded or is_learning_mode() or not name or name in _LOOPBACK_HOSTS:
+    if not _rules_loaded or is_learning_mode() or not name or name in _LOOPBACK_HOSTS or _name_rules:
         return
     try:
         ip_address(name)
@@ -1055,6 +1233,7 @@ def _wrap_socket_gethostbyname(func: Callable) -> Callable:
         if isinstance(name, str):
             _refuse_a_name_no_rule_can_allow(name)
         result = func(name, *args, **kwargs)
+        _learn_addresses(name, [result])
         if isinstance(name, str) and name and is_learning_mode():
             add_learning_rule(
                 LearnSocketRule(
@@ -1085,6 +1264,7 @@ def _wrap_socket_gethostbyname_ex(func: Callable) -> Callable:
         if isinstance(name, str):
             _refuse_a_name_no_rule_can_allow(name)
         result = func(name, *args, **kwargs)
+        _learn_addresses(name, result[2])
         if isinstance(name, str) and name and is_learning_mode():
             add_learning_rule(
                 LearnSocketRule(
@@ -1170,6 +1350,7 @@ def _wrap_socket_getaddrinfo(func: Callable) -> Callable:
             if isinstance(host, str):
                 _refuse_a_name_no_rule_can_allow(host)
             result = func(host, port, family, type, proto, flags, *args, **kwargs)
+            _learn_addresses(host, (info[4][0] for info in result))
         if isinstance(host, str) and host and is_learning_mode():
             add_learning_rule(
                 LearnSocketRule(
@@ -1746,8 +1927,10 @@ if "PYTEST_CURRENT_TEST" in os.environ or "pytest" in sys.modules:
         an inactive one: the socket wrappers stay installed for the rest of the
         process and refuse every connection a later test makes.
         """
-        global _rules, _rules_loaded, _pin_dns
+        global _rules, _rules_loaded, _pin_dns, _name_rules
         _rules = ()
         _rules_loaded = False
         _pin_dns = ImmutableDict({})
+        _name_rules = ()
+        _learned.clear()
         getaddrinfo.cache_clear()

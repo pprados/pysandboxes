@@ -16,19 +16,27 @@ IMAGES = [
     "python-sb-unshare",
     "python-sb-bwrap",
     "python-sb-qemu",
+    "python-sb-qemu-microvm",
     "python-sb-gvisor",
+    "python-sb-smolvm",
 ]
 
 # Stands for docker: logs `run --rm <image> <command...>`; prints the version held in $FAKE_DIR/version-<image>
 # (else $FAKE_VERSION) for the importlib.metadata probe; fails when "<image> <command>" is listed in $FAKE_DIR/broken.
 FAKE_DOCKER = """#!/usr/bin/env bash
 shift
-while [[ $1 == -* ]]; do if [[ $1 == --device || $1 == --group-add || $1 == --network ]]; then shift; fi; shift; done
+flags=""
+while [[ $1 == -* ]]; do
+    flags+="$1 "
+    if [[ $1 == --device || $1 == --group-add || $1 == --network || $1 == --user ]]; then shift; fi
+    shift
+done
 image=${1%%:*}; shift
 printf '%s %s\\n' "$image" "$*" >>"$FAKE_DIR/calls"
+printf '%s %s\\n' "$image" "$flags" >>"$FAKE_DIR/flags"
 if grep -qxF "$image $1" "$FAKE_DIR/broken" 2>/dev/null; then exit 1; fi
 if [[ $1 == sh && $3 == *guest-ok* ]]; then
-    grep -qxF "guest" "$FAKE_DIR/broken" 2>/dev/null || echo guest-ok
+    grep -qxF -e "guest" -e "guest-$image" "$FAKE_DIR/broken" 2>/dev/null || echo guest-ok
     exit 0
 fi
 if [[ $1 == python && $2 == -c ]]; then
@@ -88,12 +96,16 @@ PROVIDER_TOOLS = [
     "python-sb-bwrap nsenter --version",
     "python-sb-qemu qemu-system-x86_64 --version",
     "python-sb-qemu genisoimage --version",
+    "python-sb-qemu-microvm qemu-system-x86_64 --version",
+    "python-sb-qemu-microvm genisoimage --version",
     "python-sb-gvisor runsc --version",
     "python-sb-gvisor ls /usr/bin/gvisor-bin/gvisor_sentry",
     "python-sb-gvisor unshare --version",
     "python-sb-gvisor iptables-restore --version",
     "python-sb-gvisor ip -V",
     "python-sb-gvisor slirp4netns --version",
+    "python-sb-smolvm smolvm --version",
+    "python-sb-smolvm ls /opt/smolvm/guest.tar",
 ]
 
 
@@ -103,6 +115,8 @@ def test_each_provider_image_runs_every_tool_it_invokes(fake: Path) -> None:
     for call in PROVIDER_TOOLS:
         assert call in calls
     assert any(c.startswith("python-sb-qemu sh -c") and "PYSANDBOXES_VM_IMAGES_DIR" in c for c in calls)
+    assert any(c.startswith("python-sb-qemu-microvm sh -c") and "PYSANDBOXES_VM_IMAGES_DIR" in c for c in calls)
+    assert any(c.startswith("python-sb-qemu-microvm python -c") and "ensure_microvm_boot_artifacts" in c for c in calls)
 
 
 def test_an_image_holding_another_version_fails(fake: Path) -> None:
@@ -129,6 +143,33 @@ def test_the_qemu_guest_runs_a_program_behind_a_network_rule(fake: Path) -> None
     assert "net=ALLOW|TCP" in probe[0]
 
 
+def test_the_microvm_guest_runs_a_program_behind_a_network_rule(fake: Path) -> None:
+    _smoke(fake)
+    probe = [c for c in _calls(fake) if c.startswith("python-sb-qemu-microvm sh -c printf")]
+    assert len(probe) == 1
+    assert "os-sandbox=qemu-microvm" in probe[0]
+    assert "net=ALLOW|TCP" in probe[0]
+
+
+def test_the_smolvm_guest_runs_a_program_with_no_privilege(fake: Path) -> None:
+    _smoke(fake)
+    probe = [c for c in _calls(fake) if c.startswith("python-sb-smolvm sh -c printf")]
+    assert len(probe) == 1
+    assert "os-sandbox=smolvm" in probe[0]
+    flags = [line for line in (fake / "flags").read_text().splitlines() if line.startswith("python-sb-smolvm ")]
+    run = [line for line in flags if "--device" in line]
+    assert len(run) == 1
+    assert "--user" in run[0] and "--group-add" in run[0], "a user of the group of the device"
+    assert "--privileged" not in run[0], "the point of the check is that no privilege is needed"
+
+
+def test_a_smolvm_guest_that_does_not_run_only_warns(fake: Path) -> None:
+    (fake / "broken").write_text("guest-python-sb-smolvm\n")
+    result = _smoke(fake)
+    assert result.returncode == 0
+    assert "::warning::the smolvm guest of python-sb-smolvm" in result.stdout
+
+
 def test_a_guest_that_cannot_apply_its_network_rules_fails(fake: Path) -> None:
     (fake / "broken").write_text("guest\n")
     result = _smoke(fake)
@@ -141,3 +182,5 @@ def test_without_kvm_the_guest_is_not_run_and_the_smoke_test_warns(fake: Path) -
     assert result.returncode == 0
     assert "::warning::" in result.stdout
     assert not any(c.startswith("python-sb-qemu sh -c printf") for c in _calls(fake))
+    assert not any(c.startswith("python-sb-qemu-microvm sh -c printf") for c in _calls(fake))
+    assert not any(c.startswith("python-sb-smolvm sh -c printf") for c in _calls(fake))

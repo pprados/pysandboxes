@@ -6,6 +6,7 @@ Each case starts ``python -m pysandboxes.python_sb`` as the user does. QEMU boot
 that only prove the command line leave it out: ``test_guards_with_providers`` already runs it end to end.
 """
 
+import hashlib
 import os
 import subprocess
 import sys
@@ -17,6 +18,7 @@ from ._env import backend_of, coverage_profile_lines, os_sandbox_params, row_pro
 from .test_guards_with_providers import _INTERPRETER_PATHS, _TIMEOUT_SECONDS, ROOT_DIR, _skip_unavailable
 
 _ROWS = [row for row in os_sandbox_params() if not str(row.values[0]).startswith("qemu")]
+_VM_ROWS = [row for row in os_sandbox_params() if str(row.values[0]).startswith("qemu")]
 
 
 def _python_sb(
@@ -81,12 +83,55 @@ def test_a_script_read_from_stdin_runs_under_every_backend(os_sandbox: str, tmp_
 
 
 @pytest.mark.parametrize("os_sandbox", _ROWS)
+def test_the_standard_input_of_the_caller_reaches_the_program_under_every_backend(
+    os_sandbox: str, tmp_path: Path
+) -> None:
+    """About a megabyte, sent whole: a relay that loses, truncates or reorders it fails the digest."""
+    _skip_unavailable(os_sandbox)
+    program = (
+        "import hashlib, sys; data = sys.stdin.read(); print(len(data), hashlib.sha256(data.encode()).hexdigest())"
+    )
+    payload = "".join(f"line {number}\n" for number in range(120_000))
+
+    done = _python_sb(os_sandbox, "python-import=*\n", ["-c", program], tmp_path, stdin=payload)
+
+    assert done.returncode == 0, done.stderr
+    assert done.stdout.split() == [str(len(payload)), hashlib.sha256(payload.encode()).hexdigest()]
+
+
+@pytest.mark.parametrize("os_sandbox", _ROWS)
 def test_the_exit_status_of_the_script_is_the_one_returned(os_sandbox: str, tmp_path: Path) -> None:
     _skip_unavailable(os_sandbox)
 
     done = _python_sb(os_sandbox, "python-import=*\n", ["-c", "import sys; sys.exit(7)"], tmp_path)
 
     assert done.returncode == 7, done.stderr
+
+
+@pytest.mark.parametrize("os_sandbox", _VM_ROWS)
+@pytest.mark.parametrize(
+    "payload",
+    [
+        pytest.param("x" * 256, id="256-byte-header"),
+        pytest.param("x" * 8192 + "\x00\x01\x03\x04tail", id="long-control-bytes"),
+    ],
+)
+def test_a_vm_preserves_long_stdin_control_bytes_and_unterminated_eof(
+    os_sandbox: str, tmp_path: Path, payload: str
+) -> None:
+    _skip_unavailable(os_sandbox)
+
+    done = _python_sb(
+        os_sandbox,
+        "python-import=*\n",
+        ["-c", "import sys; print(sys.stdin.buffer.read().hex())"],
+        tmp_path,
+        stdin=payload,
+        env={"QEMU_MICROVM_OPTIONAL_PATHS": "/etc/ssl,/etc/ca-certificates,/usr/share/ca-certificates"},
+    )
+
+    assert done.returncode == 0, done.stderr
+    assert done.stdout.strip() == payload.encode().hex()
 
 
 @pytest.mark.parametrize("os_sandbox", _ROWS)

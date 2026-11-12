@@ -50,7 +50,11 @@ without one) bumped by patch or minor, date the `[0.0.0]` entry of `CHANGELOG.md
 `make publish-final VERSION=X.Y.Z` does the same with the version given, which must be greater than the last final
 tag: it sets the first number of a series, such as `0.5.0`. The tests run on GitHub, in `release.yml`, which reuses a
 green nightly of the same commit. `make release` (`validate` and `all-tests`) and `make sample-tests-matrix` remain
-available to run the same checks locally, on demand. The tag holds no open entry; the first merge into `develop`
+available to run the same checks locally, on demand. The `smolvm` provider is the exception to GitHub: a hosted runner
+refuses every virtio-fs share of a guest (`restore boot volume mounts: Not supported`), so `integration.yml` deselects it.
+Before a minor or final release, run it locally with `make build-smolvm-guest`, then
+`make integration-tests INTEGRATION_TESTS="tests/integration_tests -k smolvm"` and `OS_SANDBOX=smolvm make sample-tests`
+(with `PYSANDBOXES_SMOLVM_IMAGE` set to the archive). The tag holds no open entry; the first merge into `develop`
 after the release opens a new `[0.0.0]` entry.
 
 The first final version publishes the `[0.0.0]` entry as written. From the next one on, `scripts/changelog-draft.sh`
@@ -82,11 +86,12 @@ yanking only hides it.
 | `publish-testpypi` | Waits for the approval, then uploads with Trusted Publishing and PEP 740 attestations |
 | `publish-pypi` | Final tags only: waits for the `pypi` approval, then uploads `pysandboxes` and, when due, `python-sb` |
 | `verify-published` | Downloads the wheel back from the index of the tag kind (pypi.org for a final tag, test.pypi.org otherwise) and compares its sha256 with the one built |
-| `images` | Dispatches `images.yml` on the tag and waits for it (`dispatch-images.sh`; a called workflow would not receive the secrets of the `dockerhub` environment): it checks the tag again, then one runner per Python 3.11 to 3.14 resolves the newest patch of `python:<python>-slim`, builds the five images from the published wheel on it, smoke-tests them, pushes them to `docker.io/pprados/<image>` |
+| `images` | Dispatches `images.yml` on the tag and waits for it (`dispatch-images.sh`; a called workflow would not receive the secrets of the `dockerhub` environment): it checks the tag again, then one runner per Python 3.11 to 3.14 resolves the newest patch of `python:<python>-slim`, builds the eight images from the published wheel on it, smoke-tests them, pushes them to `docker.io/pprados/<image>` |
 | `advance-master` | Final tags only: fast-forwards `master` to the tagged commit, never forced |
 
-The images are `python-sb`, `python-sb-landlock`, `python-sb-unshare`, `python-sb-bwrap`, `python-sb-qemu` and `python-sb-gvisor`,
-`linux/amd64`. The smoke test checks that each provider image runs every tool its provider invokes.
+The images are `python-sb`, `python-sb-landlock`, `python-sb-unshare`, `python-sb-bwrap`, `python-sb-qemu`, `python-sb-qemu-microvm`, `python-sb-gvisor` and `python-sb-smolvm`,
+`linux/amd64`. The smoke test checks that each provider image runs every tool its provider invokes, and starts the
+`smolvm` guest without privilege when the runner has `/dev/kvm`; a failure there only warns.
 `.github/scripts/image-tags.sh` lists their tags, in the manner of the official `python` images, the pysandboxes
 version prefixed with `sb`: `<patch>-sb<version>` and `<python>-sb<version>` for every release, `sb<version>` for
 Python 3.14, plus `<patch>`, `<python>` and, for Python 3.14, `3` and `latest` for a final release only (see
@@ -168,5 +173,5 @@ Already in place. Recreate them only if they are lost:
 | `verify-published`: "published but not visible yet" | The index's CDN (test.pypi.org or pypi.org) has not served the file within 10 min. Re-run the failed jobs |
 | `verify-published`: the wheel "differs" | The index (test.pypi.org or pypi.org) holds another file for this version (a re-run rebuilt a different wheel; the upload is skipped when the version exists). Publish the next number |
 | `images` fails at the smoke test | An image lacks the version or a provider binary. Nothing pushed |
-| `images` fails while pushing | Part of the six images may be published. Re-run the failed jobs: the same tags are overwritten |
+| `images` fails while pushing | Part of the eight images may be published. Re-run the failed jobs: the same tags are overwritten |
 | `advance-master` fails | The `master` environment lacks `MASTER_DEPLOY_KEY`, or the key is wrong or read-only, or `master` is not an ancestor of the tag. Merge nothing, investigate, then push the tagged commit to `master` by hand |

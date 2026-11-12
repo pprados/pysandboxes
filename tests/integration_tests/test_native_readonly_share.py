@@ -11,15 +11,23 @@ from typing import Iterator
 
 import pytest
 
-from ._env import provider_skip_reason
+from ._env import backend_of, provider_skip_reason, qemu_tcg_requested, row_profile_lines
 
 ROOT_DIR = Path(__file__).resolve().parents[2]
-_PROVIDERS = ("qemu", "unshare", "firejail", "landlock", "bwrap")
+_PROVIDERS = (
+    "qemu",
+    "qemu-microvm",
+    *(("qemu-microvm-tcg",) if qemu_tcg_requested() else ()),
+    "unshare",
+    "firejail",
+    "landlock",
+    "bwrap",
+)
 
 
 @pytest.fixture
 def exposed_dir(provider: str, tmp_path: Path) -> Iterator[Path]:
-    if provider == "qemu":
+    if provider.startswith("qemu"):
         yield tmp_path
         return
     with tempfile.TemporaryDirectory(prefix=".native-readonly-", dir=ROOT_DIR) as directory:
@@ -38,7 +46,9 @@ def test_native_code_cannot_write_a_read_only_share(provider: str, tmp_path: Pat
         "\n".join(
             [
                 "py-sandbox=false",
-                f"os-sandbox={provider}",
+                f"os-sandbox={backend_of(provider)}",
+                row_profile_lines(provider),
+                *(["expose-ro=/etc"] if backend_of(provider) == "qemu-microvm" else []),
                 *(["qemu.use_kvm=false"] if provider == "qemu" else []),
                 f"expose-ro={exposed_dir}",
                 "",
@@ -59,6 +69,10 @@ else:
     libc.close(fd)
     print("WROTE", written)
 """
+    control = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True, check=True)
+    assert "WROTE" in control.stdout, control.stdout + control.stderr
+    assert sentinel.read_text() == "guest-write\n"
+    sentinel.write_text("host-before\n")
     result = subprocess.run(
         [
             sys.executable,
@@ -68,7 +82,7 @@ else:
             "-c",
             code,
         ],
-        cwd=ROOT_DIR if provider == "qemu" else tmp_path,
+        cwd=ROOT_DIR if provider.startswith("qemu") else tmp_path,
         capture_output=True,
         text=True,
         timeout=900,
@@ -76,4 +90,39 @@ else:
     )
 
     assert result.returncode == 0, result.stderr[-3000:]
+    assert "REFUSED" in result.stdout, result.stdout + result.stderr
     assert sentinel.read_text() == "host-before\n"
+
+
+@pytest.mark.parametrize("provider", [row for row in _PROVIDERS if row.startswith("qemu-microvm")])
+def test_microvm_rejects_distinct_exposes_beyond_its_transport_capacity(provider: str, tmp_path: Path) -> None:
+    """A distinct readonly export cannot be dropped to make a profile boot."""
+    if reason := provider_skip_reason(provider):
+        pytest.skip(reason)
+    readonly, writable = tmp_path / "readonly", tmp_path / "writable"
+    readonly.mkdir()
+    writable.mkdir()
+    profile = tmp_path / "capacity.profile"
+    profile.write_text(
+        f"py-sandbox=false\nos-sandbox=qemu-microvm\n{row_profile_lines(provider)}"
+        f"expose-ro=.\nexpose-ro=/etc\nexpose-ro={sys.base_prefix}/lib\n"
+        f"expose-ro={readonly}\nexpose-rw={writable}\n"
+    )
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "pysandboxes.python_sb",
+            f"--pysandboxes-config={profile}",
+            "-c",
+            "print('MUST_NOT_RUN')",
+        ],
+        cwd=ROOT_DIR,
+        capture_output=True,
+        text=True,
+        timeout=60,
+        check=False,
+    )
+    assert result.returncode != 0, result.stdout + result.stderr
+    assert "needs 9 MMIO devices but supports 8" in result.stderr, result.stderr
+    assert "MUST_NOT_RUN" not in result.stdout

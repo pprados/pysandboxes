@@ -14,6 +14,7 @@ import pytest  # type: ignore[import-untyped]
 
 import pysandboxes
 from pysandboxes.all_rules import AllRules, EmptyRules
+from pysandboxes.egress_filter import NameRule
 from pysandboxes.remote import main_sandbox
 from pysandboxes.remote.appcontainer_acl import PRIVATE_FOLDER_ENV
 from pysandboxes.remote.daemon_parameters import DaemonParameters
@@ -52,6 +53,7 @@ def harness(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> Any:
     monkeypatch.setattr("pysandboxes.learning.set_learning_mode", h.note("learning_mode"))
     monkeypatch.setattr("pysandboxes.tools.set_is_in_sandbox", h.note("in_sandbox"))
     monkeypatch.setattr("pysandboxes.guard_socket.set_pin_dns", h.note("pin_dns"))
+    monkeypatch.setattr("pysandboxes.guard_socket.set_name_rules", h.note("name_rules"))
     monkeypatch.setattr("pysandboxes.guard_socket.apply_pin_dns_resolution", h.note("pin_resolution"))
     monkeypatch.setattr("pysandboxes.guard_import.preimport_framework_module", h.note("preimport"))
     monkeypatch.setattr("pysandboxes.py_sandbox.activate_sandboxes", h.note("activate"))
@@ -254,6 +256,16 @@ def test_pinned_dns_patches_the_resolution_only_when_set(
 
     assert harness.named("pin_dns") == [((pinned,), {})]
     assert len(harness.named("pin_resolution")) == (1 if pinned else 0)
+
+
+def test_the_name_rules_of_the_profile_reach_the_guard_of_the_sandbox(
+    harness: _Harness, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    names = (NameRule(True, "example.com", ("tcp",), ((443, 443),)),)
+
+    _run(monkeypatch, tmp_path, EmptyRules._replace(name_rules=names))
+
+    assert harness.named("name_rules") == [((names,), {})]
 
 
 def test_the_debug_switch_configures_the_logs(

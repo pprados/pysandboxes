@@ -17,9 +17,9 @@ import errno
 import gc
 import logging
 import os
-import shutil
 import pickle
 import random
+import shutil
 import socket
 import sys
 import tempfile
@@ -353,6 +353,10 @@ class BaseSubProcessDaemon(BaseSSESandbox):
     # False when the provider's own process creates the socket (QEMU ``hostfwd=unix:``) and the guest stays on TCP.
     endpoint_handed_down: bool = True
 
+    def unix_endpoint_blocker(self) -> str | None:
+        """Why this provider's binary cannot serve a Unix endpoint here, or ``None`` when it can."""
+        return None
+
     async def _on_process_started(self) -> None:
         """Hook called after the subprocess is started but before the ping loop."""
 
@@ -373,6 +377,10 @@ class BaseSubProcessDaemon(BaseSSESandbox):
     def _sse_bind_host(self, args: Args) -> str:
         """Address the child's SSE server listens on: the loopback, as the child shares the host network."""
         return "127.0.0.1"
+
+    def _guest_endpoint(self) -> str | None:
+        """Text form of the address the child listens on when it binds a Unix socket itself, else None."""
+        return None
 
     def __init__(
         self,
@@ -648,7 +656,11 @@ class BaseSubProcessDaemon(BaseSSESandbox):
             port=port,
             init_fn=init_fn_ref,
             bind_host=self._sse_bind_host(args),
-            endpoint=format_endpoint(Endpoint(FD, port=self._listener.fileno())) if self._listener else None,
+            endpoint=(
+                format_endpoint(Endpoint(FD, port=self._listener.fileno()))
+                if self._listener
+                else self._guest_endpoint()
+            ),
         )
 
         env: Environ
@@ -860,6 +872,8 @@ class BaseSubProcessDaemon(BaseSSESandbox):
         elif mode == "auto" and (all_rules.port != -1 or sys.platform not in ("linux", "darwin")):
             reason = "a fixed port or a platform without proof asks for TCP"
         else:
+            reason = self.unix_endpoint_blocker()
+        if reason is None:
             directory = tempfile.mkdtemp(prefix="pysb_", dir="/tmp" if os.path.isdir("/tmp") else None)
             endpoint = Endpoint(UNIX, path=os.path.join(directory, "s"))
             try:

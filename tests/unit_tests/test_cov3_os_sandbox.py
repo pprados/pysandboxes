@@ -55,6 +55,17 @@ def test_set_current_daemon_installs_the_daemon_seen_by_the_module() -> None:
     assert _os_sandbox.get_token() == "token"
 
 
+async def test_a_daemon_registered_by_the_sandbox_process_shuts_down_with_a_balanced_counter() -> None:
+    daemon = _Daemon()
+    _os_sandbox._set_current_daemon(daemon)
+
+    await _os_sandbox.async_shutdown_daemon(graceful_shutdown=False)
+
+    assert daemon.shutdowns == [False]
+    assert _os_sandbox._current_daemon is None
+    assert _os_sandbox._startup_counter == 0
+
+
 async def test_an_async_shutdown_without_a_daemon_still_consumes_a_pending_start() -> None:
     _os_sandbox._startup_counter = 1
 

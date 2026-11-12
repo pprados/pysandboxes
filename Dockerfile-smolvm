@@ -1,0 +1,33 @@
+# smolvm provider: base + the smolvm release, and the guest image archive it runs.
+# Run it as a user that can open /dev/kvm (smolvm lowers the privileges of a root caller, and the VMM then loses it):
+#   docker run --device /dev/kvm --group-add $(stat -c %g /dev/kvm) --user $(id -u) python-sb-smolvm
+# Build: make build-image-smolvm  =>  python-sb-smolvm:$(PYTHON_VERSION), python-sb-smolvm:latest
+# Linux x86_64 only: the checksum below is the one of that release archive.
+ARG PYTHON_VERSION=3.11
+FROM python-sb:${PYTHON_VERSION}
+
+# Not PYTHON_VERSION: the base image sets that one as an ENV (major.minor.patch), which wins over an ARG of the same
+# name under Podman and would name another archive.
+ARG GUEST_PYTHON
+ARG SMOLVM_VERSION=1.33.0
+ARG SMOLVM_SHA256=97e0c64d50abc407499802daa6c849ac010ef29d44e1d97664d8a78067927274
+
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends ca-certificates curl && \
+    curl -fsSL -o /tmp/smolvm.tar.gz \
+        "https://github.com/smol-machines/smolvm/releases/download/v${SMOLVM_VERSION}/smolvm-${SMOLVM_VERSION}-linux-x86_64.tar.gz" && \
+    echo "${SMOLVM_SHA256}  /tmp/smolvm.tar.gz" | sha256sum -c - && \
+    mkdir -p /opt/smolvm && \
+    tar -xzf /tmp/smolvm.tar.gz --strip-components=1 -C /opt/smolvm && \
+    ln -s /opt/smolvm/smolvm /usr/local/bin/smolvm && \
+    rm /tmp/smolvm.tar.gz && \
+    apt-get purge -y --auto-remove curl && \
+    rm -rf /var/lib/apt/lists/*
+
+# Readable by anyone: smolvm reads the archive as the user it runs the guest agent as, not as the owner of the file.
+COPY --chmod=0644 build/smolvm-guest-${GUEST_PYTHON}.tar /opt/smolvm/guest.tar
+ENV PYSANDBOXES_SMOLVM_IMAGE=/opt/smolvm/guest.tar
+# smolvm keeps its state under HOME: a container user chosen at run time (--user) has none that it can write.
+ENV HOME=/tmp
+
+CMD ["python-sb"]

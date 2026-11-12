@@ -114,3 +114,26 @@ def test_unix_is_an_error_where_auto_would_fall_back(monkeypatch: pytest.MonkeyP
 
     with pytest.raises(SandBoxError, match="remote-endpoint=tcp or auto"):
         _choose(daemon, "unix")
+
+
+def test_auto_falls_back_to_tcp_when_the_provider_binary_refuses_a_socket(monkeypatch: pytest.MonkeyPatch) -> None:
+    daemon = _daemon(monkeypatch)
+    monkeypatch.setattr(SubProcessDaemon, "unix_endpoint_blocker", lambda self: "the binary is too old")
+
+    _choose(daemon, "auto")
+
+    assert daemon.endpoint is None
+
+
+def test_unix_is_an_error_when_the_provider_binary_refuses_a_socket(monkeypatch: pytest.MonkeyPatch) -> None:
+    daemon = _daemon(monkeypatch)
+    monkeypatch.setattr(SubProcessDaemon, "unix_endpoint_blocker", lambda self: "the binary is too old")
+
+    with pytest.raises(SandBoxError, match="the binary is too old"):
+        _choose(daemon, "unix")
+
+
+def test_the_qemu_probe_rejects_a_binary_that_cannot_run() -> None:
+    from pysandboxes.remote.qemu_sse_daemon import _qemu_accepts_unix_hostfwd
+
+    assert _qemu_accepts_unix_hostfwd("/nonexistent/qemu-system-x86_64") is False

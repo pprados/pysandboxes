@@ -115,3 +115,5 @@ python-import=_hmac, annotationlib, compression
 
 python-import=_sqlite3, sqlite3
 python-import=h2, hpack, hyperframe
+python-import=locale
+python-import=linecache

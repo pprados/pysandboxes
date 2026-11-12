@@ -17,15 +17,20 @@ Start here; the matrix below gives the detail behind each line.
 
 | Situation | Provider |
 |---|---|
-| Default on Linux: nothing to install, no privilege, files and TCP ports | `landlock` |
-| Untrusted native code, or host and UDP filtering | `bwrap` or `unshare` |
-| Strongest separation, in a VM that starts in under a second (needs `/dev/kvm`) | [`libkrun`](libkrun.md) |
-| Strongest separation, in a VM without KVM or with a full guest OS (more than 20 s to start) | `qemu` |
-| Compiled code or kernel exploits, user-space kernel, starts in about a second | `gvisor` |
-| Resource limits and seccomp | `firejail` |
-| Inside Docker or Podman | `landlock` or `qemu` unprivileged; `unshare`, `bwrap` or `gvisor` with `--privileged` |
+| Default on Linux: nothing to install, no privilege, files and TCP ports | [`landlock`](landlock.md) |
+| Untrusted native code, or host and UDP filtering, with the lightest namespaces | [`bwrap`](bwrap.md) |
+| Untrusted native code, or host and UDP filtering, with only user namespaces, `slirp4netns` and `iptables` | [`unshare`](unshare.md) |
+| Strongest separation, in a VM (more than 20 s to start) | [`qemu`](qemu.md) |
+| Smaller QEMU machine, x86_64 Linux, with at most eight virtio-mmio transports | [`qemu-microvm`](qemu-microvm.md) |
+| Strongest separation, in a KVM micro-VM that boots in about a second (needs `/dev/kvm`) | [`libkrun`](libkrun.md) |
+| Compiled code or kernel exploits, user-space kernel, starts in about a second | [`gvisor`](gvisor.md) |
+| Compiled code or kernel exploits, with its own guest kernel in a micro-VM (KVM, about a second), TCP filtered by address only, no IPv6, Linux only | [`smolvm`](smolvm.md) |
+| Resource limits and seccomp | [`firejail`](firejail.md) |
+| Inside Docker, Podman or Kubernetes | [`landlock`](landlock.md), [`qemu`](qemu.md) or [`qemu-microvm`](qemu-microvm.md) unprivileged; [`unshare`](unshare.md) or [`bwrap`](bwrap.md) with `--privileged`; [`smolvm`](smolvm.md) unprivileged, as a user of the `kvm` group with `/dev/kvm` (Docker `--device`, `--group-add`, `--user`; Podman also `--userns=keep-id`; Kubernetes through a device plugin); [`gvisor`](gvisor.md) with `--privileged` or its lowered confinement (see below) |
 | Files and ports on macOS (Seatbelt, no host filtering) | [`sandbox-exec`](sandbox-exec.md) |
-| Process separation only, no OS boundary (also on macOS, and the only choice on Windows) | `subprocess` |
+| Files and network on Windows, without administrator rights (AppContainer token, no host or port filtering) | [`appcontainer`](appcontainer.md) |
+| Process separation only, no OS boundary (also on macOS, and the fallback on Windows) | [`subprocess`](subprocess.md) |
+| No sandbox at all: plain Python, for comparison or trusted code | `none` |
 
 Two limits to know before choosing `landlock`: it denies a path but cannot hide it, and it does not protect the host's named Unix sockets (see [Host sockets under `/run`](#host-sockets-under-run)). Against untrusted native code, prefer `bwrap` or `unshare`.
 
@@ -35,13 +40,15 @@ The providers that can wrap the Python sandbox are:
 
 | Technology                                                      | Implementation<br/>&amp;<br/>Configuration | Specifics                                                                    | Description                                                                                                                              |
 |-----------------------------------------------------------------|--------------------------------------------|------------------------------------------------------------------------------|------------------------------------------------------------------------------------------------------------------------------------------|
-| subprocess                                                      |                                            | • no complementary security                                                  |                                                                                                                                          |
+| [subprocess](subprocess.md)                                     | [here](subprocess.md)                 | • no complementary security                                                  | Separate Python process of the same user, with no OS boundary. Runs on every platform.                                                   |
 | [bwrap](https://github.com/containers/bubblewrap)               | [here](bwrap.md)                      | • Disk mapping (without rename)<br/>• File filtering<br/>• Network filtering | This is a technology that allows isolating a Linux process at the disk and network levels.                                               |
 | [firejail](https://github.com/netblue30/firejail)               | [here](firejail.md)                   | • Disk mapping (without rename)<br/>• File filtering<br/>• Network filtering | This is a technology that allows isolating a Linux process at the disk and network levels.                                               |
 | [unshare](https://man7.org/linux/man-pages/man2/unshare.2.html) | [here](unshare.md)                    | • Disk mapping (without rename)<br/>• File filtering<br/>• Network filtering | This is a technology that allows isolating a Linux process at the disk and network levels using `unshare`, `slirp4netns` and `iptables`. |
 | [landlock](https://landlock.io/)                                | [here](landlock.md)                   | • Directory access<br/>• Network TCP port filtering                          | This is a technology that allows an auto isolation inside a Linux process.                                                               |
 | [qemu](https://www.qemu.org/)                            | [here](qemu.md)                       | • Total emulation of OS and CPU                                              | No need of privilege. Use KVM if it's possible, else use the emulation.                                                                  |
+| [qemu-microvm](https://www.qemu.org/docs/master/system/i386/microvm.html) | [here](qemu-microvm.md) | • Separate guest kernel<br/>• virtio-mmio only<br/>• Linux x86_64 | Direct kernel boot; KVM recommended. Eight transport limit; TCG is much slower. |
 | [gvisor](https://gvisor.dev)                             | [here](gvisor.md)                     | • User-space kernel (Sentry)<br/>• Disk mapping<br/>• File filtering<br/>• Network filtering | `runsc` in a private network namespace filtered by `iptables`, with `slirp4netns`. |
+| [smolvm](https://github.com/smol-machines/smolvm) | [here](smolvm.md) | • Micro-VM with its own kernel (KVM)<br/>• Disk mapping (directories)<br/>• Network filtering by address | `smolvm machine run` on an OCI image, the channel over a Unix socket; no namespace or `iptables` on the host. |
 | [libkrun](https://github.com/containers/libkrun) | [here](libkrun.md) | • KVM micro-VM, no disk image<br/>• Disk mapping<br/>• Network filtering | Boots the host's own interpreter in a micro-VM in about a second; the network stack runs in a private namespace filtered by `iptables`. |
 | sandbox-exec | [here](sandbox-exec.md) | • Seatbelt path and port filtering<br/>• Deprecated by Apple<br/>• No remote host/IP filtering | Legacy macOS-only profile launcher. |
 | [appcontainer](appcontainer.md) | [here](appcontainer.md) | • File ACLs<br/>• AppContainer network capabilities<br/>• Job Object | Windows-only provider; its administrator and standard-user suites pass, and `cross-os.yml` runs them on the Windows runner. |
@@ -52,43 +59,69 @@ A ❌ means the provider does not enforce that control. The Python layer may sti
 
 [`sandbox-exec`](sandbox-exec.md) is the macOS provider. Apple has deprecated the command, and it creates no namespace, so it is not a VM boundary. See [the provider page](sandbox-exec.md) before selecting it.
 
-| Guard                    | none | py-sandbox | landlock  |  unshare  |   bwrap   | firejail |       qemu       | libkrun | gvisor | sandbox-exec | appcontainer¹ |
-|--------------------------|:----:|:----------:|:---------:|:---------:|:---------:|:------:|:----------------:| :--------: |:--------:| :----------: |:-----------:|
-| Isolation                |  ❌   |  Process   | Linux ABI | Namespace | Namespace | Namespace | VM+<br/>emulator | KVM<br/>micro-VM | User-space<br/>kernel | Seatbelt | AppContainer |
-| Python code              |  ❌   |     ✅      |     ❌     |     ❌     |     ❌     |     ❌  |        ❌         | ❌ | ❌ | ❌ | ❌ |
-| Compiled code            |  ❌   |     ❌      |     ✅     |     ✅     |     ✅     |     ✅  |        ✅         | ✅ | ✅ | ✅ | ✅ |
-| env                      |  ❌   |     ✅      |     ✅     |     ✅     |     ✅     |     ✅  |        ✅         | ✅ | ✅ | ✅ | ✅ |
-| import                   |  ❌   |     ✅      |     ❌     |     ❌     |     ❌     |     ❌  |        ❌         | ❌ | ❌ | ❌ | ❌ |
-| expose-ro/rw=path        |  ❌   |     ✅      |     ✅     |     ✅     |     ✅     |     ✅  |        ✅         | ✅ | ✅ | ✅ | ✅ |
-| ignore=*                 |  ❌   |     ✅      |     ❌     |     ✅     |     ✅     |     ✅  |        ✅         | ✅ | ✅ | ✅ | Partial² |
-| python-api=*             |  ❌   | ✅ |  ❌  |  ❌  |  ❌  |  ❌  |  ❌  | ❌ |  ❌  |  ❌  |  ❌  |
-| eval-*                   |  ❌   |     ✅      |     ❌     |     ❌     |     ❌     |     ❌  |        ❌         | ❌ | ❌ | ❌ | ❌ |
-| **Network**              |      |            |           |           |           |        |                  |  |  |  |  |
-| • TCP                    |  ❌   |     ✅      |     ✅     |     ✅     |     ✅     |     ✅  |        ✅         | ✅ | ✅ | ✅ | Partial³ |
-| • UDP                    |  ❌   |     ✅      |     ❌     |     ✅     |     ✅     |     ✅  |        ✅         | ✅ | ✅ | ✅ | Partial³ |
-| • host                   |  ❌   |     ✅      |     ❌     |     ✅     |     ✅     |     ✅  |        ✅         | ✅ | ✅ | ❌ | ❌³ |
-| • port                   |  ❌   |     ✅      |     ✅     |     ✅     |     ✅     |     ✅  |        ✅         | ✅ | ✅ | ✅ | ❌³ |
-| OS-sandbox               |  ❌   |     ❌      |     ✅     |     ✅     |     ✅     |     ✅  |        ✅         | ✅ | ✅ | ✅ | ✅ |
-| Vm compatible            |  ❌   |     ✅      |     ✅     |     ✅     |     ✅     |     ✅  |        ✅         | ✅ | ✅ | ✅ | ✅ |
-| **Docker / Podman**      |      |            |           |           |           |        |                  |  |  |  |  |
-| • unprivileged           |  ✅   |     ✅      |     ✅     |     ❌     |     ❌     |     ❌  |        ✅         | not tested | ❌ | n/a | n/a |
-| • --privileged           |  ✅   |     ✅      |     ✅     |     ✅     |     ✅     |     ❌  |        ✅         | not tested | ✅ | n/a | n/a |
-| **Kubernetes**           |      |            |           |           |           |        |                  |  |  |  |  |
-| • unprivileged pod       |  ✅   |     ✅      |     ✅     |     ❌     |     ❌     |     ❌  |        ✅         | not tested | ❌ | n/a | n/a |
-| • SYS_ADMIN              |  ✅   |     ✅      |     ✅     |     ✅     |     ✅     |     ❌  |        ❌         | not tested | ✅ | n/a | n/a |
-| • NET_ADMIN              |  ✅   |     ✅      |     ✅     |     ✅     |     ✅     |     ❌  |        ❌         | not tested | ✅ | n/a | n/a |
-| **Extra**                |      |            |           |           |           |        |                  |  |  |  |  |
-| • Resource limits        |  ❌   |     ❌      |     ❌     |     ❌     |     ❌     |     ✅  |        ✅         | ❌ | ❌ | ❌ | ❌ |
-| • Seccomp                |  ❌   |     ❌      |     ❌     |     ❌     |     ❌     |   ✅    |        ✅         | ❌ | ❌ | ❌ | n/a |
-| • Latency                | <1s  |    <1s     |    <1s    |    <1s    |    <1s    |    <1s |      >20s        | ~1s | ~1s | <1s | Pending |
+| Guard                    | none | py-sandbox | landlock  |  unshare  |   bwrap   | firejail |       qemu       | libkrun | gvisor | smolvm | sandbox-exec | appcontainer¹ |
+|--------------------------|:----:|:----------:|:---------:|:---------:|:---------:|:------:|:----------------:|:--------:|:--------:| :--------: | :----------: |:-----------:|
+| Isolation                |  ❌   |  Process   | Linux ABI | Namespace | Namespace | Namespace | VM+<br/>emulator | KVM<br/>micro-VM | User-space<br/>kernel | MicroVM+<br/>own kernel | Seatbelt | AppContainer |
+| Host privilege           | None |    None    |   None    | None⁷ | None | **setuid root**⁶ | None<br/>(`kvm` group) | None<br/>(`kvm` group) | None | None<br/>(`kvm` group) | None | None |
+| Python code              |  ❌   |     ✅      |     ❌     |     ❌     |     ❌     |     ❌  |        ❌         |        ❌         | ❌ | ❌ | ❌ | ❌ |
+| Compiled code            |  ❌   |     ❌      |     ✅     |     ✅     |     ✅     |     ✅  |        ✅         |        ✅         | ✅ | ✅ | ✅ | ✅ |
+| env                      |  ❌   |     ✅      |     ✅     |     ✅     |     ✅     |     ✅  |        ✅         |        ✅         | ✅ | ✅ | ✅ | ✅ |
+| import                   |  ❌   |     ✅      |     ❌     |     ❌     |     ❌     |     ❌  |        ❌         |        ❌         | ❌ | ❌ | ❌ | ❌ |
+| expose-ro/rw=path        |  ❌   |     ✅      |     ✅     |     ✅     |     ✅     |     ✅  |        ✅         |        ✅         | ✅ | ✅ | ✅ | ✅ |
+| ignore=*                 |  ❌   |     ✅      |     ❌     |     ✅     |     ✅     |     ✅  |        ✅         |        ✅         | ✅ | ✅ | ✅ | Partial² |
+| python-api=*             |  ❌   | ✅ |  ❌  |  ❌  |  ❌  |  ❌  | ❌ |  ❌  |  ❌  | ❌ |  ❌  |  ❌  |
+| eval-*                   |  ❌   |     ✅      |     ❌     |     ❌     |     ❌     |     ❌  |        ❌         |        ❌         | ❌ | ❌ | ❌ | ❌ |
+| **Network**              |      |            |           |           |           |        | |                  |  | |  |  |
+| • TCP                    |  ❌   |     ✅      |     ✅     |     ✅     |     ✅     |     ✅  |        ✅         |        ✅         | ✅ | ✅ | ✅ | Partial³ |
+| • UDP                    |  ❌   |     ✅      |     ❌     |     ✅     |     ✅     |     ✅  |        ✅         |        ✅         | ✅ | ✅ | ✅ | Partial³ |
+| • host                   |  ❌   |     ✅      |     ❌     |     ✅     |     ✅     |     ✅  |        ✅         |        ✅         | ✅ | ✅ | ❌ | ❌³ |
+| • port                   |  ❌   |     ✅      |     ✅     |     ✅     |     ✅     |     ✅  |        ✅         |        ✅         | ✅ | UDP only⁴ | ✅ | ❌³ |
+| • host names at runtime⁸ |  ❌   |    n/a     | Guard only | ✅ | ✅ | Root only⁶ (else `pinned`) | ❌ | ✅ | ✅ | ❌ | Guard only | Guard only |
+| OS-sandbox               |  ❌   |     ❌      |     ✅     |     ✅     |     ✅     |     ✅  |        ✅         |        ✅         | ✅ | ✅ | ✅ | ✅ |
+| Vm compatible            |  ❌   |     ✅      |     ✅     |     ✅     |     ✅     |     ✅  |        ✅         |        ✅         | ✅ | ✅ | ✅ | ✅ |
+| **Docker / Podman**      |      |            |           |           |           |        | |                  |  | |  |  |
+| • unprivileged           |  ✅   |     ✅      |     ✅     |     ❌     |     ❌     |     ❌  | not tested |        ✅         | ❌ | ✅⁵ | n/a | n/a |
+| • --privileged           |  ✅   |     ✅      |     ✅     |     ✅     |     ✅     |     ❌  | not tested |        ✅         | ✅ | ✅⁵ | n/a | n/a |
+| **Kubernetes**           |      |            |           |           |           |        | |                  |  | |  |  |
+| • unprivileged pod       |  ✅   |     ✅      |     ✅     |     ❌     |     ❌     |     ❌  | not tested |        ✅         | ❌ | ✅⁵ | n/a | n/a |
+| • SYS_ADMIN              |  ✅   |     ✅      |     ✅     |     ✅     |     ✅     |     ❌  | not tested |        ❌         | ✅ | not needed⁵ | n/a | n/a |
+| • NET_ADMIN              |  ✅   |     ✅      |     ✅     |     ✅     |     ✅     |     ❌  | not tested |        ❌         | ✅ | not needed⁵ | n/a | n/a |
+| **Extra**                |      |            |           |           |           |        | |                  |  | |  |  |
+| • Resource limits        |  ❌   |     ❌      |     ❌     |     ❌     |     ❌     |     ✅  | ❌ |        ✅         | ❌ | ✅ | ❌ | ❌ |
+| • Seccomp                |  ❌   |     ❌      |     ❌     |     ❌     |     ❌     |   ✅    | ❌ |        ✅         | ❌ | ❌ | ❌ | n/a |
+| • Latency                | <1s  |    <1s     |    <1s    |    <1s    |    <1s    |    <1s | ~1s |      >20s        | ~1s | ~1s | <1s | Pending |
+| **OS**                   | Any  |    Any     |   Linux   |   Linux   |   Linux   |  Linux | Linux |      Linux       | Linux | Linux | macOS | Windows |
 
-¹ `appcontainer` is Windows-only: the Docker and Kubernetes rows do not apply. ² `ignore=` covers only paths present at launch, and their names may remain listable. ³ AppContainer denies outbound network access by default. An `ALLOW` `net=` rule grants a broad public-Internet or private-network capability; AppContainer itself does not filter host, port, protocol, or loopback. The Python guard checks the first three only while enabled, so native code can bypass those checks. Loopback is blocked by AppContainer even when a rule allows it.
+¹ `appcontainer` is Windows-only: the Docker and Kubernetes rows do not apply. ² `ignore=` covers only paths present at launch, and their names may remain listable. ³ AppContainer denies outbound network access by default. An `ALLOW` `net=` rule grants a broad public-Internet or private-network capability; AppContainer itself does not filter host, port, protocol, or loopback. The Python guard checks the first three only while enabled, so native code can bypass those checks. Loopback is blocked by AppContainer even when a rule allows it. ⁴ `smolvm` filters TCP by address, never by port: a TCP rule with a port opens every port of its address, and a port on any address stays closed. A UDP rule keeps its port. ⁵ `smolvm` needs no privilege and no capability, only `/dev/kvm` and a non-root user in its group, so the privileged rows add nothing and the `SYS_ADMIN` and `NET_ADMIN` rows are not needed. Docker: `--device /dev/kvm --group-add <gid> --user`. Rootless Podman: the same with `--userns=keep-id`, which is what leaves the device usable to the user. Kubernetes: a pod with no `securityContext` that asks a device plugin for the device (`resources.limits`), or a privileged pod that mounts `/dev/kvm`; the project's tests use [a plugin manifest](../tests/containers_tests/kube-kvm-device-plugin.yaml) for the first. ⁶ The `firejail` binary is setuid root, so the jail and its network namespace belong to the root user namespace: an unprivileged user cannot enter them (`nsenter -t <pid> -U -n` fails with `EPERM`) and `firejail --join-network` is reserved to root. The daemon therefore cannot open an address in the jail while the program runs, and `net-resolve=runtime` needs the daemon to run as root; without root the profile is refused. `net-resolve=pinned` needs no privilege. ⁷ Unprivileged user namespaces must be allowed (`kernel.unprivileged_userns_clone=1`, and AppArmor may need relaxing on recent Ubuntu); see [unshare](unshare.md). ⁸ `net-resolve=runtime` (see [DNS](dns.md)). `unshare`, `bwrap`, `gvisor` and `qemu` (also `qemu-microvm`) open the address in the sandbox's own firewall when the name resolves. `landlock`, `sandbox-exec` and `appcontainer` only filter by port or network class: the kernel opens the port of the name to any host and the Python guard judges the host, so native code is not filtered. `none` runs no guard and ignores the key; it logs one warning, whatever the key says, that it adds no OS boundary.
 
-QEMU passes the `readonly=on` export option for `expose-ro` mounts; an end-to-end native guest write regression test covers this behavior. Landlock denies TCP bind/connect by default on ABI v4+, but cannot filter UDP and is unavailable below ABI v4. See [QEMU security limitations](qemu.md#security-limitations) and [Landlock limits](landlock.md#limits).
+**Why `sandbox-exec` and `appcontainer` filter no host, and what it would take.** On Linux the provider owns a network
+namespace and its firewall, so it can allow one address at a time. macOS and Windows give an unprivileged process no such
+firewall: Seatbelt scopes a rule to a port, and AppContainer grants a class of traffic. A per-host filter exists on both
+(`pf` or a Network Extension on macOS, a Windows Filtering Platform filter on the package SID on Windows), but each needs
+root, an Apple entitlement or administrator rights, which a provider that runs as an ordinary user cannot assume. The same
+constraint explains `firejail`: its namespace belongs to root. In all three cases an unprivileged run keeps the Python guard
+(or, for `firejail`, the exact `pinned` firewall). Details: [`sandbox-exec`](sandbox-exec.md#why-the-host-cannot-be-filtered-better),
+[`appcontainer`](appcontainer.md#why-the-host-cannot-be-filtered-better).
+
+QEMU and QEMU microvm pass the `readonly=on` export option for `expose-ro` mounts; end-to-end native guest write regressions cover both. Microvm fails closed when the eight virtio-mmio transports are exhausted. Landlock denies TCP bind/connect by default on ABI v4+, but cannot filter UDP and is unavailable below ABI v4. See [QEMU security limitations](qemu.md#security-limitations), [QEMU microvm limits](qemu-microvm.md#limits), and [Landlock limits](landlock.md#limits).
+
+### QEMU microvm rule enforcement
+
+| Rule | OS-layer result | Evidence and limit |
+|---|---|---|
+| `expose-ro` | Read-only virtio-9p export | Native guest open-for-write is refused. |
+| `expose-rw` | Writable virtio-9p export | Native guest create/write succeeds only in the exposed directory. |
+| Unexposed files | Not exported | Native guest read fails; each distinct share consumes a transport. |
+| `ignore=` | Guest bind-mount masks original content | Native guest sees no original bytes. |
+| `net=` | Guest iptables filter | Native deny and allow controls pass, with a host control. |
+| Environment | Host allowlist copied to guest | Unlisted host variables are absent. |
+| Guest setup | Required mount failures stop startup | Fault injection verifies no user code starts. |
+
+These OS checks ran with Python guards disabled where applicable. Python import, API and `eval-*` rules remain in the Python layer.
 
 On `sandbox-exec`, the `• host` row is ❌ because Seatbelt filters by protocol and port only: `net=ALLOW|TCP|203.0.113.7|443|OUT` becomes "TCP port 443, any remote host". Only the Python socket guard still checks the host, so with `py-sandbox=false` native code reaches any host on an allowed port. A port rule is still enforced by the kernel. When DNS (UDP 53) is allowed, the rule becomes a grant on the system resolver socket (`mDNSResponder`), not a UDP rule. Details: [network limitations](sandbox-exec.md#network-limitations).
 
-`ignore=` is enforced differently by each technology: **py-sandbox** and **firejail** make the path disappear (`FileNotFoundError`), **unshare** and **sandbox-exec** have the OS refuse it (`PermissionError`), and **bwrap**, **qemu** and **gvisor** mask it, so a read succeeds and returns nothing. **landlock** denies access to a path but cannot hide one, so it has no equivalent: with `--py-sandbox=False` an ignored file stays readable there.
+`ignore=` is enforced differently by each technology: **py-sandbox** and **firejail** make the path disappear (`FileNotFoundError`), **unshare** and **sandbox-exec** have the OS refuse it (`PermissionError`), and **bwrap**, **qemu**, **qemu-microvm** and **gvisor** mask it, so a read returns no original file contents. **landlock** denies access to a path but cannot hide one, so it has no equivalent: with `--py-sandbox=False` an ignored file stays readable there.
 
 **landlock** under Kubernetes needs no capability at all, which is why its three Kubernetes rows are identical: unlike **unshare** and **bwrap**, it never asks the pod for `SYS_ADMIN` or `NET_ADMIN`, it restricts itself from the inside. Its single requirement sits elsewhere, on the *node*: the kernel must expose Landlock ABI v4 (Linux 6.7+) for the provider's default TCP deny policy, and the ABI seen inside the pod is the node's, not the image's. On a managed cluster, where the node kernel is not yours to choose, verify it before relying on it. Native UDP remains outside Landlock's network controls.
 
@@ -135,8 +168,18 @@ To pin a provider so the environment cannot downgrade it, write it literally, e.
 | appcontainer | ❌ Windows Python has no `socket.AF_UNIX`; the channel stays on TCP |
 | qemu | ✅ QEMU creates the socket (`hostfwd=unix:`); the guest keeps serving TCP behind the forward |
 | gvisor | ❌ the guest cannot accept on a handed-down socket, and `--host-uds=open` would let it reach host sockets |
+| smolvm | ✅ the guest listens on a Unix socket that `--expose-socket` makes reachable on the host, and needs no network for it; `remote-endpoint=tcp` is an error |
 
 Not supported by this layer: Windows named pipes (uvicorn cannot serve on them) and anonymous pipes (no accept loop).
+
+### How host names of `net=` rules are resolved: `net-resolve`
+
+`net-resolve=pinned|runtime` picks when the host name of a `net=` rule (`net=ALLOW|TCP|api.example.com|443|OUT`) becomes addresses. The default is not decided yet; without the key the value is `pinned`.
+
+- `pinned` resolves the name once, at start, and freezes the addresses in the ruleset and in `/etc/hosts`. A name whose addresses rotate is refused once they change.
+- `runtime` resolves the name when the sandboxed program asks. The sandbox DNS (`10.0.2.3`) is redirected to a filtering resolver on the host, which answers only the names a rule allows (`NXDOMAIN` otherwise), opens the addresses of an allowed answer in the sandbox firewall before it replies, and closes them when their TTL (clamped to 60 s to 1 h) is over. The firewall keeps the protocols and ports of the rule, a static `DENY` keeps precedence, and a resolver the program names itself (`8.8.8.8`, DoT, DoH to an unlearned address) meets the default `DROP`.
+
+`runtime` is available for `unshare`, `bwrap`, `gvisor`, `qemu`, `qemu-microvm`, `subprocess`, `landlock`, `sandbox-exec` and `appcontainer` (Python guard only, no firewall) and `firejail` (root only), and the providers with a firewall need `nsenter` and `iptables` on the host. Under `firejail` only root can enter the network namespace of a jail (`nsenter` fails with EPERM for a regular user), so as root the resolver joins it with `firejail --join-network`; for a regular user the mode falls back to `pinned` with a warning (the names are resolved once, at start, and the firewall of the jail stays exact). Under `qemu` the guest applies its own firewall, so the host talks to a small helper process of the guest through a second forwarded port; it needs no `nsenter`. Any other provider rejects it with a configuration error rather than falling back to `pinned`. A rule names a host as `name` (the name and its subdomains), `=name` (the name only) or `*.name` (subdomains only). Limits: two names behind one address share it for the TTL (the CDN case), and an opened address is open to every process of the sandbox, not only to the one that resolved the name. Also IPv4 only, and not yet exercised with a real host resolver, in containers or with the learning mode. Full list of limits and what the integration suite proves: [Unshare, names in `net=` rules](unshare.md#names-in-net-rules-net-resolveruntime).
 
 ### Host sockets under `/run`
 
@@ -155,6 +198,8 @@ Not supported by this layer: Windows named pipes (uvicorn cannot serve on them) 
   `bwrap` or `unshare`.
 - `qemu` runs a separate kernel: the host's `/run` is not visible.
 - `gvisor` binds no `/run` and starts `runsc` with `--host-uds=none`, which refuses any host Unix socket.
+- `smolvm` runs a separate kernel on the root of its image: the host's `/run` is not visible, and only the one
+  socket of the channel crosses the boundary.
 
 An `expose-ro` or `expose-rw` rule naming a directory under `/run` gives those sockets back: write one only for a
 socket the program really needs.
@@ -170,8 +215,9 @@ keep `py-sandbox` on, and put one OS provider around it (see [Recommendations](#
 | Hostile Python, no native code | LLM-generated code, plugins | on | `landlock` (default) | The Python guards, plus a kernel ruleset on files and TCP ports |
 | Hostile native code | Dependencies with C extensions, `ctypes`, database drivers | on | `bwrap` or `unshare` | Mount and network namespaces: a path that is not exposed does not exist, the network is filtered |
 | Hostile native code, kernel exploits | Code that may attack the kernel itself | on | `gvisor` | The guest talks to a user-space kernel (Sentry), which makes a small set of host system calls |
-| Worst case, or another CPU | Code you cannot reason about | on | `libkrun` | Linux | Yes | Kernel | micro-VM KVM | `os-sandbox=libkrun` |
-| `qemu` | A VM with its own Linux kernel: the host kernel is out of the guest's reach |
+| Worst case, or another CPU | Code you cannot reason about | on | `qemu` | A VM with its own Linux kernel: the host kernel is out of the guest's reach |
+| Same as `qemu`, with a smaller virtual machine | Code you cannot reason about, on Linux x86_64, with at most eight host shares | on | `qemu-microvm` | A VM with its own Linux kernel, booted directly, with virtio-mmio devices only and no PCI or ACPI. Same isolation class as `qemu`, not a stronger one, and not faster to start |
+| Worst case, a KVM micro-VM that boots in about a second | Code you cannot reason about, with `/dev/kvm` | on | `libkrun` | A micro-VM whose guest sees only the system, the interpreter and what the rules name |
 
 `firejail` is a variant of the namespace row for hosts that already have it: it adds resource limits and a seccomp
 filter. `sandbox-exec` (macOS) and `appcontainer` (Windows) are the choices on those systems.
@@ -190,16 +236,20 @@ Measured on one host with `py-sandbox=false`, one run each. Start-up counts the 
 | `firejail` | 0.51 s | 0.02 s | `firejail` | ✅ |
 | `unshare` | 1.43 s | 0.03 s | User namespaces, `slirp4netns`, `iptables` | ✅ |
 | `gvisor` (`systrap`) | 0.74 s | 0.16 s | `runsc`, `slirp4netns`, `iptables`, `/dev/net/tun` | ✅ |
-| `libkrun` | Linux | Yes | Kernel | micro-VM KVM | `os-sandbox=libkrun` |
+| `smolvm` | 1.0 s | not measured | `smolvm`, `/dev/kvm`, a guest image (`make build-image-smolvm`) | ✅ |
+| `libkrun` | about 1 s | not measured | `/dev/kvm`, `libkrun` | ✅ |
 | `qemu` | 12.8 s | 0.06 s | `qemu-system`; KVM makes it faster | ✅ |
+| `qemu-microvm` | 20.4 s KVM<br/>110.3 s TCG | — | Linux x86_64, `qemu-system-x86_64`, `7zip`; KVM recommended | ✅ |
 
 Three consequences:
 
 - `gvisor` pays on system calls, not on computation: code that stays in the interpreter runs at the speed of the
   others, while a loop of `stat`, `open` or socket calls is 6 to 8 times slower. Its `ptrace` and `kvm` platforms are
   slower still on this host (see [gVisor](gvisor.md)).
-- `qemu` pays once, at start-up. Keep the sandbox alive across calls (`with sandboxes():`) instead of starting one per
-  call.
+- `qemu` and `qemu-microvm` pay once, at start-up. Keep the sandbox alive across calls (`with sandboxes():`) instead of starting one per
+  call. Measured here, `qemu-microvm` starts slower than `qemu` (20.4 s with KVM and 110.3 s without, against 12.8 s for `qemu` in the table above):
+  choose it for its smaller device model, not for speed, and prefer `qemu` when the program needs more than eight
+  host shares. A TCG run carries no KVM isolation claim (see [QEMU microvm](qemu-microvm.md#limits)).
 - `landlock`, `bwrap` and `firejail` cost almost nothing, which is why the default is not the strongest provider: go
   up only when the threat in the first table calls for it.
 
@@ -207,9 +257,35 @@ Three consequences:
 
 A container adds a second boundary around the provider and takes nothing away from it.
 
-- `landlock` and `qemu` run without extra privilege.
-- `bwrap`, `unshare` and `gvisor` create namespaces of their own, which the default container confinement refuses:
+- `landlock`, `qemu` and `qemu-microvm` run without extra privilege; mount `/dev/kvm` to a container when acceleration is available.
+- `qemu` and `qemu-microvm` use KVM only when the profile allows it (`qemu.use_kvm`, true by default) **and** the
+  process can read `/dev/kvm`. Otherwise QEMU runs fully emulated (TCG), with no error and no profile change:
+  - **KVM**: Docker and Podman, with `--device /dev/kvm --group-add <gid of /dev/kvm>`, privileged or not; a Kubernetes
+    pod that mounts the device (`hostPath`, `CharDevice`). The project's Kubernetes tests mount it only in the
+    privileged row; an unprivileged pod with the device is not tested.
+  - **TCG**: a container started without the device, an ordinary Kubernetes pod, a host without `/dev/kvm`, or
+    `qemu.use_kvm=false`.
+  - **Cost of TCG**: the guest answers after about 125s, against about 22s for a whole run under KVM, and slower on a
+    loaded host. The daemon's start deadline follows the acceleration in use, so nothing is needed in the profile:
+    `qemu.start_timeout` defaults to 90s with KVM and 300s emulated (see [qemu.md](qemu.md)).
+  - **Container tests**: a Docker or Podman run may take 120s, or 900s for a `qemu` or `qemu-microvm` row that is
+    given no `/dev/kvm` (the same 900s as the Kubernetes exec, `K8S_QEMU_EXEC_TIMEOUT`). `CONTAINER_RUN_TIMEOUT`
+    overrides both. These are the test suite's limits, not the product's.
+- `smolvm` needs no privilege in a container, only `/dev/kvm` and a non-root user of its group: a root caller is
+  lowered by smolvm and its VMM then loses the device, even with `--privileged`. Docker: `--device /dev/kvm
+  --group-add <gid> --user <uid>`. Rootless Podman maps the groups of the host to `nobody`, so it also needs
+  `--userns=keep-id`. A Kubernetes pod gets the device from a device plugin (`resources.limits`), with no
+  `securityContext`; a hostPath mount of `/dev/kvm` works in a privileged pod. The 9p mount of minikube cannot be shared
+  with a guest (its server fails on the directory reads), so the project's pod tests copy what they need first. See
+  [smolvm.md](smolvm.md).
+- `bwrap` and `unshare` create namespaces of their own, which the default container confinement refuses:
   lower it as each provider page describes, or use `--privileged`.
+- `gvisor` runs in Docker, Podman and Kubernetes. It adapts to where it runs by choosing how `runsc` hooks the guest's
+  system calls (`gvisor.platform`): the default `systrap` uses a seccomp filter and needs neither KVM nor a VM, so it
+  works inside a container. It does need `/dev/net/tun` and a lowered confinement: Docker `--privileged`, or
+  `--device /dev/net/tun` with `seccomp` and `apparmor` unconfined; rootless Podman `--device /dev/net/tun` and
+  `--cap-add NET_ADMIN`; a Kubernetes pod with `SYS_ADMIN` and `NET_ADMIN` and `Unconfined` seccomp and AppArmor
+  profiles (see [gvisor.md](gvisor.md)).
 - `firejail` does not run in a container, even with `--privileged`.
 - A container does not replace the provider: without one, the sandboxed code is separated from the container by the
   Python layer alone.
@@ -226,5 +302,5 @@ A container adds a second boundary around the provider and takes nothing away fr
 ## References
 
 - [bubblewrap](https://github.com/containers/bubblewrap), [firejail](https://github.com/netblue30/firejail), [unshare](https://man7.org/linux/man-pages/man2/unshare.2.html), [landlock](https://landlock.io/), [qemu](https://www.qemu.org/), [gVisor](https://gvisor.dev)
-- Provider pages: [bwrap](bwrap.md), [firejail](firejail.md), [unshare](unshare.md), [landlock](landlock.md), [qemu](qemu.md), [gvisor](gvisor.md)
+- Provider pages: [subprocess](subprocess.md), [bwrap](bwrap.md), [firejail](firejail.md), [unshare](unshare.md), [landlock](landlock.md), [qemu](qemu.md), [qemu-microvm](qemu-microvm.md), [gvisor](gvisor.md), [smolvm](smolvm.md)
 - [Database drivers](database.md), [transport unpickle guard](transport-unpickle-guard.md)

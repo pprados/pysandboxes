@@ -4,6 +4,7 @@
 import resource
 import sys
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -77,7 +78,7 @@ def test_the_launcher_refuses_a_missing_config(monkeypatch: pytest.MonkeyPatch) 
         libkrun_launcher.main()
 
 
-def _script(**kwargs) -> str:
+def _script(**kwargs: Any) -> str:
     return generate_guest_init_script("/run", ["/usr/bin/python3", "-m", "x"], [], {}, **kwargs)
 
 

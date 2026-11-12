@@ -1,11 +1,13 @@
 # Copyright (c) 2026, Carbon-It, Philippe Prados (pprados)
 # License: Apache V2
 import logging
+import os
 from collections import defaultdict
 from pathlib import Path
 from typing import Any, List, Tuple, cast
 
 from .config import CONFIG_NAME
+from .egress_filter import DEFAULT_NET_RESOLVE, NET_RESOLVE_MODES
 from .main_logger import ErrorMsg, format_error_list, format_ruleref
 from .sb_types import ConfigLine, ConfigLines
 
@@ -45,6 +47,79 @@ def parse_remote_endpoint(rules: ConfigLines, errors: List[ErrorMsg]) -> Tuple[s
                 )
             )
     return endpoint, others
+
+
+NET_RESOLVE_RUNTIME_PROVIDERS = (
+    "unshare",
+    "bwrap",
+    "gvisor",
+    "firejail",
+    "qemu",
+    "qemu-microvm",
+    "subprocess",
+    "landlock",
+    "sandbox-exec",
+    "appcontainer",
+)
+
+
+def parse_net_resolve(rules: ConfigLines, errors: List[ErrorMsg]) -> Tuple[str, ConfigLines]:
+    """Extract ``net-resolve=pinned|runtime``, which picks how the host names of ``net=`` rules are resolved.
+
+    The last line wins.
+
+    Returns:
+        The chosen mode (``DEFAULT_NET_RESOLVE`` when unset) and the remaining rules.
+    """
+    mode = DEFAULT_NET_RESOLVE
+    others: ConfigLines = []
+    for rule in rules:
+        if not rule.rule.startswith("net-resolve="):
+            others.append(rule)
+            continue
+        value = rule.rule.split("=", 1)[1].strip().lower()
+        if value in NET_RESOLVE_MODES:
+            mode = value
+        else:
+            errors.append(
+                (
+                    f"{format_ruleref(rule)}: Invalid value {value!r} for net-resolve. "
+                    f"Use {' or '.join(NET_RESOLVE_MODES)}.",
+                    rule.path,
+                    rule.ln,
+                )
+            )
+    return mode, others
+
+
+def check_net_resolve_provider(net_resolve: str, os_sandbox: str, config_path: Path, errors: List[ErrorMsg]) -> None:
+    """Refuse ``net-resolve=runtime`` for a provider that has no enforcer; ``none`` ignores the key."""
+    if net_resolve == "runtime" and os_sandbox not in (*NET_RESOLVE_RUNTIME_PROVIDERS, "none"):
+        errors.append(
+            (
+                f"net-resolve=runtime is not supported by the {os_sandbox!r} provider "
+                f"(supported: {', '.join(NET_RESOLVE_RUNTIME_PROVIDERS)}). Use net-resolve=pinned.",
+                config_path,
+                0,
+            )
+        )
+
+
+def effective_net_resolve(net_resolve: str, os_sandbox: str) -> str:
+    """The mode a provider can honour: ``firejail`` without root has a static firewall, so ``runtime`` is ``pinned``.
+
+    Only root can enter the network namespace of a jail to open an address while the program runs. ``none`` has no
+    enforcer and ignores the key, without a warning.
+    """
+    if net_resolve == "runtime" and os_sandbox == "none":
+        return "pinned"
+    if net_resolve == "runtime" and os_sandbox == "firejail" and os.geteuid() != 0:
+        logger.warning(
+            "net-resolve=runtime under firejail needs root (only root may join the network namespace of a jail): "
+            "falling back to net-resolve=pinned, the names are resolved once, at start."
+        )
+        return "pinned"
+    return net_resolve
 
 
 def parse_rules(

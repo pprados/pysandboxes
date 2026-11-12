@@ -2,6 +2,7 @@
 # License: Apache V2
 """Every sample that evaluates model output declares its sub-language."""
 
+import sys
 from pathlib import Path
 
 import pytest  # type: ignore[import-untyped]
@@ -40,6 +41,40 @@ _REQUIRED = (
     "eval-max-iterations=100_000",
     "eval-timeout=2s",
 )
+
+
+@pytest.mark.skipif(sys.platform != "linux", reason="MicroVM is a Linux provider")
+@pytest.mark.parametrize("requested", ["false", "true"])
+def test_the_mcp_profile_honors_the_requested_qemu_acceleration(requested: str) -> None:
+    from pysandboxes.py_sandbox import load_and_parse_config
+
+    rules = load_and_parse_config(
+        config_path=_ROOT / "mcp-server-demo/mcp_server/unix.profile",
+        envs={"QEMU_USE_KVM": requested},
+        os_sandbox="qemu-microvm",
+    )
+
+    assert rules.os_sandbox_params["use_kvm"] == requested
+
+
+def test_autogen_complete_profile_allows_the_mimetypes_python311_dependency(monkeypatch: pytest.MonkeyPatch) -> None:
+    from pysandboxes import guard_import
+    from pysandboxes.e import RuleModuleNotFoundError
+
+    path = _ROOT / "autogen-demo/.py-sandboxes-complete"
+    lines = [
+        ConfigLine(text, path, number)
+        for number, text in enumerate(path.read_text().splitlines(), start=1)
+        if text.strip().startswith("python-import=")
+    ]
+    rules, _ = guard_import.parse_rules(lines, [])
+    monkeypatch.setattr(guard_import, "_rules", rules)
+    monkeypatch.setattr(guard_import, "_activated", True)
+
+    # Python 3.11 mimetypes imports this top-level module while httpx initializes.
+    guard_import._judge_user_import("posixpath")
+    with pytest.raises(RuleModuleNotFoundError):
+        guard_import._judge_user_import("subprocess")
 
 
 @pytest.mark.parametrize(("sample", "profile"), _PROFILES)

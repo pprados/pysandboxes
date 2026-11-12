@@ -31,6 +31,8 @@ class DaemonParameters(NamedTuple):
         init_fn: Initialization function reference.
         netfilter_rules: Optional iptables rules the child applies itself: the QEMU guest, where it is root;
             default empty. bwrap gets none: the host loads its filter.
+        learned_control_port: For a VM guest with ``net-resolve=runtime``: the port of the thread that runs the
+            host's requests on the ``LEARNED`` chain (see ``guest_learned``); 0 for none.
         python_main_args: For VM guest: argv to run as main (e.g. ["-m", "module"]); default empty.
         guest_run_dir: QEMU guest path where the host run directory is
             mounted; the guest writes its exit code there.
@@ -53,6 +55,8 @@ class DaemonParameters(NamedTuple):
     port: int
     init_fn: str
     netfilter_rules: tuple[str, ...] = ()
+    # QEMU guest with net-resolve=runtime: port where the guest serves the host's requests on the LEARNED chain
+    learned_control_port: int = 0
     python_main_args: tuple[str, ...] = ()
     # For QEMU python_sb: guest path where host run dir is mounted; guest writes exit code there
     guest_run_dir: str | None = None

@@ -37,6 +37,7 @@ from .all_rules import AllRules
 from .base_daemon import BaseDaemon
 from .config import CONFIG_NAME
 from .e import ConfigSyntaxError
+from .egress_filter import NameRule
 from .learning import set_learning_path
 from .main_logger import ErrorMsg, format_ruleref
 from .sb_types import ConfigLine, ConfigLines, Envs
@@ -295,6 +296,11 @@ def parse_config(
         others,
     ) = guard_provider.parse_rules(config_path, others, errors)
     remote_endpoint, others = guard_provider.parse_remote_endpoint(others, errors)
+    net_resolve, others = guard_provider.parse_net_resolve(others, errors)
+    guard_provider.check_net_resolve_provider(net_resolve, os_sandbox, config_path, errors)
+    net_resolve = guard_provider.effective_net_resolve(net_resolve, os_sandbox)
+    if os_sandbox == "none":
+        logger.warning("os-sandbox=none adds no OS boundary: the net= rules are not enforced by the kernel.")
 
     from pysandboxes._os_sandbox import providers_factory
 
@@ -308,6 +314,9 @@ def parse_config(
     else:
         os_sandbox_params = ImmutableDict({})
 
+    name_rules: tuple[NameRule, ...] = ()
+    if net_resolve == "runtime":
+        name_rules, others = guard_socket.parse_name_rules(others, errors)
     socket_rules, others, pin_dns = guard_socket.parse_rules(others, errors)
     files_rules, others = guard_files.parse_rules(others, errors)
     api_rules, others = guard_api.parse_rules(others, errors)
@@ -355,6 +364,8 @@ def parse_config(
         remote_result_guard=remote_result_guard,
         remote_result_data_only=remote_result_data_only,
         remote_endpoint=remote_endpoint,
+        net_resolve=net_resolve,
+        name_rules=name_rules,
         envs_rules=envs_rules,
         socket_rules=socket_rules,
         pin_dns=pin_dns,

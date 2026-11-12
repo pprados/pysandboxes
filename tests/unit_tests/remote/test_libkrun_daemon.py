@@ -5,7 +5,7 @@ import json
 import os
 import sys
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -14,6 +14,7 @@ from pysandboxes.e import SandBoxError
 from pysandboxes.guard_files import FSExposeRule
 from pysandboxes.guard_socket import SocketRules
 from pysandboxes.guard_socket import parse_rules as socket_parse_rules
+from pysandboxes.immutable_dict import ImmutableDict
 from pysandboxes.remote.endpoint import UNIX, Endpoint
 from pysandboxes.remote.libkrun_sse_daemon import LibkrunSSEDaemon, _wants_network
 from pysandboxes.sb_types import ConfigLine
@@ -41,12 +42,12 @@ def _config(tmp_path: Path) -> dict:
 @patch(f"{_MODULE}.os.access", return_value=True)
 @patch(f"{_MODULE}.find_libkrun", return_value="/usr/lib/libkrun.so")
 @patch(f"{_MODULE}.find_libkrunfw", return_value="/usr/lib/libkrunfw.so")
-def test_unavailable_reason_none(mock_fw, mock_lib, mock_access) -> None:
+def test_unavailable_reason_none(mock_fw: MagicMock, mock_lib: MagicMock, mock_access: MagicMock) -> None:
     assert LibkrunSSEDaemon.unavailable_reason() is None
 
 
 @patch(f"{_MODULE}.os.access", return_value=False)
-def test_unavailable_reason_no_kvm(mock_access) -> None:
+def test_unavailable_reason_no_kvm(mock_access: MagicMock) -> None:
     assert LibkrunSSEDaemon.unavailable_reason() == "host lacks read/write access to /dev/kvm"
 
 
@@ -118,7 +119,7 @@ def test_a_read_only_directory_is_a_bind_of_the_root_and_a_writable_one_is_a_sha
 
 def test_the_guest_receives_the_environment_of_the_rules_only(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("LIBKRUN_SECRET", "x")
-    rules = EmptyRules._replace(envs={"ALLOWED": "1"})
+    rules = EmptyRules._replace(envs=ImmutableDict({"ALLOWED": "1"}))
 
     _daemon(tmp_path).subprocess_cmd(rules, envs={}, pipe_path=tmp_path / "pipe", temp=tmp_path)
 

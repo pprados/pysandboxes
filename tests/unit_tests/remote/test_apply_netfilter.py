@@ -116,3 +116,14 @@ def test_the_backend_binaries_come_before_the_alternatives_link() -> None:
     paths = main_sandbox._IPTABLES_RESTORE_PATHS
     assert paths.index("/usr/sbin/iptables-nft-restore") < paths.index("/usr/sbin/iptables-restore")
     assert paths.index("/usr/sbin/iptables-legacy-restore") < paths.index("/usr/sbin/iptables-restore")
+
+
+def test_the_iptables_of_the_backend_that_loaded_the_rules_is_returned(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    script = _fake_restore(tmp_path, "cat >/dev/null")
+    named = script.with_name("iptables-nft-restore")
+    script.rename(named)
+    monkeypatch.setattr(main_sandbox, "_IPTABLES_RESTORE_PATHS", (str(named),))
+
+    assert main_sandbox._apply_netfilter(RULES) == str(tmp_path / "iptables-nft")

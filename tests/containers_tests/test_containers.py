@@ -53,7 +53,7 @@ OS_SANDBOX = os.environ.get("OS_SANDBOX", "unshare")
 
 
 # One image per OS provider; names are python-sb-<provider>
-# (e.g. python-sb-unshare, python-sb-qemu), :latest tag.
+# (e.g. python-sb-unshare, python-sb-qemu-microvm), :latest tag.
 def _image_for_os_provider(os_sandbox: str) -> str:
     """Return the container image name for the given OS_SANDBOX provider (e.g. unshare -> python-sb-unshare:latest)."""
     provider = (os_sandbox or "base").lower()
@@ -77,7 +77,9 @@ all_os_sandbox_provider: list[str] = [
     "unshare",
     "bwrap",
     "qemu",
+    "qemu-microvm",
     "gvisor",
+    "smolvm",
 ]
 
 # Providers that create their own namespaces and mounts. The default container confinement refuses them, but they
@@ -99,7 +101,16 @@ reduced_privilege_flags: dict[str, dict[str, list[str]]] = {
 # Set in the environment of the row: unshare runs without a /proc, as a container cannot unmask the paths it needs.
 reduced_privilege_env: dict[str, str] = {"unshare": "UNSHARE_PROC=none"}
 # Set in every row: the filtered network of bwrap is unverified in a container, which keeps the network of the host.
-always_env: dict[str, str] = {"bwrap": "BWRAP_UNSHARE_NET=no"}
+always_env: dict[str, str] = {
+    "bwrap": "BWRAP_UNSHARE_NET=no",
+    # This image's direct runtime shares fit eight MMIO transports; staging its
+    # linker closure adds three shares. Exercise direct 9p here (including its
+    # overlay/mmap compatibility), with only CA data opting into guest-native paths.
+    "qemu-microvm": (
+        "QEMU_VIRTFS=off "
+        "QEMU_MICROVM_OPTIONAL_PATHS=/etc/ssl,/etc/pki,/etc/ca-certificates,/usr/share/ca-certificates"
+    ),
+}
 
 
 # os_sandbox,py_sandbox,privileged (pytest.param tuples for parametrize)
@@ -131,7 +142,7 @@ all_os_sandbox: list = _all_os_sandbox_params()
 
 
 def _k8s_exec_timeout_seconds(os_sandbox: str) -> int:
-    if os_sandbox.lower() == "qemu":
+    if os_sandbox.lower() in ("qemu", "qemu-microvm"):
         return int(os.environ.get("K8S_QEMU_EXEC_TIMEOUT", "900"))
     return int(os.environ.get("TIMEOUT", "600"))
 
@@ -372,8 +383,19 @@ def _report_container_output(out: _PtyStream, err: _PtyStream, runtime: str, os_
 BUILD_IMAGE_TIMEOUT = 600  # seconds
 
 # Timeout for the container run (inner python-sb + integration tests). Default 2 minutes.
-# Override with CONTAINER_RUN_TIMEOUT (seconds). Nested QEMU without KVM (TCG) may need more; see wiki/qemu.md.
-CONTAINER_RUN_TIMEOUT = int(os.environ.get("CONTAINER_RUN_TIMEOUT", "120"))
+# A nested QEMU without KVM (TCG) boots in about 125s and the daemon waits up to 300s for it (wiki/qemu.md), so
+# an emulated row gets the same 900s as the Kubernetes exec; every other run, KVM included, stays at 120s.
+CONTAINER_RUN_TIMEOUT_DEFAULT = 120
+CONTAINER_RUN_TIMEOUT_TCG = 900
+
+
+def _container_run_timeout(os_sandbox: str, kvm_flags: list[str]) -> int:
+    """Seconds one docker or podman run may take; ``CONTAINER_RUN_TIMEOUT`` overrides every row."""
+    if "CONTAINER_RUN_TIMEOUT" in os.environ:
+        return int(os.environ["CONTAINER_RUN_TIMEOUT"])
+    if os_sandbox.lower() in ("qemu", "qemu-microvm") and not kvm_flags:
+        return CONTAINER_RUN_TIMEOUT_TCG
+    return CONTAINER_RUN_TIMEOUT_DEFAULT
 
 
 def _qemu_kvm_run_extra_flags() -> list[str]:
@@ -382,9 +404,7 @@ def _qemu_kvm_run_extra_flags() -> list[str]:
     kvm = Path("/dev/kvm")
     if not kvm.exists():
         logger.warning(
-            "container-tests (qemu): host has no /dev/kvm; nested QEMU will use TCG "
-            "(often exceeds %ss). Pass KVM or raise CONTAINER_RUN_TIMEOUT.",
-            CONTAINER_RUN_TIMEOUT,
+            "container-tests (qemu): host has no /dev/kvm; nested QEMU will use TCG (slow boot, longer run timeout)."
         )
         return extra
     extra.extend(["--device", "/dev/kvm"])
@@ -454,15 +474,22 @@ def _run_container_runtime(
 
     privileged_flag = ["--privileged"] if privileged else reduced_privilege_flags[runtime].get(os_sandbox, [])
     # Nested QEMU needs host KVM in the container; otherwise TCG exceeds typical timeouts.
-    kvm_flags = _qemu_kvm_run_extra_flags() if os_sandbox.lower() == "qemu" else []
+    kvm_flags = _qemu_kvm_run_extra_flags() if os_sandbox.lower() in ("qemu", "qemu-microvm", "smolvm") else []
+    # smolvm lowers the privileges of a root caller and its VMM then loses /dev/kvm: the container runs as the user.
+    if os_sandbox.lower() == "smolvm":
+        kvm_flags += ["--user", f"{os.getuid()}:{os.getgid()}"]
+        if runtime == "podman":
+            # Rootless Podman maps the groups of the host to nobody: only keep-id leaves /dev/kvm usable to the user.
+            kvm_flags.append("--userns=keep-id")
+    run_timeout = _container_run_timeout(os_sandbox, kvm_flags)
     # Use host/platform DNS so config parsing can resolve hostname
     dns_servers = _host_dns_servers()
     dns_flags = [arg for s in dns_servers for arg in ("--dns", s)]
     # Resolve profile hostname on the host and inject so container does not need DNS at config load
     add_host_flags = _add_host_flags()
-    # bwrap: host net for slirp/iptables. qemu: host net avoids double-NAT (Podman bridge + QEMU user)
+    # bwrap: host net for slirp/iptables. QEMU: host net avoids double-NAT (Podman bridge + QEMU user)
     # which can stall nested tst_usage for a long time.
-    network_mode = "host" if os_sandbox in ("bwrap", "qemu") else "bridge"
+    network_mode = "host" if os_sandbox in ("bwrap", "qemu", "qemu-microvm") else "bridge"
     cmd = [
         runtime,
         "run",
@@ -476,6 +503,9 @@ def _run_container_runtime(
         *add_host_flags,
         "-v",
         volume_mount,
+        # Guest-created mapped-xattr files otherwise persist as root-owned host
+        # scratch, breaking the next rootless Podman row. Match Kubernetes emptyDir.
+        *(["--tmpfs", "/app/tmp:rw,mode=1777"] if os_sandbox == "qemu-microvm" else []),
         "-w",
         "/app",
         image_name,
@@ -492,7 +522,7 @@ def _run_container_runtime(
         runtime,
         image_name,
         os_sandbox,
-        CONTAINER_RUN_TIMEOUT,
+        run_timeout,
     )
 
     # Do not use capture_output=True: the container produces a lot of log output (DEBUG).
@@ -515,7 +545,7 @@ def _run_container_runtime(
                 runtime,
                 os_sandbox,
                 elapsed,
-                CONTAINER_RUN_TIMEOUT,
+                run_timeout,
             )
 
     hb = threading.Thread(target=_heartbeat, name="container-test-heartbeat", daemon=True)
@@ -535,7 +565,7 @@ def _run_container_runtime(
             env=os.environ.copy(),
             stdout=out.slave_fd,
             stderr=err.slave_fd,
-            timeout=CONTAINER_RUN_TIMEOUT,
+            timeout=run_timeout,
         )
         _terminal_newline_before_log()
         logger.debug(
@@ -552,7 +582,7 @@ def _run_container_runtime(
         logger.error(
             "container-tests: %s timed out after %ss (os_sandbox=%s)",
             runtime,
-            CONTAINER_RUN_TIMEOUT,
+            run_timeout,
             os_sandbox,
         )
         # The container is what knows why it hung; without this the report is the
@@ -647,6 +677,17 @@ reduced_privilege_security_context: dict[str, str] = {
 }
 
 
+KVM_DEVICE_PLUGIN_MANIFEST = CONTAINER_SCRIPT_DIR / "kube-kvm-device-plugin.yaml"
+_KVM_RESOURCE = "pysandboxes.test/kvm"
+
+# What the pod needs of /app to run a test, copied to /work (readable by the unprivileged user, tmp writable).
+_KUBE_COPY_OFF_9P = (
+    "mkdir -p /work && tar -C /app --exclude='*/__pycache__' -cf - pysandboxes tests pyproject.toml README.md "
+    "LICENSE.txt CHANGELOG.md SECURITY.md | tar -C /work -xf - && "
+    "chmod -R a+rX /work && mkdir -p /work/tmp && chmod 1777 /work/tmp"
+)
+
+
 def _kube_manifest_text(image_name: str, privileged: bool, os_sandbox: str = "") -> str:
     """Return the pod manifest for one matrix row: image substituted, privileges applied."""
     text = KUBE_MANIFEST.read_text(encoding="utf-8")
@@ -655,6 +696,36 @@ def _kube_manifest_text(image_name: str, privileged: bool, os_sandbox: str = "")
     if not privileged:
         text, count = _SECURITY_CONTEXT_RE.subn(reduced_privilege_security_context.get(os_sandbox, ""), text)
         assert count == 1, f"no securityContext block to remove in {KUBE_MANIFEST}"
+    if os_sandbox == "smolvm":
+        if privileged:
+            text = text.replace(
+                "      volumeMounts:\n",
+                "      volumeMounts:\n        - name: dev-kvm\n          mountPath: /dev/kvm\n",
+                1,
+            )
+            text += "    - name: dev-kvm\n      hostPath:\n        path: /dev/kvm\n        type: CharDevice\n"
+        else:
+            # Without privileges a pod gets the device from a device plugin, the way a real cluster hands it out.
+            text = text.replace(
+                "      workingDir: /app\n",
+                f"      workingDir: /app\n      resources:\n        limits:\n          {_KVM_RESOURCE}: 1\n",
+                1,
+            )
+    if os_sandbox == "qemu-microvm":
+        # KVM is explicit only for the already privileged row; the ordinary pod
+        # keeps its confinement and deliberately exercises TCG without a device.
+        text = text.replace(
+            "      env:\n",
+            f'      env:\n        - name: QEMU_USE_KVM\n          value: "{str(privileged).lower()}"\n',
+            1,
+        )
+        if privileged:
+            text = text.replace(
+                "      volumeMounts:\n",
+                "      volumeMounts:\n        - name: dev-kvm\n          mountPath: /dev/kvm\n",
+                1,
+            )
+            text += "    - name: dev-kvm\n      hostPath:\n        path: /dev/kvm\n        type: CharDevice\n"
     return text
 
 
@@ -680,6 +751,23 @@ def _minikube_docker_env() -> dict[str, str]:
             key, value = m.group(1), m.group(2).strip().strip("'\"")
             env[key] = value
     return env
+
+
+def _ensure_kvm_device_plugin() -> None:
+    """Apply the KVM device plugin and wait until the node offers the resource an unprivileged pod asks for."""
+    subprocess.run(["kubectl", "apply", "-f", str(KVM_DEVICE_PLUGIN_MANIFEST)], check=True, capture_output=True)
+    resource = _KVM_RESOURCE.replace(".", r"\.")
+    deadline = time.monotonic() + WAIT_TIMEOUT
+    while time.monotonic() < deadline:
+        offered = subprocess.run(
+            ["kubectl", "get", "nodes", "-o", f"jsonpath={{.items[0].status.allocatable.{resource}}}"],
+            capture_output=True,
+            text=True,
+        ).stdout.strip()
+        if offered not in ("", "0"):
+            return
+        time.sleep(2)
+    raise RuntimeError(f"the node does not offer {_KVM_RESOURCE} {WAIT_TIMEOUT}s after the device plugin was applied")
 
 
 def _ensure_minikube_ready() -> None:
@@ -818,6 +906,8 @@ def _run_kubernetes_test(os_sandbox: str, py_sandbox: bool, privileged: bool) ->
     try:
         _ensure_minikube_ready()
         _assert_minikube_image(os_sandbox)
+        if os_sandbox == "smolvm" and not privileged:
+            _ensure_kvm_device_plugin()
 
         logger.info("Starting minikube mount in background...")
         mount_proc = subprocess.Popen(
@@ -905,9 +995,33 @@ def _run_kubernetes_test(os_sandbox: str, py_sandbox: bool, privileged: bool) ->
                 os_sandbox_env = os_sandbox.lower() if os_sandbox != "none" else os_sandbox
                 py_sandbox_args = f"--py-sandbox={py_sandbox}"
                 exec_timeout = _k8s_exec_timeout_seconds(os_sandbox)
+                accel_check = ""
+                if os_sandbox == "qemu-microvm":
+                    expected = ["-enable-kvm"] if privileged else []
+                    probe = (
+                        "import os; from pysandboxes.remote.qemu_image import qemu_accel_args; "
+                        "args = qemu_accel_args({'use_kvm': os.environ['QEMU_USE_KVM']}); "
+                        f"assert args == {expected!r}, ('unexpected MicroVM acceleration', args); "
+                        "print('MicroVM acceleration:', 'KVM' if args else 'TCG', flush=True)"
+                    )
+                    accel_check = f"python -c {shlex.quote(probe)} && "
+                # smolvm lowers the privileges of a root caller and its VMM then loses /dev/kvm: pip stays root,
+                # the sandbox runs as an ordinary user of the group that owns the device. pip leaves a root-owned
+                # /tmp/.cache under the HOME of the image, where smolvm keeps its state: it gets a home of its own.
+                as_user = (
+                    "mkdir -p /tmp/smolvm-home && chown 1000:1000 /tmp/smolvm-home && "
+                    "setpriv --reuid=1000 --regid=1000 --groups=$(stat -c %g /dev/kvm) env HOME=/tmp/smolvm-home "
+                    if os_sandbox == "smolvm"
+                    else ""
+                )
+                # The 9p mount of minikube cannot be shared with a guest: its server (go9p) panics on the directory
+                # reads of virtio-fs and drops the connection. smolvm gets a copy on the filesystem of the pod.
+                from_copy = f"{_KUBE_COPY_OFF_9P} && cd /work && " if os_sandbox == "smolvm" else ""
                 exec_cmd = (
-                    "pip install --no-cache-dir -e . && "
-                    f"PYTHONUNBUFFERED=1 TERM={term} OS_SANDBOX={os_sandbox_env} {_row_env(os_sandbox, privileged)}"
+                    f"{from_copy}pip install --no-cache-dir -e . && "
+                    f"{accel_check}"
+                    f"{as_user}PYTHONUNBUFFERED=1 TERM={term} OS_SANDBOX={os_sandbox_env} "
+                    f"{_row_env(os_sandbox, privileged)}"
                     f"python-sb {py_sandbox_args} {PYTHON_SB_ARGS} -m tests.integration_tests.tst_usage"
                 )
 

@@ -10,7 +10,8 @@ __pycache__
 *.egg-info
 dist/*
 !dist/*.whl
-build
+build/*
+!build/smolvm-guest-*.tar
 .eggs
 *.md
 !README.md

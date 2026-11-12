@@ -51,7 +51,7 @@ def test_the_latest_final_release_is_chosen_in_version_order(tmp_path: Path) -> 
 
 
 def test_only_the_pythons_without_an_image_of_their_newest_patch_are_rebuilt(tmp_path: Path) -> None:
-    result = _refresh(tmp_path, "v1.0.0\n", "docker.io/pprados/python-sb-qemu:3.14.7-sb1.0.0\n")
+    result = _refresh(tmp_path, "v1.0.0\n", "docker.io/pprados/python-sb-smolvm:3.14.7-sb1.0.0\n")
     assert result.returncode == 0
     assert result.stdout.splitlines() == ["tag=v1.0.0", 'minors=["3.13"]']
 
@@ -61,5 +61,14 @@ def test_every_python_is_rebuilt_when_no_image_exists(tmp_path: Path) -> None:
 
 
 def test_nothing_is_rebuilt_when_every_image_exists(tmp_path: Path) -> None:
-    present = "docker.io/pprados/python-sb-qemu:3.13.7-sb1.0.0\ndocker.io/pprados/python-sb-qemu:3.14.7-sb1.0.0\n"
+    present = "docker.io/pprados/python-sb-smolvm:3.13.7-sb1.0.0\ndocker.io/pprados/python-sb-smolvm:3.14.7-sb1.0.0\n"
     assert _refresh(tmp_path, "v1.0.0\n", present).stdout.splitlines()[1] == "minors=[]"
+
+
+def test_the_image_probed_is_the_last_one_images_yml_pushes() -> None:
+    """A push that stopped half-way must be done again: the probe is the image pushed last, so it is missing then."""
+    workflow = (Path(__file__).parents[2] / ".github" / "workflows" / "images.yml").read_text(encoding="utf-8")
+    pushed = next(line for line in workflow.splitlines() if line.strip().startswith("for image in python-sb "))
+    last_pushed = pushed.split(";")[0].split()[-1]
+
+    assert f"docker.io/pprados/{last_pushed}:" in SCRIPT.read_text(encoding="utf-8")

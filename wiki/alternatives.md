@@ -472,7 +472,7 @@ full QEMU VM.
 - No rule can name ICMP. ICMP is only blocked as a side effect, and the `IPPROTO_ICMP` entry of the
   `iptables` generator ([`netfilter.py`](../pysandboxes/netfilter.py)) is never used.
 - `landlock` cannot filter UDP, which the [Landlock page](landlock.md) already says.
-- QEMU enforces `expose-ro` with a read-only 9p export, covered by an end-to-end test; see the [provider audit](audit-native-guard-study.md#qemu-expose-ro-is-enforced-by-a-read-only-9p-export).
+- QEMU and QEMU microvm enforce `expose-ro` with read-only 9p exports, covered by end-to-end tests; see the [provider audit](audit-native-guard-study.md#qemu-expose-ro-is-enforced-by-a-read-only-9p-export).
 
 **Ideas worth borrowing, in decreasing order of value for the effort.**
 

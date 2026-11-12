@@ -83,7 +83,7 @@ The harness is made of three nested layers. Unlike an agent harness, which trust
 |---|---|---|
 | **Python layer** (`py-sandbox`) | Intercepts file, network, environment, import and sensitive-call APIs and applies the policy. Gives visible, explicit refusals. | Is not a boundary against hostile code: `ctypes`, native extensions and direct system calls bypass it. |
 | **Dynamic-code layer** (`eval-*`) | Parses, checks, rewrites and runs strings given to `eval()`, `exec()` and `compile()` under a budget and a timeout. | Applies only to those three entry points, and is not a process boundary. |
-| **OS layer** (a *provider*: `landlock`, `bwrap`, `firejail`, `unshare`, `qemu`, `gvisor`, `libkrun`, `sandbox-exec`, `appcontainer`) | Applies OS-level restrictions that can constrain compiled code, subject to the selected provider and profile. | Cannot express Python notions (import whitelist, `eval-*`), and each provider has its own limits. Landlock denies native TCP bind/connect by default and requires ABI v4 (Linux 6.7+); it cannot filter UDP. QEMU enforces `expose-ro` with a read-only 9p export. `sandbox-exec` (macOS) filters files and TCP/UDP ports but not remote hosts. `appcontainer` (Windows) confines files with ACLs and the network with AppContainer capabilities, without host or port filtering. |
+| **OS layer** (a *provider*: `landlock`, `bwrap`, `firejail`, `unshare`, `qemu`, `qemu-microvm`, `libkrun`, `gvisor`, `smolvm`, `sandbox-exec`, `appcontainer`) | Applies OS-level restrictions that can constrain compiled code, subject to the selected provider and profile. | Cannot express Python notions (import whitelist, `eval-*`), and each provider has its own limits. Landlock denies native TCP bind/connect by default and requires ABI v4 (Linux 6.7+); it cannot filter UDP. QEMU providers enforce `expose-ro` with read-only 9p exports; microvm is Linux x86_64 and has eight virtio-mmio transports. `sandbox-exec` (macOS) filters files and TCP/UDP ports but not remote hosts. `appcontainer` (Windows) confines files with ACLs and the network with AppContainer capabilities, without host or port filtering. |
 
 Defense in depth: use the Python layer to *see and refuse* misuse of legitimate code, add an OS provider when the code itself may be hostile. [Details of the model](https://github.com/pprados/pysandboxes/wiki/security-model).
 
@@ -153,26 +153,27 @@ The OS layer is selected with `os-sandbox=<provider>` in `.py-sandboxes`, or for
 | Default on Linux, nothing to install, no privilege (files and TCP ports) | `landlock` |
 | Untrusted native code, or host and UDP filtering | `bwrap` or `unshare` |
 | Strongest separation, a VM (slower: more than 20 s to start) | `qemu` |
+| Smaller QEMU machine, Linux x86_64, with an eight-transport ceiling | `qemu-microvm` |
 | Compiled code or kernel exploits, with a user-space kernel (starts in about a second) | `gvisor` |
 | Strongest separation in a KVM micro-VM, starting in about a second | `libkrun` |
 | Resource limits and seccomp | `firejail` |
-| Inside Docker or Podman | `landlock` or `qemu` unprivileged; `unshare`, `bwrap` or `gvisor` with `--privileged` |
+| Inside Docker or Podman | `landlock`, `qemu` or `qemu-microvm` unprivileged; `unshare`, `bwrap` or `gvisor` with `--privileged` |
 | Files and ports on macOS (no host filtering) | `sandbox-exec` |
 | Files and network capabilities on Windows (no host or port filtering) | `appcontainer` |
 | Only process separation, no OS boundary (also macOS, Windows) | `subprocess` |
 
-`landlock` denies TCP bind/connect by default when Landlock ABI v4 is available (Linux 6.7+); it cannot filter UDP, hide denied paths, or protect the host's named Unix sockets. Below ABI v4, Landlock is unavailable rather than silently running without its default TCP boundary. Against native code that needs UDP or Unix-socket isolation, use `os-sandbox=bwrap` or `unshare`. QEMU applies `expose-ro` through a read-only 9p export. A named provider is never silently downgraded: if it is unavailable, the sandboxed process fails closed. The [provider comparison](https://github.com/pprados/pysandboxes/wiki/os-providers) gives the full matrix and limits.
+`landlock` denies TCP bind/connect by default when Landlock ABI v4 is available (Linux 6.7+); it cannot filter UDP, hide denied paths, or protect the host's named Unix sockets. Below ABI v4, Landlock is unavailable rather than silently running without its default TCP boundary. Against native code that needs UDP or Unix-socket isolation, use `os-sandbox=bwrap` or `unshare`. QEMU providers apply `expose-ro` through read-only 9p exports; microvm supports at most eight virtio-mmio transports. A named provider is never silently downgraded: if it is unavailable, the sandboxed process fails closed. The [provider comparison](https://github.com/pprados/pysandboxes/wiki/os-providers) gives the full matrix and limits.
 
 # Platform support
 
 | Platform | Python layer | OS providers |
 |---|---|---|
-| Linux | yes | `landlock`, `bwrap`, `firejail`, `unshare`, `qemu`, `gvisor`, `libkrun`, `subprocess` |
+| Linux x86_64 | yes | `landlock`, `bwrap`, `firejail`, `unshare`, `qemu`, `qemu-microvm`, `libkrun`, `gvisor`, `smolvm`, `subprocess` |
 | WSL | yes | the Linux providers, where the kernel and tooling requirements are met |
 | macOS | yes | `sandbox-exec` ([Seatbelt](https://github.com/pprados/pysandboxes/wiki/sandbox-exec): files and ports, but no remote host or IP filtering) and `subprocess` |
 | Windows | yes | `appcontainer` ([limits](https://github.com/pprados/pysandboxes/wiki/appcontainer): file ACLs and network capabilities, but no host or port filtering) and `subprocess` |
 
-Kernel-backed providers (`landlock`, `bwrap`, `firejail`, `unshare`, `qemu`, `gvisor`, `libkrun`) are Linux technologies. The Python layer, `sandbox-exec` on macOS and `appcontainer` on Windows are exercised by the [cross-OS workflow](https://github.com/pprados/pysandboxes/blob/master/.github/workflows/cross-os.yml). Provider prerequisites: [provider comparison](https://github.com/pprados/pysandboxes/wiki/os-providers).
+Kernel-backed providers (`landlock`, `bwrap`, `firejail`, `unshare`, `qemu`, `qemu-microvm`, `libkrun`, `gvisor`, `smolvm`) are Linux technologies. The Python layer, `sandbox-exec` on macOS and `appcontainer` on Windows are exercised by the [cross-OS workflow](https://github.com/pprados/pysandboxes/blob/master/.github/workflows/cross-os.yml). Provider prerequisites: [provider comparison](https://github.com/pprados/pysandboxes/wiki/os-providers).
 
 # Why trust it, and how it compares
 

@@ -216,6 +216,34 @@ One parameter is read by pysandboxes and not passed to `unshare`:
 |---|---|---|
 | `unshare.proc` | `mount` (default), `none` | `none` runs the sandbox without a `/proc`. Code that reads `/proc` itself, such as `/proc/self/fd`, then fails. |
 
+## Names in `net=` rules: `net-resolve=runtime`
+
+By default (`net-resolve=pinned`) a host name of a `net=` rule is resolved once, at start, and its addresses are frozen in the ruleset. `net-resolve=runtime` resolves it when the sandboxed program asks, so a name whose addresses rotate keeps working. The sandbox DNS is redirected to a filtering resolver on the host (design: [Runtime DNS filter](implementation.md#runtime-dns-filter)):
+
+```text
+net-resolve=runtime
+net=ALLOW|TCP|api.example.com|443|OUT
+net=ALLOW|TCP|*.example.org|443|OUT
+```
+
+What it does, proved by the integration suite `tests/integration_tests/test_unshare_runtime_dns.py` (daemon mode with the Python guard on and off, and the one-shot `python-sb` entry point with it on):
+
+- the address of an allowed name opens when the name resolves, for the protocols and ports of the rule, and closes when its TTL is over (clamped to 60 s to 1 h); a new resolution opens it again;
+- a literal address nobody resolved, another port, a name no rule allows (`NXDOMAIN`) and a resolver the program names itself (`8.8.8.8`, DoT, DoH to an unlearned address) are refused;
+- the resolver stops with the sandbox, in daemon mode and in a one-shot `python-sb` run.
+
+Limitations:
+
+- **Providers.** `unshare`, `bwrap`, `gvisor` and `qemu` support it, each with the same filtering resolver and the same ruleset: `bwrap` and `gvisor` bind a `resolv.conf` naming the slirp4netns DNS (`10.0.2.3`) over the one of the host, since a host stub such as `127.0.0.53` does not exist in their network namespace. `firejail` supports it only as root: its jail lives in the root user namespace, so a regular user cannot enter it (`nsenter` fails with EPERM, `--join-network` is root only, and `--netns` refuses a name that is not under `/var/run/netns`). As root the resolver listens on the address of the jail's bridge, the jail asks a DNS address that its `nat` table redirects there, and the learned addresses are added with `firejail --join-network`. That path has unit tests only: no root was available to run it. `qemu` differs: the firewall lives in the guest, so the host asks a helper process of the guest (started before the Python guards, which would refuse it `iptables`) to add and delete the learned rules, through a second forwarded port protected by the token of the daemon; the helper only runs an add or a delete in the `LEARNED` chain. The guest keeps its own `/etc/resolv.conf`: a profile that exposes the host `/etc` replaces it with a host file that may name a stub absent from the guest, and names then fail to resolve. The guest runs as root, so code that reaches `iptables` in the guest can still flush its own firewall, as before. Every other provider rejects `net-resolve=runtime` with a configuration error; none falls back to `pinned` silently. `libkrun` needs a channel to the guest, and `landlock`, `sandbox-exec` and `appcontainer` cannot filter by address.
+- **Host prerequisites:** `nsenter` and `iptables` (the sandbox holds no capability and cannot change its own firewall), and at least one IPv4 resolver on the host: without one the start fails with an error instead of answering every name with `SERVFAIL`.
+- **IPv4 only.** An `AAAA` answer is returned but no IPv6 address is opened, and slirp4netns gives the sandbox no IPv6 route by default.
+- **A `net=` rule naming a host applies to `OUT`.** `IN` is an error in this mode. A rule that opens no port is ignored with a warning, as in `pinned` mode.
+- **An address, not a name, is opened.** It is open to every process of the sandbox for the TTL, and two names behind one address (a CDN) cannot be told apart. A connection already established survives the closing of its address.
+- **A `DENY` rule naming a host only refuses its resolution.** In `pinned` mode it becomes `DENY` address rules before the `ALLOW`s; in `runtime` mode its addresses stay reachable by literal IP, or through another name, wherever a static `ALLOW` CIDR covers them.
+- **No name is written in `/etc/hosts`.** A name listed in the `/etc` the profile exposes is answered by the libc without a query, and its address still needs a rule.
+- **Two deadlines.** The kernel closes an address at its TTL; the Python guard of the sandbox keeps what it learned for up to one hour. The stricter layer decides, and that is the kernel.
+- **Not exercised:** the forward to a real host resolver (for example a local stub on `127.0.0.53`) has been run against a test server only; the mode has not been run in Docker, Podman or Kubernetes, nor with the learning mode (`learn`), which forces the `subprocess` provider.
+
 ## Containers without `--privileged`
 
 `unshare` mounts a new `/proc` for the sandbox. A container masks parts of `/proc`, and the kernel then refuses the

@@ -28,6 +28,7 @@ from pathlib import Path
 from typing import Any, cast
 
 from ..config import DEBUG
+from .config_stream import load_config_from_fd
 from .daemon_parameters import DaemonParameters
 
 # Intentionally minimal module-level imports: the QEMU guest runs ``python -m
@@ -276,7 +277,9 @@ async def run_server(process_config: DaemonParameters, shared_socket: Any | None
         "bwrap",
         "gvisor",
         "libkrun",
+        "smolvm",
         "qemu",
+        "qemu-microvm",
         "sandbox-exec",
     )
     if all_rules.use_py_sandbox:
@@ -326,10 +329,11 @@ _IPTABLES_RESTORE_PATHS = (
 )
 
 
-def _apply_netfilter(netfilter_rules: tuple[str, ...]) -> None:
+def _apply_netfilter(netfilter_rules: tuple[str, ...]) -> str:
     """Apply the iptables rules in the QEMU guest, where the child is root.
 
     Fails closed: the profile's socket rules depend on this filter, so the child stops when it cannot be applied.
+    Returns the ``iptables`` of the backend that loaded it, the one that sees the rules.
     """
     # Bring up loopback when in a new network namespace (required before iptables)
     for ip_cmd in ("/usr/sbin/ip", "/sbin/ip", "ip"):
@@ -362,7 +366,7 @@ def _apply_netfilter(netfilter_rules: tuple[str, ...]) -> None:
             failure = f"{restore}: {e}"
             continue
         if r.returncode == 0:
-            return
+            return restore.replace("-restore", "")
         failure = f"{restore} ({r.returncode}): {r.stderr.decode(errors='replace').strip()}"
     raise RuntimeError(f"iptables-restore failed, {failure}")
 
@@ -390,18 +394,24 @@ def main() -> int:
 
     parser.add_argument("--_named-pipe", help="_internal parameter")
     parser.add_argument("--_shared-socket", help="_internal parameter")
+    parser.add_argument("--_config-on-stdin", action="store_true", default=False, help="_internal parameter")
 
     # Parse the arguments provided by the user
     sandboxes_parsed, sandboxes_args = parser.parse_known_args()
     # -------------
     # Read all configuration from named-pipe (or config file for QEMU) until EOF
-    assert sandboxes_parsed._named_pipe, "Set parameter --_named-pipe <path>"
-    config_path = Path(sandboxes_parsed._named_pipe.strip())
-    pickle_data: bytes = config_path.read_bytes()
-    # Only the parent process feeds the named_pipe; no risk of malicious pickle
-    # injection.
-    # Payload written by the trusted parent
-    process_config: DaemonParameters = pickle.loads(memoryview(pickle_data))
+    process_config: DaemonParameters
+    if sandboxes_parsed._config_on_stdin:
+        # The config heads the standard input and what follows is the program's own (smolvm guest).
+        process_config = load_config_from_fd(0)
+    else:
+        assert sandboxes_parsed._named_pipe, "Set parameter --_named-pipe <path>"
+        config_path = Path(sandboxes_parsed._named_pipe.strip())
+        pickle_data: bytes = config_path.read_bytes()
+        # Only the parent process feeds the named_pipe; no risk of malicious pickle
+        # injection.
+        # Payload written by the trusted parent
+        process_config = pickle.loads(memoryview(pickle_data))
     if not process_config:
         raise RuntimeError("Impossible to read the config body from stdin")
     shared_socket = None
@@ -424,7 +434,12 @@ def main() -> int:
     # Only the QEMU guest applies its own filter. bwrap gets no rule: the host loads its filter and waits for
     # slirp4netns before handing the child its config.
     if netfilter_rules:
-        _apply_netfilter(netfilter_rules)
+        iptables = _apply_netfilter(netfilter_rules)
+        if getattr(process_config, "learned_control_port", 0):
+            from .guest_learned import start_helper
+
+            # Before the guards: afterwards no program of this process may run iptables.
+            start_helper(process_config.learned_control_port, process_config.token, iptables)
 
     _qemu_show_boot_console_guest_trace(process_config, "main: after netfilter / wait_network")
 
@@ -444,9 +459,10 @@ def main() -> int:
 
     # Initialize learn
     set_learning_path(all_rules.learning_path)
-    from ..guard_socket import set_pin_dns
+    from ..guard_socket import set_name_rules, set_pin_dns
 
     set_pin_dns(all_rules.pin_dns)
+    set_name_rules(all_rules.name_rules)
     # When pin_dns is set but use_py_sandbox is False, patch resolution so guest uses pinned IPs
     if all_rules.pin_dns:
         import socket as _socket_mod
@@ -505,6 +521,9 @@ def main() -> int:
         # by one, as a learned one does, then dies on the harness's imports.
         import pysandboxes.remote.python_in_sb as python_in_sb_module
         import pysandboxes.remote.qemu_guest_console_io  # noqa: F401
+
+        if python_main_args:
+            pysandboxes.remote.qemu_guest_console_io.prepare_qemu_guest_stdin()
 
         module_args = sandboxes_args if sandboxes_parsed._python_sb else list(python_main_args)
         module_specs = None
