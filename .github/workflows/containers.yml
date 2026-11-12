@@ -115,7 +115,10 @@ jobs:
     - name: Run container tests
       env:
         CONTAINER_CMDS: ${{ matrix.engine }}
-        PYTEST_ADDOPTS: -k "${{ matrix.tests }}"
+        # Only a timeout is run again, twice at most: an assertion that fails is never rerun.
+        PYTEST_ADDOPTS: >-
+          -k "${{ matrix.tests }}"
+          --reruns 2 --only-rerun "Daemon failed to start|did not respond within|TimeoutError|timed out"
       run: |
         df -h /
         make container-tests

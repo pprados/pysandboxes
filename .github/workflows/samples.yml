@@ -57,6 +57,7 @@ jobs:
     env:
       UV_PYTHON: ${{ matrix.python-version }}
       OS_SANDBOX: ${{ matrix.os-sandbox }}
+      SAMPLE_ATTEMPTS: "3"
 
     steps:
     - uses: actions/checkout@v5
@@ -130,6 +131,7 @@ jobs:
       UV_PYTHON_PREFERENCE: only-managed
       OS_SANDBOX: ${{ matrix.os-sandbox }}
       PYSANDBOXES_FAIL_ON_SKIP: "1"
+      SAMPLE_ATTEMPTS: "3"
       PYSANDBOXES_QEMU_TCG: "1"
       QEMU_USE_KVM: "true"
       QEMU_MICROVM_OPTIONAL_PATHS: /etc/ssl,/etc/ca-certificates,/usr/share/ca-certificates

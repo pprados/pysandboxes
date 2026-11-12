@@ -149,7 +149,11 @@ jobs:
         PYSANDBOXES_FIREJAIL_TEST_BRIDGE: br-pysb-test
         # smolvm is left out: on a hosted runner every virtio-fs share (-v) of a guest fails with
         # "restore boot volume mounts: Not supported (os error 95)". It is run locally before a release.
-        PYTEST_ADDOPTS: --durations=20 -k "not smolvm" ${{ inputs.exclude-tcg && '-m "not slow"' || '' }}
+        # A guest that starts too slowly on a hosted runner times out: only such a test is run again, twice at
+        # most. An assertion that fails is never rerun.
+        PYTEST_ADDOPTS: >-
+          --durations=20 -k "not smolvm" ${{ inputs.exclude-tcg && '-m "not slow"' || '' }}
+          --reruns 2 --only-rerun "Daemon failed to start|did not respond within|TimeoutError|timed out"
       run: make integration-tests
 
     - name: Remove Firejail test bridge
