@@ -508,11 +508,18 @@ lint_diff format_diff: PYTHON_FILES=$(shell git diff --name-only --diff-filter=d
 # would always pass. Run `make format` to fix what lint reports.
 # The *_diff variants get an empty file list when the branch has no Python
 # change, so the guard keeps the tools from running on the whole tree.
+# mypy runs once per sample and once for the rest: every sample has a tests/ package of its own, and
+# mypy refuses two files that map to the same module name, such as samples/*/tests/test_tools_sandbox.py.
 lint lint_diff:
 	@FILES="$(PYTHON_FILES)"; \
 	if [ -z "$$FILES" ]; then echo "lint: no Python file to check."; else \
 		set -e -x; \
-		unset VIRTUAL_ENV; uv run mypy $$FILES; \
+		unset VIRTUAL_ENV; \
+		for scope in . $$(printf '%s\n' $$FILES | sed -n 's|^\(samples/[^/]*\)/.*|\1|p' | sort -u); do \
+			if [ "$$scope" = . ]; then group=$$(printf '%s\n' $$FILES | grep -v '^samples/' || true); \
+			else group=$$(printf '%s\n' $$FILES | grep "^$$scope/"); fi; \
+			[ -z "$$group" ] || uv run mypy $$group; \
+		done; \
 		uvx pyright $$FILES; \
 		uvx ruff format --check $$FILES; \
 		uvx ruff check $$FILES; \
