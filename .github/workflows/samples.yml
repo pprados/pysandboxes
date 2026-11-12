@@ -132,6 +132,8 @@ jobs:
       OS_SANDBOX: ${{ matrix.os-sandbox }}
       PYSANDBOXES_FAIL_ON_SKIP: "1"
       SAMPLE_ATTEMPTS: "3"
+      # A hosted runner sometimes boots a guest in more than the 90s that KVM gets by default.
+      QEMU_START_TIMEOUT: "180"
       PYSANDBOXES_QEMU_TCG: "1"
       QEMU_USE_KVM: "true"
       QEMU_MICROVM_OPTIONAL_PATHS: /etc/ssl,/etc/ca-certificates,/usr/share/ca-certificates

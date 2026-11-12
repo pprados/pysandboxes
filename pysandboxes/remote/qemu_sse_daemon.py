@@ -1579,7 +1579,8 @@ class QemuSSEDaemon(VMSSEDaemon):
         # qemu.start_timeout. The host gives up at that same moment, which is what keeps a
         # doomed VM from outliving the error that reported it.
         start_timeout = qemu_start_timeout(all_rules.os_sandbox_params)
-        deadline = time.monotonic() + start_timeout
+        launched_at = time.monotonic()
+        deadline = launched_at + start_timeout
         base_url = ENDPOINT_URL if self.endpoint else self.base_url.replace("{PORT}", str(port))
         ping_url = base_url + "/ping"
         logger.debug(
@@ -1617,7 +1618,8 @@ class QemuSSEDaemon(VMSSEDaemon):
                         # VM went on running long after the caller had been told it failed.
                         raise SandBoxError(
                             f"The QEMU guest did not answer within {start_timeout:.0f}s. "
-                            "A host without /dev/kvm needs a larger qemu.start_timeout."
+                            "A slow host needs a larger qemu.start_timeout (or QEMU_START_TIMEOUT); "
+                            "qemu.show_boot_console=true shows what the guest does."
                         )
                     async with session.get(
                         ping_url,
@@ -1659,6 +1661,14 @@ class QemuSSEDaemon(VMSSEDaemon):
                         )
                 await asyncio.sleep(INTERVAL_FOR_PING_DAEMON)
 
+        answered_after = time.monotonic() - launched_at
+        logger.log(
+            logging.WARNING if answered_after > start_timeout / 2 else logging.DEBUG,
+            "QEMU guest answered after %.0fs of the %.0fs allowed (%d pings)",
+            answered_after,
+            start_timeout,
+            count_loop,
+        )
         await asyncio.sleep(INTERVAL_FOR_PING_DAEMON)
         logger.debug(
             "QEMU sandbox daemon is up and running at %s (host will now accept RPCs)",
