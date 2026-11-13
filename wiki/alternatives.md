@@ -250,8 +250,13 @@ lists leave C3 at `P`, and the only timeouts found are internal to the proxies, 
 The OpenShell column was read at `7cfa0c09` for I3, C4, C5, C6, O1, R1 and R3 and none of those cells changed: five
 compute drivers back I3, a policy-advisor skill and an `openshell-prover` crate back C4 and C5, a manual or
 automatic `approval_mode` and `prover_delta` audit events back C6, `openshell-ocsf` backs O1, `openshell-vfio`
-backs R3, and R1 stays `P` because only a PID limit was found, not memory or CPU. No other cell was re-derived
-from code. Two rows stand out. The language-level rows (P1 to P5) are empty for every solution outside family 1.
+backs R3, and R1 stays `P` because only a PID limit was found, not memory or CPU. The smolagents column was read at
+`96f33fa` for P1, P2, P3, P4, R1 and E3 and none of those cells changed: `authorized_imports` with
+`check_import_authorized` backs P1, `DANGEROUS_FUNCTIONS` (`builtins.eval`, `exec`, `compile`, `globals`,
+`locals`, `__import__`, `os.system`...) backs P3, an AST walk in `evaluate_ast` backs P4, the dunder guard is a
+replacement `getattr` only (`nodunder_getattr`), which keeps P2 at `P`, and the only resource setting found on
+the remote executors is the Blaxel `memory` argument and a 5-minute Docker kernel timeout. No other cell was
+re-derived from code. Two rows stand out. The language-level rows (P1 to P5) are empty for every solution outside family 1.
 Learning or advisor mode (C4) exists only in PySandboxes and OpenShell, and partly in Codex, which adds one
 allow rule per human approval.
 
