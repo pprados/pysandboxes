@@ -296,7 +296,12 @@ allow rule per human approval.
   only that write-up ties the archiving to the disclosure, and it was read as a search summary, not in full. With `allow_read=False`, read
   and write access to the host's `node_modules` is still granted. The Python wrapper pins a published JSR
   package older than the source in the repository. Code and session travel as `argv`, which fails with
-  `E2BIG` on large payloads.
+  `E2BIG` on large payloads. Recheck of the clone at commit `fac037c` (2026-01-14, the archived tip, read
+  2026-11-13): `libs/sandbox-py/langchain_sandbox/pyodide.py` still builds the six Deno flags `--allow-env`,
+  `--allow-read`, `--allow-write`, `--allow-net`, `--allow-run` and `--allow-ffi` from constructor settings,
+  with `node_modules` forced as the default read and write path, which matches the points above; it still
+  pins `jsr:@langchain/pyodide-sandbox@0.0.4`. A keyword search for `ctypes` and `system(` finds nothing in the
+  repository's own code, which is consistent with a flaw that lives in the Emscripten layer, not here.
 
 ### NVIDIA OpenShell
 
@@ -385,8 +390,11 @@ allow rule per human approval.
   without a `socket()` call, and outside the `VmSocketRestricted` mode also denies `ptrace`,
   `process_vm_readv`, `process_vm_writev` and `request_key`. The crate has grown a managed TCP relay
   (`managed_tcp.rs`, `proxy_routing.rs`) and the repository has `mxc-sandbox`, `windows-sandbox-rs`,
-  `windows-sandbox-service` and `network-proxy` crates. The per-exec attribution token, the proxy's
-  method, path and header rules and the credential broker were not re-read.
+  `windows-sandbox-service` and `network-proxy` crates. In `network-proxy/src`, `attribution.rs` defines the
+  per-exec attribution token (`CODEX_NETWORK_PROXY_ATTRIBUTION`, a framed header of at most 128 bytes with a
+  3 s timeout), and the directory also holds `credential_broker.rs`, `aws_sigv4.rs`, `secret_substitution.rs`,
+  `mitm.rs` and `domain_matcher.rs`, which fit the claims about the token, the credential broker and the
+  optional proxy. The method, path and header rules themselves were located by file name only and not read.
 
 ### microsandbox
 
