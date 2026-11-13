@@ -33,11 +33,18 @@ on:
         description: JSON list of Python minors for the costly VM sample lane
         type: string
         default: '["3.13"]'
+      exclude-tcg:
+        description: Leave the emulated (TCG) sample row out
+        type: boolean
+        default: false
   workflow_call:
     inputs:
       vm-python-versions:
         type: string
         default: '["3.13"]'
+      exclude-tcg:
+        type: boolean
+        default: false
 
 jobs:
   samples:
@@ -169,7 +176,7 @@ jobs:
     - name: Run every sample with qemu-microvm
       run: make sample-tests
     - name: Run representative TCG sample
-      if: matrix.python-version == '3.13'
+      if: matrix.python-version == '3.13' && !inputs.exclude-tcg
       env:
         QEMU_USE_KVM: "false"
       run: make sample-tests-vm-tcg

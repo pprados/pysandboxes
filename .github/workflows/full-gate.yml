@@ -86,6 +86,7 @@ jobs:
     uses: ./.github/workflows/samples.yml
     with:
       vm-python-versions: ${{ inputs.vm-sample-python-versions }}
+      exclude-tcg: ${{ inputs.exclude-tcg == true }}
 
   containers:
     needs: changes
