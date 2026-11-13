@@ -21,7 +21,7 @@
 `unshare` provider, with `--privileged` for Docker.
 
 
-## [0.0.0] - 202X-XX-XX
+## [0.12.0] - 2026-11-13
 
 ### Added
 
@@ -35,6 +35,52 @@
 
 - Stop printing an `AssertionError` from the sandbox process when it shuts down, with every OS provider.
 - The `python-sb-qemu-microvm` image now starts its default profile, which no longer exceeds the microvm host-share capacity.
+
+### Added
+- Fall back to a PCIe bus when the 9p shares exceed MMIO
+- Qemu.microvm_pcie lifts the MMIO limit on 9p shares
+- Os-sandbox=none accepts net-resolve and warns that it adds no OS boundary
+- Net-resolve=runtime under firejail without root falls back to pinned
+- Net-resolve=runtime for firejail without root, judged by the Python guard
+- Net-resolve=runtime for landlock, judged by the Python guard
+- Net-resolve=runtime for sandbox-exec and appcontainer, judged by the Python guard
+- Net-resolve=runtime for subprocess, judged by the Python guard alone
+- Net-resolve=runtime for qemu-microvm
+- Net-resolve=runtime for qemu, through a helper process of the guest
+- Net-resolve=runtime for firejail, as root
+- Net-resolve=runtime for bwrap and gvisor, with integration tests per provider
+- Net-resolve=runtime for unshare, with positive and negative integration tests
+- Net-resolve=pinned|runtime profile key and runtime name rules in the guard
+- Netns iptables enforcer and runtime ruleset
+- Runtime DNS filter core, name rules, learned table and filtering resolver
+- Relay the standard input of python-sb to the guest
+- Build the guest image for the Python of the host and refuse another one
+- Bind the exposed paths from a few shares, and keep the config off the disk
+- Add the smolvm micro-VM provider
+
+### Fixed
+- Wait for the guest helper to listen before the sandboxed program runs
+- Make the timeout of a call into the sandbox adjustable, and raise it in the VM samples
+- Give a slow runner's guest more time and say how long it took
+- Run mypy once per sample in lint_diff
+- Avoid the 2 GiB guest hang on the ACPI machine and cover the PCIe fallback end to end
+- The one-shot python-sb run under firejail lets the runtime resolver join the jail
+- Refuse net-resolve=runtime under firejail without root when the profile is read
+- Stop the resolver in one-shot runs, error without an IPv4 resolver, document net-resolve and its limits
+- Drop the CA host shares of the default profile in the qemu-microvm image
+- Build the smolvm guest archive once per Python version
+- Count the daemon the sandbox process registers, so its shutdown balances
+- Build the smolvm guest archive once per Python version
+- Start the guest with the home that holds the smolvm agent
+- Name the guest archive from an ARG the base image does not set as an ENV
+- Refuse a script read from the standard input instead of running it empty
+- Name the guest archive stamp without PYTHON_VERSION so make help stays free of uv
+- Run from the guest image when the package cannot be shared, and make the image run
+- Drop the CA host shares of the default profile in the qemu-microvm image
+
+### Security
+- Relock soupsieve to 4.1 in the samples
+- Relock mcp-server-demo against the current pysandboxes metadata
 
 ## [0.11.0] - 2026-11-10
 
