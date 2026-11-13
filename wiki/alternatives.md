@@ -187,7 +187,7 @@ Columns: **pysb** PySandboxes, **RPy** RestrictedPython, **smol** smolagents, **
 | F1 | Path-level read/write allow/deny | Y | N | N | Y | Y | Y | Y | Y | N | N | Y | P | P | N | N | N | ? | N | P |
 | F2 | Copy-on-write / overlay / ephemeral rootfs | P | - | P | P | Y | N | P | Y | Y | Y | Y | N | P | N | ? | ? | Y | ? | ? |
 | F3 | Safe file transfer host and sandbox | P | - | N | - | P | P | P | Y | ? | Y | Y | Y | Y | ? | ? | P | P | ? | P |
-| S1 | Syscall filtering | P | N | N | P | Y | P | Y | N | P | N | N | N | P | Y | Y | - | ? | ? | ? |
+| S1 | Syscall filtering | P | N | N | P | Y | P | Y | N | P | N | P | N | P | Y | Y | - | ? | ? | ? |
 | S2 | Control of process execution | Y | N | P | Y | P | P | Y | P | P | Y | Y | Y | N | P | N | N | ? | ? | ? |
 | S3 | Code runs unprivileged by default (not root, not privileged) | P | - | N | - | P | Y | P | N | P | N | P | N | N | ? | N | ? | ? | ? | ? |
 | P1 | Import control | Y | N | Y | N | - | N | N | N | - | - | N | N | N | N | N | N | - | - | - |
@@ -214,9 +214,14 @@ Columns: **pysb** PySandboxes, **RPy** RestrictedPython, **smol** smolagents, **
 | G1 | SDKs, MCP, agent frameworks | Y | P | Y | P | Y | Y | Y | Y | Y | Y | Y | Y | Y | Y | Y | Y | Y | Y | Y |
 | G2 | Safety of results returned to the host | Y | - | Y | Y | P | - | ? | P | Y | Y | Y | Y | Y | P | ? | P | ? | ? | ? |
 
-One cell was changed on 2026-11-13: I3 for sandbox-runtime went from `N` to `P`, because its code at
+Two cells were changed on 2026-11-13. I3 for sandbox-runtime went from `N` to `P`, because its code at
 `0bbebed0` offers a Windows backend choice (`windows.backend` set to `'mxc'`); on Linux and macOS it has one
-backend each. No other cell was re-derived from code. Two rows stand out. The language-level rows (P1 to P5) are empty for every solution outside family 1.
+backend each. S1 for OpenSandbox went from `N` to `P`: at `e564cd1`, `components/execd/pkg/isolation` and
+`configs/isolation.example.toml` describe a seccomp denylist of about thirty syscalls (`mount`, `ptrace`,
+`bpf`...) that the file calls always active by default for execd isolation; whether every sandbox goes through
+execd isolation was not checked, hence `P`. A keyword search of the other clones found no change to the S1
+cells of microsandbox, Daytona and agent-sandbox (the latter only passes `seccompProfile` through its CRD).
+No other cell was re-derived from code. Two rows stand out. The language-level rows (P1 to P5) are empty for every solution outside family 1.
 Learning or advisor mode (C4) exists only in PySandboxes and OpenShell, and partly in Codex, which adds one
 allow rule per human approval.
 
