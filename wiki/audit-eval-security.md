@@ -15,9 +15,12 @@ selected operators, enforces budgets, and guards stores. Evaluation runs in
 the host process; `eval-*` is not an OS boundary.
 
 The findings marked reproduced below come from in-memory probes run during the
-2026-10-16 audit; there is no committed probe file. The task ledger records a
-unit checkpoint of 3,689 passed, 20 skipped, 6 xfailed on Python 3.14.5. Tests
-cited here cover specific regression cases and do not establish universal
+2026-10-16 audit; there is no committed probe file. They were not re-run on
+2026-11-13. Instead, each one was re-checked by reading the code at commit
+`2601d77b` (release 0.12.0): all four mechanisms are still present, so the
+reproduced label is kept and the code reading is the current evidence. A
+probe on the current commit would turn that reading into a reproduction.
+Tests cited here cover specific regression cases and do not establish universal
 safety.
 
 ## Findings
@@ -32,6 +35,10 @@ safety.
 | Attribute/frame traversal with the intended helper | `eval_runtime.__sb_getattr__` calls `_check_attr`; `FRAME_CAPTURE` denies listed frame/code attributes. Guarded builtins and formatting helpers route through checks. | Specific paths are tested in `tests/unit_tests/guard/test_eval_runtime.py` and `test_eval_hardening.py`. The `names` override finding means it is inaccurate to claim every attribute read always passes the helper when callers control that mapping. |
 | Caller-supplied callables and namespace modes | `build_namespace` exposes permitted builtins and wrapper names; `eval-namespace=caller` is an explicit broader mode. | A callable supplied by the application runs application-selected behavior. Adaptive/caller namespace choices enlarge ambient capability. These are conditional capabilities and policy concerns; they do not themselves demonstrate escape from an OS sandbox. |
 | Time, iterations, recursion, native work | `eval_runtime` injects ticks and call-depth checks; `guard_eval` uses a timeout worker. | Timeout and iteration cases are in `tests/unit_tests/guard/test_guard_eval.py`. Native/C-level work may not reach a tick, and a Python worker thread cannot safely preempt arbitrary native work. This is a denial-of-service/resource containment limit. A killable process boundary is needed where supported. |
+| Regular-expression backtracking | `eval_runtime._warn_about_regex` logs one warning per attribute name when evaluated code reaches `re` or a compiled pattern; the source states that a match is one opaque C call that charges no tick and holds the GIL. | **Established by code, documented by the project, not reproduced here.** A pattern such as `(a+)+` can run past `eval-timeout` while holding the whole interpreter, host application included. The guard warns and does not refuse. The mitigation is for the application to inject a linear engine under the name `re`. Denial of service only. |
+| Workers blocked in native calls | `guard_eval.run_guarded` refuses a new evaluation once `leaked_threads()` reaches `eval-max-leaked-threads`, raising `EvalInterrupted`. | **Established by code.** An evaluation that blocks in a C call and outlives its timeout keeps running. The counter bounds how many such workers accumulate; it does not stop one. Denial of service only. |
+| Library code generation exempt from the checks | `guard_eval.is_ambient` exempts the runtime's own `compile`, `exec` and `eval` calls (`dataclasses`, `typing`, `importlib`), keyed on the caller's code-object filename under the stdlib and `site-packages`, not on a module name. | **Established by code, not probed for a bypass.** The filename can only be set through `compile()`, which is itself guarded and absent from the closed namespace. A caller that can place a file under `site-packages` or the stdlib, or one that supplies a namespace with `eval-namespace=caller`, is outside this model. |
+| Nested supplied objects and in-place operators (status check) | `__sb_writable__` compares identity against the objects found at the top level of `names`; its docstring says an object nested in a supplied one is not covered. | **Established by code, unchanged since 2026-10-16.** The mitigation is on the application side: pass copies, or immutable values, and keep `names` narrow. |
 
 ## Boundary statement
 

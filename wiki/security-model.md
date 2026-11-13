@@ -54,10 +54,27 @@ The controls apply to supported APIs and depend on the selected OS provider; the
 - **Network access**: direction, IP addresses, domain names and ports available to the sandbox.
 - **Disk access**: directories are mapped to their equivalent in the sandbox, read-only or read and write. File filters ignore some files (e.g. `ignore=.*`).
 - **Imported modules**: a whitelist of the Python modules accessible to the sandbox. Importing others is rejected.
-- **Sensitive API calls**: a registry of sensitive functions (`os.system`, `subprocess.Popen`, `os.kill`, ...) is denied by default, regardless of `python-import=`: an import right is not a call right. Permissions can be granted per function or category. Learning records the supported calls it observes; it does not discover calls made through native code.
+- **Sensitive API calls**: a registry of 152 sensitive functions (`os.system`, `subprocess.Popen`, `os.kill`, ...) in eight categories (`process-exec`, `process-control`, `privileges`, `threads`, `native`, `introspection`, `dynamic-code`, `deserialization`) is denied by default, regardless of `python-import=`: an import right is not a call right. Permissions can be granted per function or category with `python-api=ALLOW:<category>|<function>`. Learning records the supported calls it observes; it does not discover calls made through native code.
 - **Dynamically evaluated code**: a string handed to `eval()`, `exec()` or `compile()` is refused unless the profile declares the sub-language it may use.
 
 The [generated parameter file](https://github.com/pprados/pysandboxes/blob/master/pysandboxes/templates/py-sandboxes.template) documents every rule. Each key of the `eval-*` family is described, with a valid and an invalid example, in [eval.md](eval.md).
+
+## Process boundary and result channel
+
+The sandboxed code runs in a child process; the application and the child talk over a local channel (server-sent events). The channel is a Unix socket handed down to the child where the provider allows it (`remote-endpoint=auto`), a local TCP port otherwise. See [OS providers](os-providers.md#how-the-host-reaches-the-sandbox-remote-endpoint).
+
+The parent deserializes what the child returns, which is code-execution surface in the trusted process. The default `remote-result-mode=data-only` accepts a closed list of plain values. `remote-result-mode=objects` rebuilds application objects behind a denylist and widens that surface. The exception channel falls back to a descriptor (class, message, denials) when the exception's state holds a refused type. See the [transport unpickle guard](transport-unpickle-guard.md) and, for the limits, [Weaknesses](weaknesses.md#remote-result-and-exception-handling).
+
+## What the OS layer adds
+
+The OS providers fall into four families, detailed in [OS providers](os-providers.md):
+
+- **No boundary** (`none`, `subprocess`): only the Python layer protects. `none` also leaves the Python guards inactive.
+- **Kernel rules or namespaces on the host kernel** (`landlock`, `bwrap`, `unshare`, `firejail`, and `sandbox-exec` on macOS and `appcontainer` on Windows): they contain native code and direct system calls, but a kernel exploit reaches the host. `landlock`, `sandbox-exec` and `appcontainer` do not filter the remote host, and `landlock` has no UDP rule.
+- **A user-space kernel** (`gvisor`): the guest talks to Sentry, which makes a small set of host system calls.
+- **A VM with its own kernel** (`smolvm`, `qemu`, `qemu-microvm`): the host kernel is out of the guest's reach. A `qemu` or `qemu-microvm` run without KVM (TCG) carries no isolation claim.
+
+On Linux and WSL only the kernel-backed providers hold against compiled code. macOS and Windows can opt into `sandbox-exec` and `appcontainer`, and both default to `subprocess`. Resolution of host names in `net=` rules is chosen by `net-resolve=pinned|runtime`, see [DNS](dns.md). Residual DNS exfiltration is listed in [Weaknesses](weaknesses.md#os-provider-limitations).
 
 ## Learning mode
 
@@ -67,5 +84,6 @@ Learning mode records supported accesses observed during a run, and gives an ini
 
 - [Security assessment of the Python layer](audit-python-security.md): attack by attack, what hostile code can and cannot reach once a profile is armed, which layer stops each attempt and what the layer does not claim to cover.
 - [Security assessment of the `eval-*` guard](audit-eval-security.md): the same for a hostile string.
+- [Security assessment of the OS boundary](audit-native-guard-study.md): what each OS provider holds against native code.
 - [Weaknesses](weaknesses.md): known limits and residual risks.
 - [Provider comparison](os-providers.md): what each OS mechanism enforces.

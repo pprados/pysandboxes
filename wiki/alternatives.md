@@ -1,8 +1,13 @@
 # Alternatives to PySandboxes
 
-*Snapshot: 2026-10-01. Open-source projects were checked at the commits listed in
+*Snapshot: 2026-10-01 for the other solutions, 2026-11-13 for PySandboxes (release 0.12.0, commit `2601d77b`).
+Open-source projects were checked at the commits listed in
 [Sources](#sources-and-commits-analysed). Closed services were assessed from vendor documentation, security
-pages, and independent reviews. Verify claims before relying on them; projects change.*
+pages, and independent reviews. The PySandboxes rows, cells and paragraphs were refreshed on 2026-11-13 from
+the code of this repository. The other solutions got one web search each that day (see the end of
+[Sources](#sources-and-commits-analysed)); the source-code analysis, the analysed commits and the feature
+matrix are still those of 2026-10-01 and may be out of date. Verify claims before relying on them; projects
+change.*
 
 This page compares PySandboxes with eighteen solutions: embeddable frameworks, self-hosted platforms, and cloud
 services. It focuses on enforced controls, implementation, and security boundaries.
@@ -38,7 +43,7 @@ labelled.
 
 | Solution | Kind | Boundary that holds against hostile native code | Licence |
 |---|---|---|---|
-| **PySandboxes** | Python framework | Python API patching, inside one OS provider: Landlock, bubblewrap, Firejail, unshare, QEMU, gVisor, or macOS Seatbelt | Apache-2.0 |
+| **PySandboxes** | Python framework | Python API patching, inside one OS provider: Landlock, bubblewrap, Firejail, unshare, QEMU (full VM or microvm), gVisor, smolvm (micro-VM), macOS Seatbelt, or a Windows AppContainer | Apache-2.0 |
 | [RestrictedPython](https://github.com/zopefoundation/RestrictedPython) | Python library | None. AST rewriting at compile time, guards supplied by the host | ZPL-2.1 |
 | [smolagents](https://github.com/huggingface/smolagents) | Agent framework | None for the local AST interpreter. The remote executors delegate to Docker, E2B, Modal or Blaxel | Apache-2.0 |
 | [langchain-sandbox](https://github.com/langchain-ai/langchain-sandbox) | Python library, **archived** | Pyodide (CPython compiled to WASM) under Deno permissions | MIT |
@@ -109,7 +114,7 @@ layer 7, and it grants privileges on more than the network destination alone.
 
 | Solution | Default egress | UDP | ICMP | DNS | Domain rules | Layer 7 | Credentials |
 |---|---|---|---|---|---|---|---|
-| **PySandboxes** | Deny at the Python layer. At the OS layer: `unshare` and `qemu` set `iptables` to `DROP`; `bwrap` and `firejail` leave only loopback when the profile has no `net=` rule; with `net=` rules under an explicit `restricted-network yes`, `firejail` keeps the host network and warns. `landlock` denies native TCP bind/connect by default on ABI v4+; the provider is unavailable below ABI v4 | `net=` rules, enforced by Python and `iptables`. `landlock` cannot filter native UDP | No rule can name it; blocked as a side effect | Names resolved once and pinned into `getaddrinfo` | Name resolved to IPs when the profile is parsed | None | `env=` whitelist; a granted secret enters the sandbox in clear |
+| **PySandboxes** | Deny at the Python layer. At the OS layer: `unshare` and `qemu` set `iptables` to `DROP`; `bwrap` and `firejail` leave only loopback when the profile has no `net=` rule; with `net=` rules under an explicit `restricted-network yes`, `firejail` keeps the host network and warns. `landlock` denies native TCP bind/connect by default on ABI v4+; the provider is unavailable below ABI v4 | `net=` rules, enforced by Python and `iptables`. `landlock` cannot filter native UDP | No rule can name it; blocked as a side effect | `net-resolve=pinned` (the value without the key): names resolved once and pinned into `getaddrinfo` and `/etc/hosts`. `net-resolve=runtime`: a filtering resolver on the host answers only the names a rule allows and opens the addresses for the TTL | `pinned`: name resolved to IPs at start. `runtime`: name resolved when the program asks; one address is shared by every name behind it | None | `env=` whitelist; a granted secret enters the sandbox in clear |
 | OpenShell | Deny | Only to the DNS relay | Socket never created | Own relay, policy per name | Proxy `CONNECT` + OPA | REST, GraphQL, JSON-RPC, MCP, WebSocket, TLS interception | Placeholders, SigV4, SPIFFE to OAuth2 |
 | sandbox-runtime | Open if `allowedDomains` is undefined; the CLI closes it | Impossible: the netns has only loopback | Impossible | Resolved by the proxy after the allow decision | HTTP and SOCKS proxy | Optional TLS interception; domain fronting acknowledged | Masked credentials, SigV4 re-signed |
 | Codex | Deny on Linux and macOS; on Windows (restricted token), allow with a WFP deny-list | Blocked by seccomp (Linux Restricted mode) | Blocked on Windows by WFP | Resolved by the proxy, rebinding checked | Optional proxy | Method, path, headers (optional proxy) | Credential broker scoped per host |
@@ -137,8 +142,11 @@ Three observations follow.
   [Unit 42](https://unit42.paloaltonetworks.com/bypass-of-aws-sandbox-network-isolation-mode/), HackerOne report
   3323153). It stays open on
   Vercel when only CIDRs are allowed, and on E2B, by construction, as soon as a domain rule exists.
-  PySandboxes pins names to the addresses resolved when the profile is parsed, which closes the TTL drift.
-  When a provider uses `iptables`, the sandbox still talks to a resolver ([DNS and iptables](dns.md)).
+  PySandboxes pins names to the addresses resolved at start (`net-resolve=pinned`), which closes the TTL
+  drift but refuses a rotating name; `net-resolve=runtime` follows the name instead. When a provider uses
+  `iptables`, the sandbox still talks to a resolver, and the filter always accepts UDP port 53 to it:
+  DNS stays a low-rate exfiltration channel under every provider that has its own network namespace
+  ([DNS and iptables](dns.md), [Weaknesses](weaknesses.md#os-provider-limitations)).
 - **Layer 7 belongs to the proxy-based solutions.** Rules on HTTP method and path exist only behind a proxy:
   OpenShell, Codex, Vercel, Cloudflare (as code), OpenSandbox (through addons) and sandbox-runtime (partly).
   Credential injection, where the real secret never enters the sandbox, is common: nine of the nineteen
@@ -217,9 +225,10 @@ allow rule per human approval.
 - **Strengths**: the only solution that controls imports, a registry of 152 sensitive functions in eight
   categories (`guard_api`), and code arriving as a string (the `eval-*` sub-language: parsed, rewritten, run
   under a budget and a timeout). It is the only one granular to the function (`@sandbox`). Its results are
-  unpickled under a guard ([Transport unpickle guard](transport-unpickle-guard.md)). Five interchangeable
-  kernel providers are available, and the AppContainer provider on Windows. It passed the Windows VM matrix as
-  administrator and as standard user.
+  unpickled under a guard ([Transport unpickle guard](transport-unpickle-guard.md)). Eight interchangeable
+  Linux providers are available (`landlock`, `bwrap`, `firejail`, `unshare`, `qemu`, `qemu-microvm`, `gvisor`
+  and `smolvm`), plus `sandbox-exec` on macOS and AppContainer on Windows. The VM providers need `/dev/kvm`
+  for a boundary claim. It passed the Windows VM matrix as administrator and as standard user.
 - **Weaknesses**: no layer 7, no TLS interception, no credential brokering. A granted secret enters the
   sandbox in clear. There is no built-in list of private ranges or metadata addresses: the profile author has
   to write the `DENY` rules. No rule can name ICMP. `landlock` cannot filter UDP. A change
@@ -239,7 +248,10 @@ allow rule per human approval.
   for lazy imports and comprehension unpacking. Six advisories, all sandbox escapes or leaks, listed on
   [the project's advisories page](https://github.com/zopefoundation/RestrictedPython/security/advisories):
   CVE-2023-37271, CVE-2023-41039, CVE-2024-47532,
-  CVE-2025-22153, CVE-2026-55830 and CVE-2026-76825 (`string.Formatter`, fixed in 8.4).
+  CVE-2025-22153, CVE-2026-55830 (guard hooks shadowed through positional-only arguments, fixed in 8.3.0) and
+  CVE-2026-76825 (`string.Formatter`, fixed in 8.4.0, dated 2026-07-10 in the changelog). A pull request opened
+  on 2026-11-05 proposes a 5.4.post1 security release of the 5.4 line; a web search on 2026-11-13 does not
+  show whether it was merged.
 
 ### smolagents
 
@@ -249,14 +261,20 @@ allow rule per human approval.
 - **Weaknesses**: it is the default executor. The timeout cannot kill its thread, as its own docstring says.
   `DANGEROUS_MODULES` is never read by the enforcing code; a test only uses it as a list of names. The
   `DockerExecutor` sets no network, capability or memory limit. CVE-2025-5120 and CVE-2025-9959 were sandbox
-  escapes. [Issue 2094](https://github.com/huggingface/smolagents/issues/2094) (`ctypes`) is still open.
+  escapes. [Issue 2094](https://github.com/huggingface/smolagents/issues/2094) (`ctypes`) was open on 2026-10-01. A search on 2026-11-13 also lists CVE-2026-4963 (code injection in
+  `evaluate_augassign`, `evaluate_call` and `evaluate_with`, published 2026-03-27, an incomplete fix of
+  CVE-2025-9959; the sources give a severity of 10 and of 5.3) and CVE-2026-2654 (SSRF through `requests.get`
+  and `requests.post`, up to 1.24.0). No patched version was confirmed for either.
 
 ### langchain-sandbox
 
 - **Bet**: let Deno permissions and WASM do all the work.
 - **Strengths**: every permission is closed in the constructor's signature (network, environment, run, FFI).
   Session state round-trips through `dill` as opaque bytes, without the host ever unpickling it.
-- **Weaknesses**: archived, and its own README advises against production use. With `allow_read=False`, read
+- **Weaknesses**: archived by its owner on 2026-01-14 (GitHub, checked 2026-11-13 through a web search), and
+  its own README advises against production use. [Cyera](https://www.cyera.com/research/sandcastles-not-sandboxes-how-one-architectural-flaw-exposed-seven-products)
+  reports a `ctypes` path to `system()` that Emscripten's syscall emulation serves outside Deno's `allow_run`;
+  only that write-up ties the archiving to the disclosure, and it was read as a search summary, not in full. With `allow_read=False`, read
   and write access to the host's `node_modules` is still granted. The Python wrapper pins a published JSR
   package older than the source in the repository. Code and session travel as `argv`, which fails with
   `E2BIG` on large payloads.
@@ -282,7 +300,11 @@ allow rule per human approval.
   [CVE-2026-65093](https://nvd.nist.gov/vuln/detail/CVE-2026-65093) (escape, CWE-427),
   [CVE-2026-65083](https://nvd.nist.gov/vuln/detail/CVE-2026-65083) (provisioning API) and
   [CVE-2026-65091](https://nvd.nist.gov/vuln/detail/CVE-2026-65091) (command injection from a malicious
-  gateway). CVE-2026-65086 is reported by the press, not confirmed in a registry.
+  gateway). CVE-2026-65086 is now listed with the others in
+  [NVIDIA's August 2026 security bulletin](https://nvidia.custhelp.com/app/answers/detail/a_id/5872) (65083,
+  65085, 65086, 65091, 65092 and 65093, fixed in v0.0.34), as seen in a search result on 2026-11-13; the
+  bulletin was not read in full. The same search lists releases up to v0.1.6 (v0.1.5 on 2026-10-20), later
+  than the commit analysed here.
 
 ### Anthropic sandbox-runtime
 
@@ -298,7 +320,9 @@ allow rule per human approval.
   vendor acknowledges domain fronting
   ([Claude Code sandboxing](https://code.claude.com/docs/en/sandboxing#security-limitations)). One policy
   per command, no learning mode. One low-severity advisory,
-  [CVE-2025-66479](https://github.com/advisories/GHSA-9gqj-5w7c-vx47), fixed in 0.0.16.
+  [CVE-2025-66479](https://github.com/advisories/GHSA-9gqj-5w7c-vx47), fixed in 0.0.16. The releases page
+  (search result of 2026-11-13) lists v0.0.78 as the newest, with Windows support described as alpha and the
+  project still labelled a research preview; the commit analysed here predates that.
 
 ### OpenAI Codex sandbox
 
@@ -313,7 +337,11 @@ allow rule per human approval.
   DNS, SMB). The proxy is optional. Published incidents hit the decision layer above the sandbox, not the
   kernel boundary: [CVE-2025-59532](https://osv.dev/vulnerability/CVE-2025-59532) (fixed in 0.39.0),
   [CVE-2026-19591](https://nvd.nist.gov/vuln/detail/CVE-2026-19591) (Codex CLI 0.72 to 0.130) and [CVE-2026-19593](https://nvd.nist.gov/vuln/detail/CVE-2026-19593) (`.git/config` read by Codex
-  Desktop).
+  Desktop). A search on 2026-11-13 adds CVE-2026-19592 (a repo-local `core.fsmonitor` helper run outside the
+  command sandbox, published 2026-09-01), two flaws without a CVE called Heapjack and Overpatch (fixed in Codex
+  CLI 0.149.0, 2026-08-21) and seven escapes across several agents disclosed by Pillar Security in July 2026
+  (Codex CLI fixed in 0.95.0). They again concern the layer above the kernel boundary, not Seatbelt, bubblewrap
+  or seccomp.
 
 ### microsandbox
 
@@ -338,7 +366,11 @@ allow rule per human approval.
   nothing. As soon as a domain rule exists, `8.8.8.8` is open on every protocol and port, and cannot be
   closed. No `jailer`. TLS interception, header injection and bring-your-own-proxy exist only in the closed
   cloud build: the open-source orchestrator rejects them with `Unimplemented`. The legacy v1 API leaves
-  `envd` unauthenticated unless `secure` is set.
+  `envd` unauthenticated unless `secure` is set. The current E2B documentation (search result of 2026-11-13)
+  describes `allowInternetAccess: false` as `denyOut` of `0.0.0.0/0`, a policy replaced at run time with
+  `updateNetwork()`, per-host header injection in public beta and a bring-your-own proxy in private beta, which
+  fits the cloud-only split above. It also warns that a blocked TCP connection can look successful from inside
+  the sandbox. A third-party project reports numbered addresses getting through; that claim is not confirmed.
 
 ### Daytona
 
@@ -365,7 +397,11 @@ allow rule per human approval.
   closest thing in the field to writing a guard by hand. Memory and disk pause/resume on microVMs.
 - **Weaknesses**: no sidecar, so no filtering, unless the request carries a `networkPolicy`. The default
   DNS-only mode can be bypassed by direct IP. gVisor, the strongest syscall isolation it offers, is
-  incompatible with the sidecar.
+  incompatible with the sidecar. The project now lives under `opensandbox-group` and a search on 2026-11-13
+  treats 1.2.0 as the current stable release: it adds port-scoped rules to the classic profile (the fast
+  profile rejects them) and rejects `networkPolicy` for the Docker network modes `none`, `pasta` and
+  `slirp4netns`. An upstream issue (#2329) reports established TCP sessions surviving a tightened policy on
+  server 0.2.1 and egress 1.1.4; it was not checked against 1.2.0.
 
 ### Kubernetes agent-sandbox
 
@@ -375,7 +411,9 @@ allow rule per human approval.
   Service-selector label spoofing.
 - **Weaknesses**: its own threat model says "Agent Sandbox itself does not implement isolation". The
   template's default egress allows everything except private and metadata ranges, and DNS goes to public
-  resolvers. A bare `Sandbox` gets none of that. The router's default authoriser is `AllowAll`.
+  resolvers. A bare `Sandbox` gets none of that. The router's default authoriser is `AllowAll`. The core API reached `v1beta1` with v0.5.0 on 2026-06-24 and
+  the quickstart now covers gVisor on KIND and Kata on minikube; sources disagree on the latest release, so
+  the analysed commit is the only firm reference.
 
 ### llm-sandbox
 
@@ -384,7 +422,9 @@ allow rule per human approval.
   GHSA-crfw-xvcm-hjxj (found on the repository, not yet in the global database). Package-name allow-lists
   per ecosystem, against shell injection.
 - **Weaknesses**: root, open network and no limits by default. `runtime_configs` is passed through unfiltered,
-  as its own documentation warns. `SecurityPolicy` is a regex that `run()` never calls.
+  as its own documentation warns. `SecurityPolicy` is a regex that `run()` never calls. The archive-extraction advisory
+  (GHSA-crfw-xvcm-hjxj) was fixed in 0.3.45 on 2026-09-28, and 0.3.46 followed on 2026-10-16 (search result of
+  2026-11-13); its severity and CVE identifier were not found. The README still calls the policies advisory.
 
 ### Modal Sandboxes
 
@@ -396,7 +436,10 @@ allow rule per human approval.
   gVisor is a user-space kernel:
   [CVE-2026-96812](https://osv.dev/vulnerability/CVE-2026-96812) (escape through CUSE passthrough) and
   [CVE-2025-2713](https://osv.dev/vulnerability/CVE-2025-2713) affect gVisor itself. Whether they apply to
-  Modal's deployment is not known.
+  Modal's deployment is not known. Per Modal's SDK release notes seen in a search on 2026-11-13, gVisor is
+  still the default runtime, `runtime="vm"` selects a full VM since 1.6.0 (2026-09-28), a running sandbox's
+  outbound policy can be replaced (`updateNetworkPolicy`, described by a third party as alpha) and the domain
+  allowlist is described as beta with a domain-fronting caveat.
 
 ### Vercel Sandbox
 
@@ -406,7 +449,11 @@ allow rule per human approval.
   sandbox. Policy replaced while the sandbox runs. Very candid documentation of its own pitfalls
   ([Firewall](https://vercel.com/docs/sandbox/concepts/firewall)).
 - **Weaknesses**: `allow-all` by default. DNS open under `subnets.allow`. Domain fronting acknowledged. UDP
-  and ICMP not documented.
+  and ICMP not documented. Per Vercel's changelog seen in a search on 2026-11-13, the full firewall
+  (egress policies, credential brokering, request proxying, request matchers) reached the Hobby plan on
+  2026-08-05 and Postgres connections pass through it; a third-party summary says the firewall runs on the
+  host and filters DNS with the same domain policy, which this entry's DNS remark does not reflect and which
+  was not checked in the documentation.
 
 ### Cloudflare Sandbox
 
@@ -422,15 +469,24 @@ allow rule per human approval.
 
 - **AWS AgentCore Code Interpreter**: three network modes and an IAM role, nothing finer. In "sandbox" mode,
   DNS leaked and was turned into a command channel. AWS first called it intended behaviour. The SDK had an
-  argument injection, [CVE-2026-16796](https://nvd.nist.gov/vuln/detail/CVE-2026-16796).
+  argument injection, [CVE-2026-16796](https://nvd.nist.gov/vuln/detail/CVE-2026-16796). Sources disagree on whether the
+  "sandbox" mode DNS channel was later closed: BeyondTrust's timeline says remediated on 2026-04-15, another
+  vendor says a fix was validated on 2025-12-30, a March 2026 note and a press report say AWS only changed
+  the documentation, and a lab test found VPC mode still leaking DNS. Test DNS egress before relying on it.
 - **Azure dynamic sessions**: one Hyper-V VM per session, at the scale of Copilot. Egress is a single on/off
   switch per pool, closed by default. The managed identity is off by default; the documentation warns that
-  turning it on lets any code in the session mint tokens.
+  turning it on lets any code in the session mint tokens. A search on 2026-11-13 reports a separate preview
+  resource type, Azure Container Apps Sandboxes (June 2026), with per-sandbox egress rules according to one
+  source; dynamic sessions themselves keep the per-pool egress switch.
 - **Docker Sandboxes**: a microVM with its own Docker Engine. Deny by default with presets, rules per host,
   credentials injected by the proxy. In 2026, its file-sharing bridge was the weak point:
   [CVE-2026-77179](https://nvd.nist.gov/vuln/detail/CVE-2026-77179) and
   [CVE-2026-79994](https://nvd.nist.gov/vuln/detail/CVE-2026-79994) (symlink TOCTOU escapes), and
   [CVE-2026-17106](https://osv.dev/vulnerability/GO-2026-6253), a bug in the shared `moby/go-archive` library.
+  A search on 2026-11-13 adds CVE-2026-103916 (`sbx cp` does not enforce the access restrictions, fixed in
+  0.51.0 on 2026-11-03), and describes CVE-2026-79994 as a flaw of the guest-to-host Unix-socket relay, where
+  the entry above calls it a symlink race; CVE-2026-77179 is a flaw of the virtio-fs host server, fixed in
+  0.42.0. Which description is right was not settled.
 
 ## Primary source examples
 
@@ -449,16 +505,21 @@ That means imports, a registry of 152 sensitive functions, and code arriving as 
 rewritten and run under a budget. It is the only solution that confines one function rather than a process,
 a pod or a VM. It is one of two that write their own policy from observed behaviour; OpenShell is the other,
 with an advisor rather than a recording. Unlike most solutions, which avoid the problem by never
-unpickling, it returns real Python objects from the sandbox, and it unpickles them under a guard. And it lets the user choose among five kernel boundaries, from Landlock with no extra binary up to a
-full QEMU VM.
+unpickling, it returns real Python objects from the sandbox, and it unpickles them under a guard. And it lets the user choose among eight Linux boundaries, from Landlock with no extra binary, through namespaces
+(`bwrap`, `unshare`, `firejail`) and a user-space kernel (`gvisor`), up to a VM with its own kernel (`smolvm`,
+`qemu`, `qemu-microvm`), plus Seatbelt on macOS and AppContainer on Windows.
 
 **What the field does better.**
 
-- *A stronger default boundary.* Platforms give every sandbox its own kernel. PySandboxes' strongest option,
-  QEMU, is a full VM, not a microVM restored from a snapshot, and the four other kernel providers share the
-  host kernel.
+- *A stronger default boundary.* Platforms give every sandbox its own kernel. PySandboxes offers a VM
+  (`smolvm`, a micro-VM that starts in about a second; `qemu` and `qemu-microvm`, which take 13 to 20 s) and a
+  user-space kernel (`gvisor`), but none is the default: the default is `landlock`, which shares the host
+  kernel, as do `bwrap`, `unshare` and `firejail`. None restores a VM from a snapshot. A VM run without
+  `/dev/kvm` is emulated and carries no isolation claim.
 - *The network above layer 4.* There is no TLS interception, no method or path rules, no protocol-aware
-  rules. Nine solutions match domain rules on the live connection (SNI, `Host`, proxy). PySandboxes resolves names once, when the profile is parsed.
+  rules. Nine solutions match domain rules on the live connection (SNI, `Host`, proxy). PySandboxes resolves names once at start (`net-resolve=pinned`), or when the program asks, through a
+  filtering resolver on the host (`net-resolve=runtime`, on most providers); it still sees no SNI and no `Host`
+  header.
 - *Secrets.* The pattern "the secret never enters the sandbox" (placeholders, header injection, SigV4
   re-signing) is widespread. PySandboxes filters the environment, but a granted secret is passed in
   clear.
@@ -472,6 +533,9 @@ full QEMU VM.
 - No rule can name ICMP. ICMP is only blocked as a side effect, and the `IPPROTO_ICMP` entry of the
   `iptables` generator ([`netfilter.py`](../pysandboxes/netfilter.py)) is never used.
 - `landlock` cannot filter UDP, which the [Landlock page](landlock.md) already says.
+- DNS stays a low-rate exfiltration channel under every provider that owns a network namespace, and `smolvm`
+  lets a program look up subdomains of an allowed host; see [Weaknesses](weaknesses.md#os-provider-limitations).
+- `smolvm` filters TCP by address only, so a rule with a port opens every port of its address.
 - QEMU and QEMU microvm enforce `expose-ro` with read-only 9p exports, covered by end-to-end tests; see the [provider audit](audit-native-guard-study.md#qemu-expose-ro-is-enforced-by-a-read-only-9p-export).
 
 **Ideas worth borrowing, in decreasing order of value for the effort.**
@@ -491,14 +555,14 @@ full QEMU VM.
 
 | Solution | Analysed at |
 |---|---|
-| PySandboxes | [pprados/pysandboxes](https://www.github.com/pprados/pysandboxes), `develop` at `bda508f` |
+| PySandboxes | [pprados/pysandboxes](https://www.github.com/pprados/pysandboxes), `develop` at `2601d77b` (release 0.12.0, re-read 2026-11-13) |
 | RestrictedPython | [`c5066f7`](https://github.com/zopefoundation/RestrictedPython/tree/c5066f7d5b2c7538c67c2f8c4635d681c2b325aa) |
 | smolagents | [`c30b115`](https://github.com/huggingface/smolagents/tree/c30b115286e000e98711fae5e85993547b73d826) |
 | langchain-sandbox | [`fac037c`](https://github.com/langchain-ai/langchain-sandbox/tree/fac037cb46cac3d60aa370feeb1e1f68a1ed91fa) |
 | OpenShell | [`021400b`](https://github.com/NVIDIA/OpenShell/tree/021400be8af471f8669369e679de3e18cf0bd672), [docs](https://docs.nvidia.com/openshell/) |
 | sandbox-runtime | [`5d196e0`](https://github.com/anthropics/sandbox-runtime/tree/5d196e0937ccdd9bedb83b27879a7a2ecd3a0dd2), [Claude Code sandboxing](https://code.claude.com/docs/en/sandboxing) |
 | Codex | [`444da31`](https://github.com/openai/codex/tree/444da310e108da16aaeb18fd790b0ac464f08aca) |
-| microsandbox | [`b3843eb`](https://github.com/superradcompany/microsandbox/tree/b3843eb12344c928662323378b9dee113b12f397) (v0.7.5) |
+| microsandbox | [`b3843eb`](https://github.com/superradcompany/microsandbox/tree/b3843eb12344c928662323378b9dee113b12f397) (v0.7.5); a search on 2026-11-13 shows [PR 2040](https://github.com/superradcompany/microsandbox/pull/2040) bumping it to 0.7.15, not re-read |
 | E2B | SDK [`f713914`](https://github.com/e2b-dev/E2B/tree/f7139140d34ad440e35f4ec7d1bdd183f1b35a6e), runtime [`23f7a0f`](https://github.com/e2b-dev/runtime/tree/23f7a0f89dc3645afc5a3026c363bdd6c6f281c1), [docs](https://e2b.dev/docs) |
 | Daytona | v0.190.0 [`01c502b`](https://github.com/daytonaio/daytona/tree/01c502bb1f1ff8f2885d0cd490e043736083dca8) |
 | OpenSandbox | [`c7dc78a`](https://github.com/opensandbox-group/OpenSandbox/tree/c7dc78a4090e5de2b9119e9bd93952cae24f87bd) |
@@ -506,10 +570,18 @@ full QEMU VM.
 | llm-sandbox | [`7361f5e`](https://github.com/vndee/llm-sandbox/tree/7361f5e5ca06b5597f977f13efbe859f481cb01e) |
 | Modal | client [`83cd277`](https://github.com/modal-labs/modal-client/tree/83cd27748d1fc0ac6adbf5acc8e9a3bfbf85208e), [networking](https://modal.com/docs/guide/sandbox-networking), [security](https://modal.com/docs/guide/security) |
 | Vercel | client [`6fc8e16`](https://github.com/vercel/sandbox/tree/6fc8e16fd606beab8f99546482f11cc40c3e5a8e), [firewall](https://vercel.com/docs/sandbox/concepts/firewall) |
-| Cloudflare | client [`f9e972a`](https://github.com/cloudflare/sandbox-sdk/tree/f9e972a14123bef3b93e9bb337bab6e83419fe7e) (1.0 preview), [Containers outbound traffic](https://developers.cloudflare.com/containers/platform-details/outbound-traffic) |
+| Cloudflare | client [`f9e972a`](https://github.com/cloudflare/sandbox-sdk/tree/f9e972a14123bef3b93e9bb337bab6e83419fe7e) (1.0 preview; a search on 2026-11-13 shows 1.0.0 released and 1.0.3 on 2026-10-22, and says a container has no Internet unless `enableInternet: true` is passed, whereas the table above gives it as open: not re-read, so that cell may be out of date), [Containers outbound traffic](https://developers.cloudflare.com/containers/platform-details/outbound-traffic) |
 | AWS AgentCore | [AgentCore documentation](https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/code-interpreter-tool.html), [BeyondTrust](https://www.beyondtrust.com/blog/entry/pwning-aws-agentcore-code-interpreter), [Unit 42](https://unit42.paloaltonetworks.com/bypass-of-aws-sandbox-network-isolation-mode/) |
 | Azure dynamic sessions | [Container Apps sessions](https://learn.microsoft.com/en-us/azure/container-apps/sessions) |
 | Docker Sandboxes | [Docker Sandboxes documentation](https://docs.docker.com/ai/sandboxes/security/) |
 
-CVE numbers were checked on 2026-10-01. Only CVE-2026-65086 (OpenShell) was seen in secondary sources alone,
-and it is quoted as such.
+CVE numbers were checked on 2026-10-01 against NVD, OSV and the GitHub Advisory Database. The ones added on
+2026-11-13 come from search results and were not looked up in those registries.
+
+On 2026-11-13, all eighteen other entries were re-checked through one web search each. The result summaries
+were read, not the pages in full, and nothing was fetched from the vendors' repositories: what a search
+returned is quoted as such in the entry, with its date. Daytona matches the entry above (the public
+repository is no longer maintained and the platform went to a private codebase in June 2026, after v0.190.0
+of 2026-06-23); langchain-sandbox was archived on 2026-01-14. The analysed commits, the claims drawn from the
+source code and the feature matrix keep their 2026-10-01 state, and no matrix cell was changed even where a
+search suggests it may be out of date (Cloudflare's default egress, Vercel's DNS).
