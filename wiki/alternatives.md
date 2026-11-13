@@ -247,7 +247,11 @@ none of those cells changed: `mitm-ca.ts` and a `tlsTerminate` option back L1, `
 backs N6, `SandboxAskCallback` takes only a host and a port (so L3 stays `N`: the decision does not depend on
 the protocol), `SandboxViolationStore` and the two violation monitors back O1, `updateConfig()` and per-command
 lists leave C3 at `P`, and the only timeouts found are internal to the proxies, with no CPU or memory limits.
-No other cell was re-derived from code. Two rows stand out. The language-level rows (P1 to P5) are empty for every solution outside family 1.
+The OpenShell column was read at `7cfa0c09` for I3, C4, C5, C6, O1, R1 and R3 and none of those cells changed: five
+compute drivers back I3, a policy-advisor skill and an `openshell-prover` crate back C4 and C5, a manual or
+automatic `approval_mode` and `prover_delta` audit events back C6, `openshell-ocsf` backs O1, `openshell-vfio`
+backs R3, and R1 stays `P` because only a PID limit was found, not memory or CPU. No other cell was re-derived
+from code. Two rows stand out. The language-level rows (P1 to P5) are empty for every solution outside family 1.
 Learning or advisor mode (C4) exists only in PySandboxes and OpenShell, and partly in Codex, which adds one
 allow rule per human approval.
 
@@ -360,8 +364,12 @@ allow rule per human approval.
   isolation primitives are not named there, so the Landlock and seccomp description above was not rechecked
   against 0.1.x. A keyword search of the crates at `main` commit `7cfa0c09` (2026-11-13) still finds
   `network_broker.rs` in `openshell-sandbox` and the words `seccomp` and `landlock` in that crate's sources and
-  README, and a `rego` policy in `openshell-supervisor-network`; it also finds new crates, among them an `mxc`
-  compute driver. Nothing more was read.
+  README, and a `rego` policy in `openshell-supervisor-network`; its `crates` directory now lists compute
+  drivers for Docker, Kubernetes, Podman, a VM and `mxc`, credential drivers (`vault`, `db-credstore`,
+  `kubernetes-secrets`), a `openshell-prover` crate with its CLI, an `openshell-vfio` crate that binds GPUs
+  through sysfs, an `openshell-ocsf` crate for structured audit events and a Podman driver that sets a default
+  per-sandbox PID limit of 2048 (`DEFAULT_SANDBOX_PIDS_LIMIT`). Only crate names and the places named here were
+  read.
 
 ### Anthropic sandbox-runtime
 
