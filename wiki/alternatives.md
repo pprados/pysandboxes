@@ -622,10 +622,20 @@ unpickling, it returns real Python objects from the sandbox, and it unpickles th
 CVE numbers were checked on 2026-10-01 against NVD, OSV and the GitHub Advisory Database. The ones added on
 2026-11-13 come from search results and were not looked up in those registries.
 
-On 2026-11-13, all eighteen other entries were re-checked through one web search each. The result summaries
-were read, not the pages in full, and nothing was fetched from the vendors' repositories: what a search
-returned is quoted as such in the entry, with its date. Daytona matches the entry above (the public
-repository is no longer maintained and the platform went to a private codebase in June 2026, after v0.190.0
-of 2026-06-23); langchain-sandbox was archived on 2026-01-14. The analysed commits, the claims drawn from the
-source code and the feature matrix keep their 2026-10-01 state, and no matrix cell was changed even where a
-search suggests it may be out of date (Cloudflare's default egress, Vercel's DNS).
+On 2026-11-13, all eighteen other entries were re-checked in three passes. First, one web search each, whose
+result summaries were read; what a search returned is quoted as such in the entry, with its date. Second, a
+primary page of each (README, documentation page or releases page) was fetched and compared with the text,
+and the entries were corrected where it disagreed. Third, for the twelve open-source projects below, a
+shallow clone of the default branch was searched by keyword, which is not a code analysis. Commits seen
+(all read on 2026-11-13): sandbox-runtime `0bbebed0`, OpenShell `7cfa0c09`, RestrictedPython `9d7aeb26`,
+microsandbox `28bdced5`, smolagents `96f33fa` (2026-10-06), llm-sandbox `abdddb2`, OpenSandbox `e564cd1`,
+Codex `69231e1`, E2B infra `ee78f06`, agent-sandbox `13470fe`, Daytona `ec4c21b` (2026-06-25, frozen) and
+langchain-sandbox `fac037c` (2026-01-14, archived). What the keyword searches found: smolagents still defines
+`MAX_OPERATIONS` (10,000,000) and `MAX_WHILE_ITERATIONS` (1,000,000); llm-sandbox ships `bubblewrap.py`,
+`nsjail.py` and `wsl2_bubblewrap.py` next to its container backends; agent-sandbox still has `AllowAll` as the
+router's default authoriser; Codex's `linux-sandbox` crate still holds `seccomp.rs`, `bwrap.rs` and
+`launcher.rs`; OpenSandbox's server configuration and examples still reference gVisor, Kata and Firecracker.
+The Daytona search for `domainAllowList` found nothing under `apps`, which proves nothing about the runner
+claim. The analysed commits of the table above, the claims drawn from the source code and the 45-feature
+matrix keep their 2026-10-01 state, and no matrix cell was changed even where a source suggests it may be out
+of date (Cloudflare's default egress, Vercel's DNS). Redoing them means reading the code of each project.
