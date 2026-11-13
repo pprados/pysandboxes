@@ -349,6 +349,15 @@ def test_only_the_full_nightly_is_titled_nightly() -> None:
     assert title == "${{ inputs.nightly == true && inputs.exclude-tcg != true && 'Nightly' || 'Full Gate' }}"
 
 
+def test_exclude_tcg_reaches_the_emulated_sample_row() -> None:
+    # The release leaves the TCG rows out for the integration suite and the samples alike.
+    jobs = _workflow(FULL_GATE_WORKFLOW)["jobs"]
+    assert jobs["samples"]["with"]["exclude-tcg"] == "${{ inputs.exclude-tcg == true }}"
+    samples = _workflow(FULL_GATE_WORKFLOW.parent / "samples.yml")
+    step = next(s for s in samples["jobs"]["vm-samples"]["steps"] if s.get("run") == "make sample-tests-vm-tcg")
+    assert "!inputs.exclude-tcg" in step["if"]
+
+
 def test_the_nightly_guard_and_the_skipped_suites_follow_the_nightly_input() -> None:
     jobs = _workflow(FULL_GATE_WORKFLOW)["jobs"]
     guard = next(s for s in jobs["changes"]["steps"] if s.get("name", "").startswith("Check that the nightly"))
