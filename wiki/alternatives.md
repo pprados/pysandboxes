@@ -8,7 +8,7 @@ the code of this repository. The other solutions got one web search each that da
 page) was read and compared with the text, with uneven depth: for microsandbox, RestrictedPython and
 AWS AgentCore the pages read gave nothing new on network or isolation; the discrepancies found are
 corrected in the sections concerned (see the end of [Sources](#sources-and-commits-analysed)). The
-matrix was re-read against the code of the open-source projects on 2026-11-13, in two passes, and 32 cells were
+matrix was re-read against the code of the open-source projects on 2026-11-13, in three passes, and 34 cells were
 changed; the rows that no pass reached, and every cell of the closed services (documentation only), keep the
 evidence level of 2026-10-01. Verify claims before relying on them; projects
 change.*
@@ -200,11 +200,11 @@ Columns: **pysb** PySandboxes, **RPy** RestrictedPython, **smol** smolagents, **
 | P4 | AST restriction / rewriting | Y | Y | Y | N | - | N | N | N | - | - | N | N | N | N | N | N | - | - | - |
 | P5 | Per-function granularity | Y | P | P | N | - | - | - | - | - | - | - | - | P | - | - | - | - | - | - |
 | C2 | Default deny for everything | Y | P | P | P | Y | P | P | P | N | N | P | N | N | N | N | N | P | P | P |
-| C3 | Live update without restart | N | - | N | N | Y | P | P | N | Y | Y | Y | Y | N | Y | Y | Y | ? | ? | Y |
+| C3 | Live update without restart | N | - | N | N | Y | P | P | P | Y | Y | Y | Y | N | Y | Y | Y | ? | ? | Y |
 | C4 | Learning / advisor mode | Y | N | N | N | Y | N | P | N | N | N | N | N | N | N | N | N | N | N | N |
 | C5 | Formal verification of the policy | N | N | N | N | Y | N | N | N | N | N | N | N | N | N | N | N | N | N | N |
 | C6 | Human approval loop for denied actions | P | N | N | N | Y | Y | Y | N | N | N | N | N | N | N | N | N | N | N | N |
-| K1 | Environment filtering / secret scrubbing | Y | N | N | Y | Y | Y | Y | P | N | N | P | N | P | P | N | P | N | N | Y |
+| K1 | Environment filtering / secret scrubbing | Y | N | N | Y | Y | Y | Y | Y | N | N | P | N | P | P | N | P | N | N | Y |
 | E1 | Cold start / warm pool | P | - | P | N | N | - | P | P | P | Y | Y | Y | Y | Y | Y | ? | ? | Y | ? |
 | E2 | Snapshot, pause/resume, fork | N | - | N | P | P | N | N | Y | Y | Y | Y | P | P | Y | Y | P | N | N | N |
 | E3 | Persistence across sessions | N | - | P | Y | Y | P | P | Y | Y | Y | Y | Y | P | Y | Y | Y | N | N | N |
@@ -218,8 +218,9 @@ Columns: **pysb** PySandboxes, **RPy** RestrictedPython, **smol** smolagents, **
 | G1 | SDKs, MCP, agent frameworks | Y | P | Y | P | Y | Y | Y | Y | Y | Y | Y | Y | Y | Y | Y | Y | Y | Y | Y |
 | G2 | Safety of results returned to the host | Y | - | Y | Y | P | - | Y | P | Y | Y | Y | Y | Y | P | ? | P | ? | ? | ? |
 
-Thirty-two cells were changed on 2026-11-13. A second pass re-read the code column by column and changed ten more
-(the tenth is E2B F3, `?` to `Y`: `envd` implements upload and download, and the legend's `Y` means a transfer exists):
+Thirty-four cells were changed on 2026-11-13. A second pass re-read the code column by column and changed twelve more
+(microsandbox C3 went from `N` to `P` because `msb modify` rotates secrets and their allowed hosts live, and K1 from `P` to `Y`
+because the host environment is never passed to the guest and secrets are placeholders; the last is E2B F3, `?` to `Y`: `envd` implements upload and download, and the legend's `Y` means a transfer exists):
 smolagents L3 and L4 (`P` to `N`, no network policy and no credential brokering in `remote_executors.py`),
 langchain-sandbox S1 and P5 (`P` to `N`, isolation comes from Deno flags per sandbox instance), Codex G2 (`?` to `Y`,
 plain-text output capped at 1 MiB, no deserialisation of objects), Daytona I1 (`Y` to `P`, Sysbox appears only in the
