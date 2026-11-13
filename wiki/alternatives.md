@@ -377,7 +377,10 @@ allow rule per human approval.
   raises `ExecutionTimeoutError` from a worker thread it cannot kill; and a keyword search of
   `remote_executors.py` finds no `network_mode`, `mem_limit`, `cap_drop`, `read_only`, `security_opt` or
   `pids_limit`. The remote executors are still `E2BExecutor`, `DockerExecutor`, `ModalExecutor` and
-  `BlaxelExecutor`. Issue 2094 was still open when fetched on 2026-11-13, with a suggested fix that adds
+  `BlaxelExecutor`. Their base class serialises variables with a `SafeSerializer` (a `safe:` JSON prefix) and
+  keeps a `pickle:` fallback behind `allow_pickle`, which defaults to `False` and whose docstring warns that
+  pickle deserialisation can execute arbitrary code; this is why result safety (G2) is `Y` by default and
+  becomes a parent-side risk when a user turns the flag on. Issue 2094 was still open when fetched on 2026-11-13, with a suggested fix that adds
   `ctypes` to the list; the repository has no commit after 2026-10-06 in the clone read.
 
 ### langchain-sandbox
