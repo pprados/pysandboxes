@@ -106,6 +106,21 @@ def test_a_guest_that_cannot_be_reached_answers_failure_not_an_exception() -> No
     assert gl.send(port, TOKEN, ADD) == 1
 
 
+def test_the_helper_listens_when_it_is_started() -> None:
+    # The program of the sandbox resolves a name at once: a helper still importing would refuse the host's request.
+    with socket.socket() as free:
+        free.bind(("127.0.0.1", 0))
+        port = free.getsockname()[1]
+
+    helper = gl.start_helper(port, TOKEN, "/ipt")
+    try:
+        socket.create_connection(("127.0.0.1", port), timeout=1).close()
+    finally:
+        assert helper.stdin is not None
+        helper.stdin.close()
+        helper.wait(timeout=10)
+
+
 def test_the_guest_enforcer_opens_each_port_of_a_name_rule_through_the_channel(monkeypatch: pytest.MonkeyPatch) -> None:
     sent: list[list[str]] = []
 
