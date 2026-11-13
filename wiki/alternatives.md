@@ -8,7 +8,7 @@ the code of this repository. The other solutions got one web search each that da
 page) was read and compared with the text, with uneven depth: for microsandbox, RestrictedPython and
 AWS AgentCore the pages read gave nothing new on network or isolation; the discrepancies found are
 corrected in the sections concerned (see the end of [Sources](#sources-and-commits-analysed)). The
-matrix was re-read against the code of the open-source projects on 2026-11-13, in three passes, and 38 cells were
+matrix was re-read against the code of the open-source projects on 2026-11-13, in three passes, and 39 cells were
 changed; the rows that no pass reached, and every cell of the closed services (documentation only), keep the
 evidence level of 2026-10-01. Verify claims before relying on them; projects
 change.*
@@ -207,7 +207,7 @@ Columns: **pysb** PySandboxes, **RPy** RestrictedPython, **smol** smolagents, **
 | K1 | Environment filtering / secret scrubbing | Y | N | N | Y | Y | Y | Y | Y | N | N | P | N | P | P | N | P | N | N | Y |
 | E1 | Cold start / warm pool | P | - | P | N | N | - | P | P | P | Y | Y | Y | Y | Y | Y | ? | ? | Y | ? |
 | E2 | Snapshot, pause/resume, fork | N | - | N | P | P | N | N | Y | Y | Y | Y | P | P | Y | Y | P | N | N | N |
-| E3 | Persistence across sessions | N | - | P | Y | Y | P | P | Y | Y | Y | Y | Y | P | Y | Y | Y | N | N | N |
+| E3 | Persistence across sessions | N | - | P | Y | Y | P | P | Y | Y | Y | Y | Y | P | Y | Y | Y | Y | N | N |
 | R1 | CPU / memory limits | P | N | P | P | P | N | N | Y | Y | Y | Y | Y | P | Y | Y | P | ? | P | P |
 | R2 | Timeouts / operation budgets | Y | P | Y | Y | Y | N | Y | Y | Y | Y | Y | P | Y | Y | Y | P | Y | Y | N |
 | R3 | GPU | N | - | N | N | Y | N | N | N | N | Y | P | Y | N | Y | N | N | ? | P | ? |
@@ -218,7 +218,10 @@ Columns: **pysb** PySandboxes, **RPy** RestrictedPython, **smol** smolagents, **
 | G1 | SDKs, MCP, agent frameworks | Y | P | Y | P | Y | Y | Y | Y | Y | Y | Y | Y | Y | Y | Y | Y | Y | Y | Y |
 | G2 | Safety of results returned to the host | Y | - | Y | Y | P | - | Y | P | Y | Y | Y | Y | Y | P | ? | P | ? | ? | ? |
 
-Thirty-eight cells were changed on 2026-11-13. The security page of Docker Sandboxes, read that day, says the agent has
+Thirty-nine cells were changed on 2026-11-13. AgentCore E3 went from `N` to `Y`: its file system configuration page lets a code
+interpreter mount Amazon S3 Files or EFS access points, whose data is "persisted and managed in your own AWS account" and shared
+across sessions. The Azure session pool page, read the same day, says untrusted code has full access to the container, including its
+environment variables, secrets and files, and that egress is a per-pool setting, which agrees with K1 and C2. The security page of Docker Sandboxes, read that day, says the agent has
 full control inside the microVM, including `sudo`, so S3 went from `?` to `N`, and that with `--clone` the repository is mounted
 read-only and the agent works on a private clone, so F2 went from `?` to `P`. The AgentCore overview and the Azure sessions
 overview were also re-read and give nothing that changes a cell (AgentCore lists CloudTrail logging and network modes, Azure
