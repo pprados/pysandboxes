@@ -483,9 +483,16 @@ allow rule per human approval.
 
 - **Bet**: orchestration convenience over containers you already run. The README read on 2026-11-13 now also
   lists local backends without a daemon: Bubblewrap, NsJail, Windows MXC and WSL2 Bubblewrap, next to Docker,
-  Podman and Kubernetes. The analysed commit has only the container backends, and the new ones were not
-  analysed, so the "containers" description in the landscape table and the weaknesses below apply to the
-  analysed commit only.
+  Podman and Kubernetes. The analysed commit has only the container backends, so the "containers" description
+  in the landscape table and the weaknesses below apply to the container backends. Code read on 2026-11-13 at
+  commit `abdddb2` (2026-11-06): `bubblewrap.py` starts `bwrap` with `--unshare-all`, `--unshare-user`,
+  `--disable-userns`, `--cap-drop ALL`, `--clearenv`, `--new-session` and `--die-with-parent`, adds
+  `--share-net` only when the sandbox network is `host`, mounts the project read-only and loads a seccomp
+  filter; `nsjail.py` builds an optional Kafel seccomp policy and passes a time limit. These local backends are
+  closed to the network by default, unlike the container backends. The container backend still starts as
+  `"user": "root"` (`docker.py`), tar extraction still uses `tarfile.data_filter` (`core/mixins.py`), and
+  `is_safe` is still defined (`core/session_base.py`) without a caller anywhere in the package, which matches the
+  claim that `run()` does not apply the policy.
 - **Strengths**: fail-closed tar extraction (`tarfile.data_filter`), written after
   GHSA-crfw-xvcm-hjxj (found on the repository, not yet in the global database). Package-name allow-lists
   per ecosystem, against shell injection.
