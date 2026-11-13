@@ -181,7 +181,7 @@ Columns: **pysb** PySandboxes, **RPy** RestrictedPython, **smol** smolagents, **
 | N7 | Domain/FQDN rules | Y | N | N | P | Y | Y | P | Y | Y | P | Y | N | N | Y | Y | Y | N | N | Y |
 | L1 | TLS interception | N | N | N | N | Y | Y | P | Y | N | N | Y | N | N | P | Y | Y | N | N | Y |
 | L2 | HTTP method / path / header / query rules | N | N | N | N | P | P | Y | N | N | N | P | N | N | N | Y | Y | N | N | N |
-| L3 | Protocol-aware rules beyond HTTP | N | N | P | N | P | N | N | N | N | N | P | P | N | N | P | N | N | N | N |
+| L3 | Protocol-aware rules beyond HTTP | N | N | P | N | P | N | P | N | N | N | P | P | N | N | P | N | N | N | N |
 | L4 | Credential injection / brokering | N | N | P | N | Y | Y | Y | Y | P | N | Y | N | N | Y | Y | Y | N | P | Y |
 | L5 | Identity of the caller in network policy | N | N | N | N | Y | P | P | N | N | N | P | P | N | N | N | N | N | N | N |
 | F1 | Path-level read/write allow/deny | Y | N | N | Y | Y | Y | Y | Y | N | N | Y | P | P | N | N | N | ? | N | P |
@@ -214,7 +214,10 @@ Columns: **pysb** PySandboxes, **RPy** RestrictedPython, **smol** smolagents, **
 | G1 | SDKs, MCP, agent frameworks | Y | P | Y | P | Y | Y | Y | Y | Y | Y | Y | Y | Y | Y | Y | Y | Y | Y | Y |
 | G2 | Safety of results returned to the host | Y | - | Y | Y | P | - | ? | P | Y | Y | Y | Y | Y | P | ? | P | ? | ? | ? |
 
-Four cells were changed on 2026-11-13. S3 and K1 for llm-sandbox went from `N` to `P`, because its local
+Five cells were changed on 2026-11-13. L3 for Codex went from `N` to `P`: in `network-proxy/src` at `69231e1`,
+decisions and audit events are keyed by a `NetworkProtocol` (`Http`, `HttpsConnect`, `Socks5Tcp`, `Socks5Udp`)
+and a limited mode keeps SOCKS5 UDP and non-HTTPS SOCKS5 TCP blocked, which is protocol-aware handling beyond
+HTTP, though not a rule language for those protocols. S3 and K1 for llm-sandbox went from `N` to `P`, because its local
 Bubblewrap backend (`bubblewrap.py` at `abdddb2`) runs with `--unshare-user` and `--cap-drop ALL` and starts
 from `--clearenv`, while its container backend still starts as root. I3 for sandbox-runtime went from `N` to `P`, because its code at
 `0bbebed0` offers a Windows backend choice (`windows.backend` set to `'mxc'`); on Linux and macOS it has one
@@ -236,7 +239,10 @@ egress code, and the execd build skips non-Linux targets. The E2B column was re-
 mode (`NonDNSUDPMode`), the interception and proxy hooks are stubs in the open-source build, `update_network.go`
 replaces the policy at run time, no GPU code appears in the orchestrator or the API, and `seccomp` appears only
 around helper tools (`debugfs`, template builds), not around the guest, so S1 `P` rests on Firecracker itself
-and was not confirmed in this repository. No other cell was re-derived from code. Two rows stand out. The language-level rows (P1 to P5) are empty for every solution outside family 1.
+and was not confirmed in this repository. The Codex column was also read for L2, N3, C6 and R1: the proxy has an `allowed_methods` check in `mitm.rs` and
+`methods` and `path_prefixes` rules in its SOCKS5 tests, `enable_socks5_udp` is on by default, a
+`NetworkPolicyDecision` has `Deny` and `Ask`, and a search for `RLIMIT`, `cgroup` and `setrlimit` finds no
+resource limits; those cells stand. No other cell was re-derived from code. Two rows stand out. The language-level rows (P1 to P5) are empty for every solution outside family 1.
 Learning or advisor mode (C4) exists only in PySandboxes and OpenShell, and partly in Codex, which adds one
 allow rule per human approval.
 
