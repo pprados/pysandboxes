@@ -202,7 +202,7 @@ Columns: **pysb** PySandboxes, **RPy** RestrictedPython, **smol** smolagents, **
 | C6 | Human approval loop for denied actions | P | N | N | N | Y | Y | Y | P | N | N | N | N | N | N | N | N | N | N | N |
 | K1 | Environment filtering / secret scrubbing | Y | N | N | Y | Y | Y | Y | P | N | P | Y | N | P | P | N | P | N | N | Y |
 | E1 | Cold start / warm pool | P | - | P | N | N | - | P | P | P | Y | Y | Y | Y | Y | Y | ? | ? | Y | ? |
-| E2 | Snapshot, pause/resume, fork | N | - | N | P | P | N | N | Y | Y | Y | Y | N | P | Y | Y | P | N | N | N |
+| E2 | Snapshot, pause/resume, fork | N | - | N | P | P | N | N | Y | Y | Y | Y | P | P | Y | Y | P | N | N | N |
 | E3 | Persistence across sessions | N | - | P | Y | Y | P | P | Y | Y | Y | P | Y | P | Y | Y | Y | N | N | N |
 | R1 | CPU / memory limits | P | N | P | P | P | N | N | Y | Y | Y | Y | Y | P | Y | Y | P | ? | P | P |
 | R2 | Timeouts / operation budgets | Y | P | Y | Y | Y | N | Y | Y | Y | Y | P | P | Y | Y | Y | P | Y | Y | N |
@@ -214,7 +214,10 @@ Columns: **pysb** PySandboxes, **RPy** RestrictedPython, **smol** smolagents, **
 | G1 | SDKs, MCP, agent frameworks | Y | P | Y | P | Y | Y | Y | Y | Y | Y | Y | Y | Y | Y | Y | Y | Y | Y | Y |
 | G2 | Safety of results returned to the host | Y | - | Y | Y | P | - | ? | P | Y | Y | Y | Y | Y | P | ? | P | ? | ? | ? |
 
-Six cells were changed on 2026-11-13. E2 for llm-sandbox went from `N` to `P`: `docker.py` at `abdddb2` takes a
+Seven cells were changed on 2026-11-13. E2 for agent-sandbox went from `N` to `P`: at `13470fe` the `Sandbox`
+API has an `operatingMode` of `Suspended`, with a `Suspended` condition that turns true once the backing Pod is
+terminated, and `volumeClaimTemplates` keep state on volumes; the memory and process state are not kept. E2 for
+llm-sandbox went from `N` to `P`: `docker.py` at `abdddb2` takes a
 `commit_container` option that commits the container to a new image, which saves the filesystem but not the
 process or memory state. L3 for Codex went from `N` to `P`: in `network-proxy/src` at `69231e1`,
 decisions and audit events are keyed by a `NetworkProtocol` (`Http`, `HttpsConnect`, `Socks5Tcp`, `Socks5Udp`)
@@ -252,7 +255,10 @@ lists leave C3 at `P`, and the only timeouts found are internal to the proxies, 
 The OpenShell column was read at `7cfa0c09` for I3, C4, C5, C6, O1, R1 and R3 and none of those cells changed: five
 compute drivers back I3, a policy-advisor skill and an `openshell-prover` crate back C4 and C5, a manual or
 automatic `approval_mode` and `prover_delta` audit events back C6, `openshell-ocsf` backs O1, `openshell-vfio`
-backs R3, and R1 stays `P` because only a PID limit was found, not memory or CPU. The llm-sandbox column was also read for E1, R1, R2, S1 and O1: a `pool` package with Docker, Kubernetes and
+backs R3, and R1 stays `P` because only a PID limit was found, not memory or CPU. The agent-sandbox column was also read for E1, E3, R2 and S3: a `SandboxWarmPool` type with `Recreate` and
+`OnReplenish` update strategies backs E1, `volumeClaimTemplates` back E3, a `Lifecycle` with a `shutdownTime`
+backs R2, and a search for `runAsNonRoot` and `runAsUser` in the controllers finds nothing, so S3 stays `N`.
+The llm-sandbox column was also read for E1, R1, R2, S1 and O1: a `pool` package with Docker, Kubernetes and
 Podman pools backs E1, `default_timeout` and `execution_timeout` back R2, limits only through the pass-through
 `runtime_configs` keep R1 at `P`, a `security/seccomp.py` module backs S1, and the policy's issue severities
 are not applied by `run()`, so O1 stays `N`. The smolagents column was read at
