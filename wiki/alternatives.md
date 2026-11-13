@@ -397,8 +397,9 @@ allow rule per human approval.
   closest thing in the field to writing a guard by hand. Memory and disk pause/resume on microVMs.
 - **Weaknesses**: no sidecar, so no filtering, unless the request carries a `networkPolicy`. The default
   DNS-only mode can be bypassed by direct IP. gVisor, the strongest syscall isolation it offers, is
-  incompatible with the sidecar. The project now lives under `opensandbox-group` and a search on 2026-11-13
-  treats 1.2.0 as the current stable release: it adds port-scoped rules to the classic profile (the fast
+  incompatible with the sidecar. The project now lives under `opensandbox-group` and its releases page, read on
+  2026-11-13, marks 1.2.1 as the latest release (1.1.0 of 2026-09-21 was the first umbrella release). A search
+  of the same day describes 1.2.0, which adds port-scoped rules to the classic profile (the fast
   profile rejects them) and rejects `networkPolicy` for the Docker network modes `none`, `pasta` and
   `slirp4netns`. An upstream issue (#2329) reports established TCP sessions surviving a tightened policy on
   server 0.2.1 and egress 1.1.4; it was not checked against 1.2.0.
