@@ -13,6 +13,7 @@ arguments, answered by the return code of ``iptables``.
 import hmac
 import json
 import os
+import select
 import socket
 import subprocess
 import sys
@@ -20,6 +21,7 @@ import threading
 from typing import Callable
 
 TIMEOUT = 10.0
+READY_TIMEOUT = 30.0
 _VERBS = ("-A", "-D")
 _CHAIN = "LEARNED"
 
@@ -91,16 +93,22 @@ def send(port: int, token: str, argv: list[str], host: str = "127.0.0.1") -> int
 
 
 def start_helper(port: int, token: str, iptables: str) -> "subprocess.Popen[bytes]":
-    """Start the process that serves ``port``; the token goes through its stdin, and closing the pipe ends it."""
+    """Start the process that serves ``port``, and return once it listens.
+
+    The token goes through its stdin, and closing the pipe ends it. The helper imports this package before it
+    listens, which takes seconds on a guest: a program that resolved a name sooner would have its address refused.
+    """
     helper = subprocess.Popen(
         [sys.executable, "-c", "from pysandboxes.remote.guest_learned import main; main()", str(port), iptables],
         stdin=subprocess.PIPE,
-        stdout=subprocess.DEVNULL,
+        stdout=subprocess.PIPE,
         env={**os.environ, "PYTHONPATH": os.pathsep.join(p for p in sys.path if p)},
     )
-    assert helper.stdin is not None
+    assert helper.stdin is not None and helper.stdout is not None
     helper.stdin.write(token.encode() + b"\n")
     helper.stdin.flush()
+    if select.select([helper.stdout], [], [], READY_TIMEOUT)[0]:
+        helper.stdout.readline()
     return helper
 
 
@@ -109,4 +117,5 @@ def main() -> None:
     port, iptables = int(sys.argv[1]), sys.argv[2]
     token = sys.stdin.readline().rstrip("\n")
     serve(port, token, iptables)
+    print("ready", flush=True)
     sys.stdin.read()
