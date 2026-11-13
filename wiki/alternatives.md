@@ -305,8 +305,9 @@ allow rule per human approval.
 - **Bet**: a single declarative `.py-sandboxes` whitelist, recorded by running the real application once in
   learning mode, then enforced twice. Python guards apply it inside the interpreter, and an OS provider
   translates it into a kernel boundary.
-- **Strengths**: the only solution that controls imports, a registry of 152 sensitive functions in eight
-  categories (`guard_api`), and code arriving as a string (the `eval-*` sub-language: parsed, rewritten, run
+- **Strengths**: import control (shared only with the local executor of smolagents, which has an
+  `authorized_imports` list), the only registry of 152 sensitive functions in eight categories
+  (`guard_api`), and code arriving as a string (the `eval-*` sub-language: parsed, rewritten, run
   under a budget and a timeout). It is the only one granular to the function (`@sandbox`). Its results are
   unpickled under a guard ([Transport unpickle guard](transport-unpickle-guard.md)). Eight interchangeable
   Linux providers are available (`landlock`, `bwrap`, `firejail`, `unshare`, `qemu`, `qemu-microvm`, `gvisor`
