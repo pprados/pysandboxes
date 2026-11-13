@@ -443,6 +443,12 @@ allow rule per human approval.
   repository's `main` says the code "moved to a private codebase": the open source is frozen at v0.190.0.
   Its README, read on 2026-11-13, describes sandboxes as having "a dedicated kernel, filesystem, network
   stack", without naming the isolation technology, which is not what the Sysbox container above shows.
+  The code of the last public release was read again on 2026-11-13 from the tag `v0.190.0`
+  (`01c502bb`, 2026-06-23), since `main` now holds only a README and images: `container_configs.go` still sets
+  `Privileged: gpuIndex == nil`, so every sandbox without a GPU is privileged; the docs of that tag still say
+  Daytona "uses Sysbox as its container runtime" (`security-exhibit.mdx`, with `sysbox-runc` as the default
+  `CONTAINER_RUNTIME`); and `domainAllowList` appears in the API, the database migration and the runner adapter,
+  but in the runner only in its generated Swagger files, never in Go logic, which matches the claim above.
   A batch of advisories in June 2026, all fixed by 0.185.0:
   [CVE-2026-54320](https://nvd.nist.gov/vuln/detail/CVE-2026-54320) (invitation accepted without a verified
   e-mail), [CVE-2026-54321](https://nvd.nist.gov/vuln/detail/CVE-2026-54321) (stale preview-visibility cache),
