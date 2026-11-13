@@ -254,7 +254,9 @@ allow rule per human approval.
   CVE-2025-22153, CVE-2026-55830 (guard hooks shadowed through positional-only arguments, fixed in 8.3.0) and
   CVE-2026-76825 (`string.Formatter`, fixed in 8.4.0, dated 2026-07-10 in the changelog). A pull request opened
   on 2026-11-05 proposes a 5.4.post1 security release of the 5.4 line; a web search on 2026-11-13 does not
-  show whether it was merged.
+  show whether it was merged. Recheck of the code at commit `9d7aeb26` (2026-11-04, read 2026-11-13):
+  `Guards.py` refuses `string.Formatter` (`NotImplementedError('string.Formatter is not safe')`) and
+  `transformer.py` iterates `posonlyargs`, which matches the two 2026 fixes. Only these two spots were read.
 
 ### smolagents
 
