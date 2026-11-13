@@ -405,7 +405,12 @@ allow rule per human approval.
   `envd` unauthenticated unless `secure` is set. The current E2B documentation (read on 2026-11-13) confirms that
   `8.8.8.8` gets all traffic, not only DNS, once a domain is allowed, but now adds a `dnsServers` option: a
   list of up to ten IPv4 addresses replaces it, and an empty list allows no DNS server, so "cannot be closed"
-  describes the analysed commit, not the current API. The same page
+  describes the analysed commit, not the current API. The code agrees: in `e2b-dev/infra` at `ee78f06`
+  (2026-11-13), `buildEgressConfig` in `packages/api/internal/orchestrator/create_instance.go` takes
+  `dnsServers`, uses `DefaultNameserver = "8.8.8.8"` (`packages/shared/pkg/sandbox-network/firewall.go`) only
+  when it is nil, and `update_network.go` passes the field on a running sandbox. The generated API also carries
+  per-host `rules`; whether the open-source orchestrator still rejects them with `Unimplemented`, as the
+  analysed runtime did, was not rechecked, and a keyword search for `jailer` still finds nothing. The same page
   describes `allowInternetAccess: false` as `denyOut` of `0.0.0.0/0`, a policy replaced at run time with
   `updateNetwork()`, per-host header injection in public beta and a bring-your-own proxy in private beta, which
   fits the cloud-only split above. It also warns that a blocked TCP connection can look successful from inside
