@@ -375,7 +375,10 @@ allow rule per human approval.
   nothing. As soon as a domain rule exists, `8.8.8.8` is open on every protocol and port, and cannot be
   closed. No `jailer`. TLS interception, header injection and bring-your-own-proxy exist only in the closed
   cloud build: the open-source orchestrator rejects them with `Unimplemented`. The legacy v1 API leaves
-  `envd` unauthenticated unless `secure` is set. The current E2B documentation (search result of 2026-11-13)
+  `envd` unauthenticated unless `secure` is set. The current E2B documentation (read on 2026-11-13) confirms that
+  `8.8.8.8` gets all traffic, not only DNS, once a domain is allowed, but now adds a `dnsServers` option: a
+  list of up to ten IPv4 addresses replaces it, and an empty list allows no DNS server, so "cannot be closed"
+  describes the analysed commit, not the current API. The same page
   describes `allowInternetAccess: false` as `denyOut` of `0.0.0.0/0`, a policy replaced at run time with
   `updateNetwork()`, per-host header injection in public beta and a bring-your-own proxy in private beta, which
   fits the cloud-only split above. It also warns that a blocked TCP connection can look successful from inside
@@ -390,6 +393,8 @@ allow rule per human approval.
 - **Weaknesses**: containers run `--privileged` outside GPU and Android sandboxes. No IPv6, DNS or ICMP
   handling, no L7. `domainAllowList` is validated and forwarded by the API but never read by the runner. The
   repository's `main` says the code "moved to a private codebase": the open source is frozen at v0.190.0.
+  Its README, read on 2026-11-13, describes sandboxes as having "a dedicated kernel, filesystem, network
+  stack", without naming the isolation technology, which is not what the Sysbox container above shows.
   A batch of advisories in June 2026, all fixed by 0.185.0:
   [CVE-2026-54320](https://nvd.nist.gov/vuln/detail/CVE-2026-54320) (invitation accepted without a verified
   e-mail), [CVE-2026-54321](https://nvd.nist.gov/vuln/detail/CVE-2026-54321) (stale preview-visibility cache),
@@ -492,7 +497,8 @@ allow rule per human approval.
   resource type, Azure Container Apps Sandboxes (June 2026), with per-sandbox egress rules according to one
   source; dynamic sessions themselves keep the per-pool egress switch.
 - **Docker Sandboxes**: a microVM with its own Docker Engine. Deny by default with presets, rules per host,
-  credentials injected by the proxy. In 2026, its file-sharing bridge was the weak point:
+  credentials injected by the proxy. The security page, read on 2026-11-13, adds that outbound TCP goes
+  through the host proxy, UDP egress is experimental and follows the same policy, and ICMP is blocked. In 2026, its file-sharing bridge was the weak point:
   [CVE-2026-77179](https://nvd.nist.gov/vuln/detail/CVE-2026-77179) and
   [CVE-2026-79994](https://nvd.nist.gov/vuln/detail/CVE-2026-79994) (symlink TOCTOU escapes), and
   [CVE-2026-17106](https://osv.dev/vulnerability/GO-2026-6253), a bug in the shared `moby/go-archive` library.
