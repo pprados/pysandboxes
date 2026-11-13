@@ -231,7 +231,12 @@ N4, L2, C6, R1, R2, R3, D1 and E3 and none of those cells changed either: the eg
 target, ports and port ranges but no method, path or header matcher (hence `P` for L2, which rests on
 mitmproxy addons), the nftables manager says UDP and QUIC rely on DNS-driven refresh, the create request
 takes `timeout_seconds` up to 10800 and `cpu`, `memory` and `gpu` limits, no approval flow appears in the
-egress code, and the execd build skips non-Linux targets. No other cell was re-derived from code. Two rows stand out. The language-level rows (P1 to P5) are empty for every solution outside family 1.
+egress code, and the execd build skips non-Linux targets. The E2B column was re-read in `e2b-dev/infra` at
+`ee78f06` for N3, L1, L4, C3, R3 and S1 and none of those cells changed: UDP outside port 53 has an operator
+mode (`NonDNSUDPMode`), the interception and proxy hooks are stubs in the open-source build, `update_network.go`
+replaces the policy at run time, no GPU code appears in the orchestrator or the API, and `seccomp` appears only
+around helper tools (`debugfs`, template builds), not around the guest, so S1 `P` rests on Firecracker itself
+and was not confirmed in this repository. No other cell was re-derived from code. Two rows stand out. The language-level rows (P1 to P5) are empty for every solution outside family 1.
 Learning or advisor mode (C4) exists only in PySandboxes and OpenShell, and partly in Codex, which adds one
 allow rule per human approval.
 
@@ -443,8 +448,13 @@ allow rule per human approval.
   (2026-11-13), `buildEgressConfig` in `packages/api/internal/orchestrator/create_instance.go` takes
   `dnsServers`, uses `DefaultNameserver = "8.8.8.8"` (`packages/shared/pkg/sandbox-network/firewall.go`) only
   when it is nil, and `update_network.go` passes the field on a running sandbox. The generated API also carries
-  per-host `rules`; whether the open-source orchestrator still rejects them with `Unimplemented`, as the
-  analysed runtime did, was not rechecked, and a keyword search for `jailer` still finds nothing. The same page
+  per-host `rules`. The open-source orchestrator still carries the bring-your-own-proxy and interception
+  hooks as stubs: in `orchestrator/pkg/tcpfirewall/proxy.go`, `SupportsBYOP()` returns `false`, `CABundle()`
+  returns an empty string and `HeadFilterRules()` returns nothing, and `server/sandboxes.go` refuses a start
+  that asks for an egress proxy when `SupportsBYOP()` is false, behind the `BYOPProxyEnabledFlag` feature flag;
+  so the cloud-only split above still holds in the code, in this form. The firewall also gained a
+  `NonDNSUDPMode` (`off`, `count` or `drop` for guest UDP outside port 53) and four chain postures (`default`,
+  `rules`, `byop`, `isolated`). A keyword search for `jailer` still finds nothing. The same page
   describes `allowInternetAccess: false` as `denyOut` of `0.0.0.0/0`, a policy replaced at run time with
   `updateNetwork()`, per-host header injection in public beta and a bring-your-own proxy in private beta, which
   fits the cloud-only split above. It also warns that a blocked TCP connection can look successful from inside
