@@ -704,7 +704,10 @@ unpickling, it returns real Python objects from the sandbox, and it unpickles th
 
 **What the field does better.**
 
-- *A stronger default boundary.* Platforms give every sandbox its own kernel. PySandboxes offers a VM
+- *A stronger default boundary.* The VM and microVM platforms (E2B, Vercel, Cloudflare, Azure, Docker
+  Sandboxes, microsandbox, and Modal on request) give every sandbox its own kernel. The others rely on a
+  container (Daytona with Sysbox, OpenSandbox with runc by default, llm-sandbox) or a user-space kernel (Modal
+  by default, gVisor), and agent-sandbox leaves the choice to the cluster. PySandboxes offers a VM
   (`smolvm`, a micro-VM that starts in about a second; `qemu` and `qemu-microvm`, which take 13 to 20 s) and a
   user-space kernel (`gvisor`), but none is the default: the default is `landlock`, which shares the host
   kernel, as do `bwrap`, `unshare` and `firejail`. None restores a VM from a snapshot. A VM run without
