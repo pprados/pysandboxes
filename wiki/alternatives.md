@@ -180,7 +180,7 @@ Columns: **pysb** PySandboxes, **RPy** RestrictedPython, **smol** smolagents, **
 | N6 | SSRF: private ranges, metadata, rebinding | P | N | N | N | Y | Y | Y | Y | Y | N | P | P | N | ? | N | N | ? | ? | Y |
 | N7 | Domain/FQDN rules | Y | N | N | P | Y | Y | P | Y | Y | N | Y | N | N | Y | Y | Y | N | N | Y |
 | L1 | TLS interception | N | N | N | N | Y | Y | P | Y | N | N | Y | N | N | P | Y | Y | N | N | Y |
-| L2 | HTTP method / path / header / query rules | N | N | N | N | P | P | Y | N | N | N | P | N | N | N | Y | Y | N | N | N |
+| L2 | HTTP method / path / header / query rules | N | N | N | N | Y | P | Y | N | N | N | P | N | N | N | Y | Y | N | N | N |
 | L3 | Protocol-aware rules beyond HTTP | N | N | P | N | P | N | P | N | N | N | P | P | N | N | P | N | N | N | N |
 | L4 | Credential injection / brokering | N | N | P | N | Y | Y | Y | Y | P | N | Y | N | N | Y | Y | Y | N | P | Y |
 | L5 | Identity of the caller in network policy | N | N | N | N | Y | P | P | N | N | N | P | P | N | N | N | N | N | N | N |
@@ -214,7 +214,10 @@ Columns: **pysb** PySandboxes, **RPy** RestrictedPython, **smol** smolagents, **
 | G1 | SDKs, MCP, agent frameworks | Y | P | Y | P | Y | Y | Y | Y | Y | Y | Y | Y | Y | Y | Y | Y | Y | Y | Y |
 | G2 | Safety of results returned to the host | Y | - | Y | Y | P | - | ? | P | Y | Y | Y | Y | Y | P | ? | P | ? | ? | ? |
 
-Thirteen cells were changed on 2026-11-13. C3 for Azure dynamic sessions went from `Y` to `?`: neither the
+Fourteen cells were changed on 2026-11-13. L2 for OpenShell went from `P` to `Y`: the rule structures of
+`openshell-policy-schema/src/lib.rs` at `7cfa0c09` carry `method`, `path` and a `query` map of matchers (short or
+expanded form), which is what the entry for OpenShell and the layer-7 paragraph above already say, and
+`openshell-supervisor-network` evaluates them in a Rego policy. C3 for Azure dynamic sessions went from `Y` to `?`: neither the
 documentation page read on 2026-11-13 nor the entry above says a session pool's egress setting can be changed
 while sessions run, and `?` is the legend's value for "no source says either way". Four others are consistency corrections against the table of network
 protocols above, not new code readings. llm-sandbox went from `P` to `N` for N3 and N4, because that table says
