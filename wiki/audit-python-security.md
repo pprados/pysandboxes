@@ -14,10 +14,14 @@ boundary escape.
 ## Evidence and scope
 
 The named probes were reproduced in-memory during the 2026-10-16 audit; no
-committed probe file exists. The two in-memory probes (`guard_files._rules`
-reassignment and the `sys.modules` lookup) were not re-run on 2026-11-13 and
-rest on a reading of the code at commit `2601d77b` (release 0.12.0). The test
-file `test_escape_pysandbox.py` was run that day (see the table). Cited tests are regression evidence for their named cases,
+committed probe file exists. The `guard_files._rules` reassignment probe was not re-run on 2026-11-13 and
+rests on a reading of the code at commit `2601d77b` (release 0.12.0). A replay of
+the `sys.modules` probe was tried that day and is **inconclusive**: with the
+import guard activated, `lifecycle.arm()` called and the module cached inside
+`framework_imports()`, `__import__` of that module from `user_code()` was
+allowed, not refused as on 2026-10-01, so the harness did not reproduce the
+original setup and neither confirms nor refutes the finding. The test file
+`test_escape_pysandbox.py` was run that day (see the table). Cited tests are regression evidence for their named cases,
 not proof that equivalent routes are closed.
 
 The `guard_api` registry now holds 152 sensitive functions in eight categories
