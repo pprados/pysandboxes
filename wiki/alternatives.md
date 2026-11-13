@@ -370,7 +370,16 @@ allow rule per human approval.
   command sandbox, published 2026-09-01), two flaws without a CVE called Heapjack and Overpatch (fixed in Codex
   CLI 0.149.0, 2026-08-21) and seven escapes across several agents disclosed by Pillar Security in July 2026
   (Codex CLI fixed in 0.95.0). They again concern the layer above the kernel boundary, not Seatbelt, bubblewrap
-  or seccomp.
+  or seccomp. Recheck of the code at `openai/codex` commit `69231e1` (2026-11-13): the filter is now in
+  `codex-rs/linux-sandbox/src/seccomp.rs`, no `landlock.rs` remains in that crate and a comment there calls the
+  Landlock filesystem backend legacy, with bubblewrap used for filesystem-restricted policies. It still has
+  three network modes (`Restricted`, `ProxyRouted`, `VmSocketRestricted`), denies `io_uring_setup`,
+  `io_uring_enter` and `io_uring_register` with a comment that `io_uring` can create `AF_VSOCK` sockets
+  without a `socket()` call, and outside the `VmSocketRestricted` mode also denies `ptrace`,
+  `process_vm_readv`, `process_vm_writev` and `request_key`. The crate has grown a managed TCP relay
+  (`managed_tcp.rs`, `proxy_routing.rs`) and the repository has `mxc-sandbox`, `windows-sandbox-rs`,
+  `windows-sandbox-service` and `network-proxy` crates. The per-exec attribution token, the proxy's
+  method, path and header rules and the credential broker were not re-read.
 
 ### microsandbox
 
