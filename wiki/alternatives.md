@@ -442,8 +442,15 @@ allow rule per human approval.
   2026-11-13, marks 1.2.1 as the latest release (1.1.0 of 2026-09-21 was the first umbrella release). A search
   of the same day describes 1.2.0, which adds port-scoped rules to the classic profile (the fast
   profile rejects them) and rejects `networkPolicy` for the Docker network modes `none`, `pasta` and
-  `slirp4netns`. An upstream issue (#2329) reports established TCP sessions surviving a tightened policy on
-  server 0.2.1 and egress 1.1.4; it was not checked against 1.2.0.
+  `slirp4netns`. An upstream issue (#2329, opened 2026-10-21) reported established TCP sessions surviving a
+  tightened policy on server 0.2.1 and egress 1.1.4, because the output chain began with
+  `ct state established,related accept`. The issue is now closed by pull request 2346, and the egress sources
+  at commit `e564cd1` (2026-11-13) hold the matching code: `pkg/nftables/established_drop.go` defines the
+  destinations whose established flows a policy change must tear down, and `pkg/nftables/conntrack_linux.go`
+  works on the conntrack table. That the teardown completes before the policy request returns, as the issue
+  asked, was not tested here. The same tree also holds a transparent mitmproxy mode
+  (`docs/mitmproxy-transparent.md`) and revision, quarantine and persistence packages for policy updates,
+  which the 2026-10-01 text does not describe.
 
 ### Kubernetes agent-sandbox
 
