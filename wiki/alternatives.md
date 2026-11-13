@@ -196,7 +196,7 @@ Columns: **pysb** PySandboxes, **RPy** RestrictedPython, **smol** smolagents, **
 | P4 | AST restriction / rewriting | Y | Y | Y | N | - | N | N | N | - | - | N | N | N | N | N | N | - | - | - |
 | P5 | Per-function granularity | Y | P | P | P | - | - | - | - | - | - | - | - | P | - | - | - | - | - | - |
 | C2 | Default deny for everything | Y | P | P | P | Y | P | P | P | N | N | P | N | N | N | N | N | P | P | P |
-| C3 | Live update without restart | N | - | N | N | Y | P | P | N | Y | Y | Y | Y | N | Y | Y | Y | ? | Y | Y |
+| C3 | Live update without restart | N | - | N | N | Y | P | P | N | Y | Y | Y | Y | N | Y | Y | Y | ? | ? | Y |
 | C4 | Learning / advisor mode | Y | N | N | N | Y | N | P | N | N | N | N | N | N | N | N | N | N | N | N |
 | C5 | Formal verification of the policy | N | N | N | N | Y | N | N | N | N | N | N | N | N | N | N | N | N | N | N |
 | C6 | Human approval loop for denied actions | P | N | N | N | Y | Y | Y | P | N | N | N | N | N | N | N | N | N | N | N |
@@ -214,7 +214,9 @@ Columns: **pysb** PySandboxes, **RPy** RestrictedPython, **smol** smolagents, **
 | G1 | SDKs, MCP, agent frameworks | Y | P | Y | P | Y | Y | Y | Y | Y | Y | Y | Y | Y | Y | Y | Y | Y | Y | Y |
 | G2 | Safety of results returned to the host | Y | - | Y | Y | P | - | ? | P | Y | Y | Y | Y | Y | P | ? | P | ? | ? | ? |
 
-Twelve cells were changed on 2026-11-13. Four of them are consistency corrections against the table of network
+Thirteen cells were changed on 2026-11-13. C3 for Azure dynamic sessions went from `Y` to `?`: neither the
+documentation page read on 2026-11-13 nor the entry above says a session pool's egress setting can be changed
+while sessions run, and `?` is the legend's value for "no source says either way". Four others are consistency corrections against the table of network
 protocols above, not new code readings. llm-sandbox went from `P` to `N` for N3 and N4, because that table says
 UDP and ICMP are "not mediated" and no rule can name either (the same standard as PySandboxes' `N` for ICMP).
 E2B and Daytona went from `N` to `P` for N4, because that table says their ICMP handling is the same as their
