@@ -228,7 +228,7 @@ documentation while the runner of the `v0.190.0` tag sets `Privileged: gpuIndex 
 environment is copied into the container unfiltered), microsandbox N5 (`P` to `Y`, DNS interception with rebinding defence
 and pinning, as for OpenShell and sandbox-runtime) and C6 (`P` to `N`, no approval mechanism in the docs or the policy types).
 The sandbox-runtime, OpenShell, llm-sandbox and agent-sandbox columns came back with no change that the code supports. A last pass by hand
-looked for file-level evidence on the rows not yet read for Codex (network proxy, domain matcher, MITM, credential broker), OpenShell
+looked for file-level evidence on the rows not yet read for microsandbox (its security and sandbox documentation confirms N2, N6, F1, F2, F3, D1 and G1), Codex (network proxy, domain matcher, MITM, credential broker), OpenShell
 (`policy_update.rs`, binary rules in the policy schema), Daytona (no `SecurityOpt`, no private-range check, toolbox file API) and E2B
 (Firecracker, chroot package, volumes), and found no cell to change; this is a search for contradicting evidence, not a proof of each cell; for llm-sandbox (R1, R2, E1, F3, G2) and agent-sandbox (E1, E3, R2, F3, G1) the cells were also checked by hand against the clones after a delegated audit mixed up the two columns. Four are OpenSandbox cells re-read at `e564cd1`: R2 and E3 went from `P` to `Y`
 (a sandbox `timeout` and a per-command `timeout` in `specs/execd-api.yaml`; volume mounts and snapshot services in the server),
