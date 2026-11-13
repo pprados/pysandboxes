@@ -8,7 +8,7 @@ the code of this repository. The other solutions got one web search each that da
 page) was read and compared with the text, with uneven depth: for microsandbox, RestrictedPython and
 AWS AgentCore the pages read gave nothing new on network or isolation; the discrepancies found are
 corrected in the sections concerned (see the end of [Sources](#sources-and-commits-analysed)). The
-matrix was re-read against the code of the open-source projects on 2026-11-13, in three passes, and 34 cells were
+matrix was re-read against the code of the open-source projects on 2026-11-13, in three passes, and 35 cells were
 changed; the rows that no pass reached, and every cell of the closed services (documentation only), keep the
 evidence level of 2026-10-01. Verify claims before relying on them; projects
 change.*
@@ -132,7 +132,7 @@ layer 7, and it grants privileges on more than the network destination alone.
 | langchain-sandbox | Deny | No socket layer in Pyodide (not tested) | Same | Not mediated | Deno `--allow-net` host list | None | None |
 | Modal | Open | CIDR list "any protocol" (doc) | Not found | Blocked with `block_network` | SNI, port 443 only | None | Header injection per domain |
 | Vercel | `allow-all` | Not documented | Not documented | Open under `subnets.allow` (documented) | SNI; domain fronting acknowledged | Matchers on method, path, query and headers; transform, forward or respond; Postgres aware | Header transform, secret never inside |
-| Cloudflare | Open (`enableInternet` true); closed, only 80 and 443 leave, through the interception | None | None | Not documented | JavaScript written in the Worker | Anything the Worker code does | In the Worker, on fictitious host names |
+| Cloudflare | Closed by default (`enableInternet: false`, documentation of 2026-10-22); open when set to `true`. With it closed, only requests an outbound handler intercepts leave (80 and 443) | None | None | Not documented | JavaScript written in the Worker | Anything the Worker code does | In the Worker, on fictitious host names |
 | AWS AgentCore | Three modes (sandbox, public, VPC) | DNS leaked in sandbox mode | Not documented | The exfiltration channel | None | None | IAM role |
 | Azure dynamic sessions | Deny (`EgressDisabled`) | Not documented | Not documented | Not documented | None | None | Managed identity, off by default |
 | Docker Sandboxes | Deny, with presets | Experimental, gated by policy | Blocked | Mediated by the proxy | Allow and deny per host | Host name only | Injected by the proxy |
@@ -199,7 +199,7 @@ Columns: **pysb** PySandboxes, **RPy** RestrictedPython, **smol** smolagents, **
 | P3 | Control of `eval` / `exec` / `compile` | Y | P | Y | N | - | N | N | N | - | - | N | N | N | N | N | N | - | - | - |
 | P4 | AST restriction / rewriting | Y | Y | Y | N | - | N | N | N | - | - | N | N | N | N | N | N | - | - | - |
 | P5 | Per-function granularity | Y | P | P | N | - | - | - | - | - | - | - | - | P | - | - | - | - | - | - |
-| C2 | Default deny for everything | Y | P | P | P | Y | P | P | P | N | N | P | N | N | N | N | N | P | P | P |
+| C2 | Default deny for everything | Y | P | P | P | Y | P | P | P | N | N | P | N | N | N | N | P | P | P | P |
 | C3 | Live update without restart | N | - | N | N | Y | P | P | P | Y | Y | Y | Y | N | Y | Y | Y | ? | ? | Y |
 | C4 | Learning / advisor mode | Y | N | N | N | Y | N | P | N | N | N | N | N | N | N | N | N | N | N | N |
 | C5 | Formal verification of the policy | N | N | N | N | Y | N | N | N | N | N | N | N | N | N | N | N | N | N | N |
@@ -218,7 +218,7 @@ Columns: **pysb** PySandboxes, **RPy** RestrictedPython, **smol** smolagents, **
 | G1 | SDKs, MCP, agent frameworks | Y | P | Y | P | Y | Y | Y | Y | Y | Y | Y | Y | Y | Y | Y | Y | Y | Y | Y |
 | G2 | Safety of results returned to the host | Y | - | Y | Y | P | - | Y | P | Y | Y | Y | Y | Y | P | ? | P | ? | ? | ? |
 
-Thirty-four cells were changed on 2026-11-13. A second pass re-read the code column by column and changed twelve more
+Thirty-five cells were changed on 2026-11-13. A second pass re-read the code column by column and changed twelve more
 (microsandbox C3 went from `N` to `P` because `msb modify` rotates secrets and their allowed hosts live, and K1 from `P` to `Y`
 because the host environment is never passed to the guest and secrets are placeholders; the last is E2B F3, `?` to `Y`: `envd` implements upload and download, and the legend's `Y` means a transfer exists):
 smolagents L3 and L4 (`P` to `N`, no network policy and no credential brokering in `remote_executors.py`),
@@ -227,6 +227,7 @@ plain-text output capped at 1 MiB, no deserialisation of objects), Daytona I1 (`
 documentation while the runner of the `v0.190.0` tag sets `Privileged: gpuIndex == nil`) and K1 (`P` to `N`, the sandbox
 environment is copied into the container unfiltered), microsandbox N5 (`P` to `Y`, DNS interception with rebinding defence
 and pinning, as for OpenShell and sandbox-runtime) and C6 (`P` to `N`, no approval mechanism in the docs or the policy types).
+Cloudflare C2 went from `N` to `P` after reading its Sandbox security page, which says a container starts with `enableInternet: false`.
 The sandbox-runtime, OpenShell, llm-sandbox and agent-sandbox columns came back with no change that the code supports. A last pass by hand
 looked for file-level evidence on the rows not yet read for microsandbox (its security and sandbox documentation confirms N2, N6, F1, F2, F3, D1 and G1), Codex (network proxy, domain matcher, MITM, credential broker), OpenShell
 (`policy_update.rs`, binary rules in the policy schema), Daytona (no `SecurityOpt`, no private-range check, toolbox file API) and E2B
@@ -806,7 +807,7 @@ unpickling, it returns real Python objects from the sandbox, and it unpickles th
 | llm-sandbox | [`7361f5e`](https://github.com/vndee/llm-sandbox/tree/7361f5e5ca06b5597f977f13efbe859f481cb01e) |
 | Modal | client [`83cd277`](https://github.com/modal-labs/modal-client/tree/83cd27748d1fc0ac6adbf5acc8e9a3bfbf85208e), [networking](https://modal.com/docs/guide/sandbox-networking), [security](https://modal.com/docs/guide/security) |
 | Vercel | client [`6fc8e16`](https://github.com/vercel/sandbox/tree/6fc8e16fd606beab8f99546482f11cc40c3e5a8e), [firewall](https://vercel.com/docs/sandbox/concepts/firewall) |
-| Cloudflare | client [`f9e972a`](https://github.com/cloudflare/sandbox-sdk/tree/f9e972a14123bef3b93e9bb337bab6e83419fe7e) (1.0 preview; a search on 2026-11-13 shows 1.0.0 released and 1.0.3 on 2026-10-22, and says a container has no Internet unless `enableInternet: true` is passed, whereas the table above gives it as open: not re-read, so that cell may be out of date), [Containers outbound traffic](https://developers.cloudflare.com/containers/platform-details/outbound-traffic) |
+| Cloudflare | client [`f9e972a`](https://github.com/cloudflare/sandbox-sdk/tree/f9e972a14123bef3b93e9bb337bab6e83419fe7e) (1.0 preview; 1.0.0 is released and 1.0.3 dates from 2026-10-22. The [Sandbox security](https://developers.cloudflare.com/sandbox/concepts/security/) page, read on 2026-11-13, says a container starts with `enableInternet: false`, that every process has the capabilities of `root`, and that an outbound handler in the Worker can add a credential to a request after it leaves the sandbox), [Containers outbound traffic](https://developers.cloudflare.com/containers/platform-details/outbound-traffic) |
 | AWS AgentCore | [AgentCore documentation](https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/code-interpreter-tool.html), [BeyondTrust](https://www.beyondtrust.com/blog/entry/pwning-aws-agentcore-code-interpreter), [Unit 42](https://unit42.paloaltonetworks.com/bypass-of-aws-sandbox-network-isolation-mode/) |
 | Azure dynamic sessions | [Container Apps sessions](https://learn.microsoft.com/en-us/azure/container-apps/sessions) |
 | Docker Sandboxes | [Docker Sandboxes documentation](https://docs.docker.com/ai/sandboxes/security/) |
@@ -849,6 +850,7 @@ langchain-sandbox `fac037c` (2026-01-14, archived). What the keyword searches fo
 router's default authoriser; Codex's `linux-sandbox` crate still holds `seccomp.rs`, `bwrap.rs` and
 `launcher.rs`; OpenSandbox's server configuration and examples still reference gVisor, Kata and Firecracker.
 The Daytona search for `domainAllowList` found nothing under `apps`, which proves nothing about the runner
-claim. The analysed commits of the table above, the claims drawn from the source code and the 45-feature
-matrix keep their 2026-10-01 state, and no matrix cell was changed even where a source suggests it may be out
-of date (Cloudflare's default egress, Vercel's DNS). Redoing them means reading the code of each project.
+claim. The October commits of the first table keep their state; the matrix was changed where a later reading of
+the code or of a vendor page contradicted a cell (see the note under the matrix). Cloudflare's default egress
+is now taken from its documentation of 2026-10-22 (`enableInternet: false`), and C2 for Cloudflare went from `N`
+to `P` on that basis. Vercel's DNS handling has not been re-read.
