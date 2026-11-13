@@ -276,7 +276,14 @@ allow rule per human approval.
   escapes. [Issue 2094](https://github.com/huggingface/smolagents/issues/2094) (`ctypes`) was open on 2026-10-01. A search on 2026-11-13 also lists CVE-2026-4963 (code injection in
   `evaluate_augassign`, `evaluate_call` and `evaluate_with`, published 2026-03-27, an incomplete fix of
   CVE-2025-9959; the sources give a severity of 10 and of 5.3) and CVE-2026-2654 (SSRF through `requests.get`
-  and `requests.post`, up to 1.24.0). No patched version was confirmed for either.
+  and `requests.post`, up to 1.24.0). No patched version was confirmed for either. Recheck of the code at commit `96f33fa` (2026-10-06, read
+  2026-11-13): `MAX_OPERATIONS` and `MAX_WHILE_ITERATIONS` are still defined in `local_python_executor.py`;
+  `DANGEROUS_MODULES` (ten names, without `ctypes`) is still referenced only by a test; the timeout still
+  raises `ExecutionTimeoutError` from a worker thread it cannot kill; and a keyword search of
+  `remote_executors.py` finds no `network_mode`, `mem_limit`, `cap_drop`, `read_only`, `security_opt` or
+  `pids_limit`. The remote executors are still `E2BExecutor`, `DockerExecutor`, `ModalExecutor` and
+  `BlaxelExecutor`. Issue 2094 was still open when fetched on 2026-11-13, with a suggested fix that adds
+  `ctypes` to the list; the repository has no commit after 2026-10-06 in the clone read.
 
 ### langchain-sandbox
 
