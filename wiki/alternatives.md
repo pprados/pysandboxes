@@ -853,4 +853,4 @@ The Daytona search for `domainAllowList` found nothing under `apps`, which prove
 claim. The October commits of the first table keep their state; the matrix was changed where a later reading of
 the code or of a vendor page contradicted a cell (see the note under the matrix). Cloudflare's default egress
 is now taken from its documentation of 2026-10-22 (`enableInternet: false`), and C2 for Cloudflare went from `N`
-to `P` on that basis. Vercel's firewall page was re-read on 2026-11-13: it says `deny-all` and an empty policy deny DNS too, and documents nothing else about DNS, UDP or ICMP, so N3, N4 and N5 keep their values.
+to `P` on that basis. Vercel's firewall page was re-read on 2026-11-13: it says `deny-all` and an empty policy deny DNS too, and documents nothing else about DNS, UDP or ICMP, so N3, N4 and N5 keep their values. Modal's networking and security page was re-read the same day and confirms its column (CIDR list for any protocol, domain list in beta limited to TLS on port 443, DNS unrestricted unless all outbound traffic is blocked, live policy updates, gVisor or a VM).
