@@ -311,7 +311,10 @@ allow rule per human approval.
   new isolation primitives, an expanded extension surface" for 0.1.x, SDKs in Python, TypeScript, Go and Rust,
   and a move of the code to the `ai-openshell` organisation with governance going to the CNCF. The new
   isolation primitives are not named there, so the Landlock and seccomp description above was not rechecked
-  against 0.1.x.
+  against 0.1.x. A keyword search of the crates at `main` commit `7cfa0c09` (2026-11-13) still finds
+  `network_broker.rs` in `openshell-sandbox` and the words `seccomp` and `landlock` in that crate's sources and
+  README, and a `rego` policy in `openshell-supervisor-network`; it also finds new crates, among them an `mxc`
+  compute driver. Nothing more was read.
 
 ### Anthropic sandbox-runtime
 
@@ -334,7 +337,12 @@ allow rule per human approval.
   was not checked in code. No learning mode. One low-severity advisory,
   [CVE-2025-66479](https://github.com/advisories/GHSA-9gqj-5w7c-vx47), fixed in 0.0.16. The releases page,
   read on 2026-11-13, lists v0.0.81 (20 October) as the newest, a release whose notes say every change is on
-  Windows; the project is still labelled a research preview, and the commit analysed here predates all of it.
+  Windows; the project is still labelled a research preview, and the commit analysed here predates all of it. A recheck of the code at `0bbebed0`
+  (2026-11-12, 2026-11-13) still finds `seccomp-unix-block.c`, `aws-sigv4.ts` and the credential-masking
+  modules, and `sandbox-manager.ts` still tells an undefined `allowedDomains` apart from an empty list
+  (`runtimeConfig.network.allowedDomains !== undefined`), which fits the matrix cell "open if undefined". It
+  also shows a Windows backend choice (`windows.backend` set to `'mxc'`) that the 2026-10-01 text does not
+  mention. Only these spots were read.
 
 ### OpenAI Codex sandbox
 
