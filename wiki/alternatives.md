@@ -281,7 +281,12 @@ The RestrictedPython column was read at `9d7aeb26` for P1, P3 and R2 and none of
 `execfile` out, so the host supplies any import control (P1 `N`) and P3 stays `P`. The langchain-sandbox column
 was read at `fac037c` for N7, E3 and R2 and none changed: `allow_net` takes `list[str] | bool` and defaults to
 `False` (the host list keeps N7 at `P`), `stateful`, `session_bytes` and `session_metadata` back E3, and
-`timeout_seconds` backs R2. Row N6 (SSRF) was read across five projects: E2B's `tcpfirewall/handlers.go` checks the connected address
+`timeout_seconds` backs R2. Row F3 (file transfer) was read for six projects and no cell changed, but the evidence differs. llm-sandbox
+checks container paths for traversal (`SecurityError` in `core/mixins.py`) and extracts archives with
+`tarfile.data_filter`. For agent-sandbox (a Python client with `read`, `write` and `read_to`), microsandbox (`msb cp`
+in both directions), Daytona (toolbox download and upload) and OpenSandbox (a file API in execd), the code read
+shows that a transfer exists but no path-traversal check was located, so `Y` there means "a transfer API
+exists", not "proved safe". Row N6 (SSRF) was read across five projects: E2B's `tcpfirewall/handlers.go` checks the connected address
 against `isIPInAlwaysDeniedCIDRs` after the connection (`Y`); OpenSandbox's egress code checks loopback only,
 in `nameserver.go` and the DNS proxy, with no private-range or metadata-address list found (`P` kept, with
 that limit); and no private-range or metadata check was found in Daytona's runner, in llm-sandbox or in
