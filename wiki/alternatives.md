@@ -242,7 +242,12 @@ around helper tools (`debugfs`, template builds), not around the guest, so S1 `P
 and was not confirmed in this repository. The Codex column was also read for L2, N3, C6 and R1: the proxy has an `allowed_methods` check in `mitm.rs` and
 `methods` and `path_prefixes` rules in its SOCKS5 tests, `enable_socks5_udp` is on by default, a
 `NetworkPolicyDecision` has `Deny` and `Ask`, and a search for `RLIMIT`, `cgroup` and `setrlimit` finds no
-resource limits; those cells stand. No other cell was re-derived from code. Two rows stand out. The language-level rows (P1 to P5) are empty for every solution outside family 1.
+resource limits; those cells stand. The sandbox-runtime column was read at `0bbebed0` for L1, L3, C3, C6, N6, O1, R1 and R2, and
+none of those cells changed: `mitm-ca.ts` and a `tlsTerminate` option back L1, `resolved-address-guard.ts`
+backs N6, `SandboxAskCallback` takes only a host and a port (so L3 stays `N`: the decision does not depend on
+the protocol), `SandboxViolationStore` and the two violation monitors back O1, `updateConfig()` and per-command
+lists leave C3 at `P`, and the only timeouts found are internal to the proxies, with no CPU or memory limits.
+No other cell was re-derived from code. Two rows stand out. The language-level rows (P1 to P5) are empty for every solution outside family 1.
 Learning or advisor mode (C4) exists only in PySandboxes and OpenShell, and partly in Codex, which adds one
 allow rule per human approval.
 
