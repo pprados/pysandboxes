@@ -8,8 +8,9 @@ the code of this repository. The other solutions got one web search each that da
 page) was read and compared with the text, with uneven depth: for microsandbox, RestrictedPython and
 AWS AgentCore the pages read gave nothing new on network or isolation; the discrepancies found are
 corrected in the sections concerned (see the end of [Sources](#sources-and-commits-analysed)). The
-source-code analysis, the analysed commits and the 45-feature matrix are still those of 2026-10-01 and may
-be out of date. Verify claims before relying on them; projects
+matrix was re-read against the code of the open-source projects on 2026-11-13, in two passes, and 32 cells were
+changed; the rows that no pass reached, and every cell of the closed services (documentation only), keep the
+evidence level of 2026-10-01. Verify claims before relying on them; projects
 change.*
 
 This page compares PySandboxes with eighteen solutions: embeddable frameworks, self-hosted platforms, and cloud
