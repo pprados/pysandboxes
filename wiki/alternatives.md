@@ -367,6 +367,13 @@ allow rule per human approval.
   L7 method or path rules.
   [CVE-2026-61670](https://osv.dev/vulnerability/GHSA-m8f5-rh7h-vgg3) (secrets visible in `/proc/<pid>/cmdline`)
   was fixed in 0.5.10.
+- **Recheck, 2026-11-13, at commit `28bdced5` (2026-11-12)**: a keyword search of the Rust crates, not a full
+  read, still finds no `seccomp`, `landlock`, `pivot_root`, `sandbox_init` or `unshare(` anywhere, so the
+  absence of host-side confinement of the VMM still holds. The network crate still carries an ICMP relay
+  (`engine/icmp/relay.rs`), a DNS engine that mentions SNI, a secrets handler that checks it
+  (`engine/secrets/handler.rs`), a TCP deny path (`engine/tcp/deny.rs`) and a `smoltcp` fork (`msb_smoltcp`
+  0.14.0). The search for L7 method or path rules finds nothing in the network crate. The claims about the UDP
+  relay sessions, the ICMP echo limit and the rebinding defence were not re-read.
 
 ### E2B
 
