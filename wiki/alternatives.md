@@ -189,7 +189,7 @@ Columns: **pysb** PySandboxes, **RPy** RestrictedPython, **smol** smolagents, **
 | F2 | Copy-on-write / overlay / ephemeral rootfs | P | - | P | P | Y | N | P | Y | Y | Y | Y | N | P | N | ? | ? | Y | ? | ? |
 | F3 | Safe file transfer host and sandbox | P | - | N | - | P | P | P | Y | ? | Y | Y | Y | Y | ? | ? | P | P | ? | P |
 | S1 | Syscall filtering | P | N | N | P | Y | P | Y | N | P | N | P | N | P | Y | Y | - | ? | ? | ? |
-| S2 | Control of process execution | Y | N | P | Y | P | P | Y | P | P | Y | Y | Y | N | P | N | N | ? | ? | ? |
+| S2 | Control of process execution | Y | N | P | Y | P | P | Y | P | P | N | P | P | N | P | N | N | ? | ? | ? |
 | S3 | Code runs unprivileged by default (not root, not privileged) | P | - | N | - | P | Y | P | N | P | N | P | N | P | ? | N | ? | ? | ? | ? |
 | P1 | Import control | Y | N | Y | N | - | N | N | N | - | - | N | N | N | N | N | N | - | - | - |
 | P2 | Sensitive call control beyond imports | Y | N | P | N | - | N | N | N | - | - | N | N | N | N | N | N | - | - | - |
@@ -215,7 +215,13 @@ Columns: **pysb** PySandboxes, **RPy** RestrictedPython, **smol** smolagents, **
 | G1 | SDKs, MCP, agent frameworks | Y | P | Y | P | Y | Y | Y | Y | Y | Y | Y | Y | Y | Y | Y | Y | Y | Y | Y |
 | G2 | Safety of results returned to the host | Y | - | Y | Y | P | - | ? | P | Y | Y | Y | Y | Y | P | ? | P | ? | ? | ? |
 
-Fourteen cells were changed on 2026-11-13. L2 for OpenShell went from `P` to `Y`: the rule structures of
+Seventeen cells were changed on 2026-11-13. Three are in row S2, process execution control, where `Y` cells
+had no support in the code read. Daytona went from `Y` to `N`: a search of the `v0.190.0` tag for command
+allow-lists or execution policies finds nothing. agent-sandbox went from `Y` to `P`: the only command allow-lists
+found at `13470fe` are in its `examples` (an `ALLOWED_COMMANDS` set in two example servers and an example
+`command-governance` policy), not in the controllers or the API. OpenSandbox went from `Y` to `P`: at `e564cd1`
+its execd isolation drops capabilities and sets a seccomp floor but has no allow-list of programs, and reserves
+`execve` for its own launcher. L2 for OpenShell went from `P` to `Y`: the rule structures of
 `openshell-policy-schema/src/lib.rs` at `7cfa0c09` carry `method`, `path` and a `query` map of matchers (short or
 expanded form), which is what the entry for OpenShell and the layer-7 paragraph above already say, and
 `openshell-supervisor-network` evaluates them in a Rego policy. C3 for Azure dynamic sessions went from `Y` to `?`: neither the
