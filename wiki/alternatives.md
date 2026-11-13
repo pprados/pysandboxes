@@ -223,7 +223,10 @@ backend each. S1 for OpenSandbox went from `N` to `P`: at `e564cd1`, `components
 `bpf`...) that the file calls always active by default for execd isolation; whether every sandbox goes through
 execd isolation was not checked, hence `P`. A keyword search of the other clones found no change to the S1
 cells of microsandbox, Daytona and agent-sandbox (the latter only passes `seccompProfile` through its CRD).
-No other cell was re-derived from code. Two rows stand out. The language-level rows (P1 to P5) are empty for every solution outside family 1.
+The microsandbox column was re-read against the code at `28bdced5` for I2, I3, N2, C3, L5, S1, R1, R2, R3, E2 and
+D1 (no libkrun alternative, `Destination::Cidr` rules, no live policy update, no GPU or caller-identity code,
+a per-job `timeout_ms`, fork and snapshot with `--cow-mem` in the README, `cfg(target_os = "windows")` code in
+the metrics crate) and none of those cells changed. No other cell was re-derived from code. Two rows stand out. The language-level rows (P1 to P5) are empty for every solution outside family 1.
 Learning or advisor mode (C4) exists only in PySandboxes and OpenShell, and partly in Codex, which adds one
 allow rule per human approval.
 
