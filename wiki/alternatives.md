@@ -158,7 +158,9 @@ Three observations follow.
 
 ## Feature matrix
 
-`Y` yes, `P` partial, `N` no, `-` not applicable, `?` no source says either way (closed services).
+`Y` yes, `P` partial, `N` no, `-` not applicable, `?` no source says either way (closed services). For F3, `Y`
+means the project offers a transfer between host and sandbox, not that it was proved safe against path traversal;
+the notes below say, project by project, which transfers carry a traversal check.
 The default egress posture (N1) does not fit a yes/no cell; it is in the
 [table above](#the-network-protocol-by-protocol). The policy format (C1) is left out: every solution has
 one, as a file, API arguments or code, so the row says nothing.
