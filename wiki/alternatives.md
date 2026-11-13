@@ -258,7 +258,12 @@ automatic `approval_mode` and `prover_delta` audit events back C6, `openshell-oc
 backs R3, and R1 stays `P` because only a PID limit was found, not memory or CPU. The agent-sandbox column was also read for E1, E3, R2 and S3: a `SandboxWarmPool` type with `Recreate` and
 `OnReplenish` update strategies backs E1, `volumeClaimTemplates` back E3, a `Lifecycle` with a `shutdownTime`
 backs R2, and a search for `runAsNonRoot` and `runAsUser` in the controllers finds nothing, so S3 stays `N`.
-The Daytona column was read at the `v0.190.0` tag for N2, C3, E1, E2, F3, O1, R1 and R2 and none of those cells
+The RestrictedPython column was read at `9d7aeb26` for P1, P3 and R2 and none of those cells changed:
+`Guards.py` builds `safe_builtins` without `__import__` and with comments that keep `eval`, `compile` and
+`execfile` out, so the host supplies any import control (P1 `N`) and P3 stays `P`. The langchain-sandbox column
+was read at `fac037c` for N7, E3 and R2 and none changed: `allow_net` takes `list[str] | bool` and defaults to
+`False` (the host list keeps N7 at `P`), `stateful`, `session_bytes` and `session_metadata` back E3, and
+`timeout_seconds` backs R2. The Daytona column was read at the `v0.190.0` tag for N2, C3, E1, E2, F3, O1, R1 and R2 and none of those cells
 changed: `NetworkAllowList` and `NetworkBlockAll` feed `netRulesManager` in `runner/pkg/docker/create.go` (N2), the
 runner has an update-network-settings path (`docker/network.go`, C3), the API has warm-pool migrations (E1), a
 snapshot controller and a backup DTO exist in the runner (E2), the toolbox daemon has file upload and download
