@@ -263,7 +263,12 @@ The RestrictedPython column was read at `9d7aeb26` for P1, P3 and R2 and none of
 `execfile` out, so the host supplies any import control (P1 `N`) and P3 stays `P`. The langchain-sandbox column
 was read at `fac037c` for N7, E3 and R2 and none changed: `allow_net` takes `list[str] | bool` and defaults to
 `False` (the host list keeps N7 at `P`), `stateful`, `session_bytes` and `session_metadata` back E3, and
-`timeout_seconds` backs R2. The Daytona column was read at the `v0.190.0` tag for N2, C3, E1, E2, F3, O1, R1 and R2 and none of those cells
+`timeout_seconds` backs R2. Row N6 (SSRF) was read across five projects: E2B's `tcpfirewall/handlers.go` checks the connected address
+against `isIPInAlwaysDeniedCIDRs` after the connection (`Y`); OpenSandbox's egress code checks loopback only,
+in `nameserver.go` and the DNS proxy, with no private-range or metadata-address list found (`P` kept, with
+that limit); and no private-range or metadata check was found in Daytona's runner, in llm-sandbox or in
+smolagents (`N` kept; smolagents has a published SSRF advisory, CVE-2026-2654). The Daytona column was read at
+the `v0.190.0` tag for N2, C3, E1, E2, F3, O1, R1 and R2 and none of those cells
 changed: `NetworkAllowList` and `NetworkBlockAll` feed `netRulesManager` in `runner/pkg/docker/create.go` (N2), the
 runner has an update-network-settings path (`docker/network.go`, C3), the API has warm-pool migrations (E1), a
 snapshot controller and a backup DTO exist in the runner (E2), the toolbox daemon has file upload and download
