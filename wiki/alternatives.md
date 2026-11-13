@@ -173,37 +173,37 @@ Columns: **pysb** PySandboxes, **RPy** RestrictedPython, **smol** smolagents, **
 
 | ID | Feature | pysb | RPy | smol | lcsb | OShl | srt | Cdx | msb | E2B | Dayt | OSbx | k8s | llms | Modl | Verc | CF | AWS | Azur | DkSb |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
-| I1 | Boundary that holds against hostile native code | P | N | P | Y | Y | Y | P | Y | Y | Y | P | P | P | Y | Y | Y | P | Y | Y |
+| I1 | Boundary that holds against hostile native code | P | N | P | Y | Y | Y | P | Y | Y | P | P | P | P | Y | Y | Y | P | Y | Y |
 | I2 | Host-side confinement of the runtime or VMM itself | P | - | ? | N | P | Y | Y | N | P | P | Y | N | - | ? | Y | ? | ? | ? | ? |
 | I3 | Choice of isolation backends | Y | Y | Y | N | Y | P | P | N | N | P | Y | Y | Y | Y | N | N | N | N | N |
 | N2 | IP/CIDR and port rules | Y | N | N | P | Y | Y | P | Y | P | Y | Y | Y | N | Y | Y | P | P | N | P |
 | N3 | UDP handling | P | N | N | ? | Y | Y | P | Y | P | P | P | P | N | P | ? | N | P | ? | P |
 | N4 | ICMP handling | N | N | N | ? | N | N | P | P | P | P | P | N | N | N | ? | N | ? | ? | N |
-| N5 | DNS mediation | P | N | N | N | Y | Y | P | P | P | N | Y | P | N | P | P | ? | N | ? | Y |
+| N5 | DNS mediation | P | N | N | N | Y | Y | P | Y | P | N | Y | P | N | P | P | ? | N | ? | Y |
 | N6 | SSRF: private ranges, metadata, rebinding | P | N | N | N | Y | Y | Y | Y | Y | N | P | P | N | ? | N | N | ? | ? | Y |
 | N7 | Domain/FQDN rules | Y | N | N | P | Y | Y | P | Y | Y | N | Y | N | N | Y | Y | Y | N | N | Y |
 | L1 | TLS interception | N | N | N | N | Y | Y | P | Y | N | N | Y | N | N | P | Y | Y | N | N | Y |
 | L2 | HTTP method / path / header / query rules | N | N | N | N | Y | P | Y | N | N | N | P | N | N | N | Y | Y | N | N | N |
-| L3 | Protocol-aware rules beyond HTTP | N | N | P | N | P | N | P | N | N | N | P | P | N | N | P | N | N | N | N |
-| L4 | Credential injection / brokering | N | N | P | N | Y | Y | Y | Y | P | N | Y | N | N | Y | Y | Y | N | P | Y |
+| L3 | Protocol-aware rules beyond HTTP | N | N | N | N | P | N | P | N | N | N | P | P | N | N | P | N | N | N | N |
+| L4 | Credential injection / brokering | N | N | N | N | Y | Y | Y | Y | P | N | Y | N | N | Y | Y | Y | N | P | Y |
 | L5 | Identity of the caller in network policy | N | N | N | N | Y | P | P | N | N | N | P | P | N | N | N | N | N | N | N |
 | F1 | Path-level read/write allow/deny | Y | N | N | Y | Y | Y | Y | Y | N | N | P | P | P | N | N | N | ? | N | P |
 | F2 | Copy-on-write / overlay / ephemeral rootfs | P | - | P | P | Y | N | P | Y | Y | Y | Y | N | P | N | ? | ? | Y | ? | ? |
-| F3 | Safe file transfer host and sandbox | P | - | N | - | P | P | P | Y | ? | Y | Y | Y | Y | ? | ? | P | P | ? | P |
-| S1 | Syscall filtering | P | N | N | P | Y | P | Y | N | P | N | P | N | P | Y | Y | - | ? | ? | ? |
+| F3 | Safe file transfer host and sandbox | P | - | N | - | P | P | P | Y | Y | Y | Y | Y | Y | ? | ? | P | P | ? | P |
+| S1 | Syscall filtering | P | N | N | N | Y | P | Y | N | P | N | P | N | P | Y | Y | - | ? | ? | ? |
 | S2 | Control of process execution | Y | N | P | Y | P | P | Y | P | P | N | P | P | N | P | N | N | ? | ? | ? |
 | S3 | Code runs unprivileged by default (not root, not privileged) | P | - | N | - | P | Y | P | N | P | N | P | N | P | ? | N | ? | ? | ? | ? |
 | P1 | Import control | Y | N | Y | N | - | N | N | N | - | - | N | N | N | N | N | N | - | - | - |
 | P2 | Sensitive call control beyond imports | Y | N | P | N | - | N | N | N | - | - | N | N | N | N | N | N | - | - | - |
 | P3 | Control of `eval` / `exec` / `compile` | Y | P | Y | N | - | N | N | N | - | - | N | N | N | N | N | N | - | - | - |
 | P4 | AST restriction / rewriting | Y | Y | Y | N | - | N | N | N | - | - | N | N | N | N | N | N | - | - | - |
-| P5 | Per-function granularity | Y | P | P | P | - | - | - | - | - | - | - | - | P | - | - | - | - | - | - |
+| P5 | Per-function granularity | Y | P | P | N | - | - | - | - | - | - | - | - | P | - | - | - | - | - | - |
 | C2 | Default deny for everything | Y | P | P | P | Y | P | P | P | N | N | P | N | N | N | N | N | P | P | P |
 | C3 | Live update without restart | N | - | N | N | Y | P | P | N | Y | Y | Y | Y | N | Y | Y | Y | ? | ? | Y |
 | C4 | Learning / advisor mode | Y | N | N | N | Y | N | P | N | N | N | N | N | N | N | N | N | N | N | N |
 | C5 | Formal verification of the policy | N | N | N | N | Y | N | N | N | N | N | N | N | N | N | N | N | N | N | N |
-| C6 | Human approval loop for denied actions | P | N | N | N | Y | Y | Y | P | N | N | N | N | N | N | N | N | N | N | N |
-| K1 | Environment filtering / secret scrubbing | Y | N | N | Y | Y | Y | Y | P | N | P | P | N | P | P | N | P | N | N | Y |
+| C6 | Human approval loop for denied actions | P | N | N | N | Y | Y | Y | N | N | N | N | N | N | N | N | N | N | N | N |
+| K1 | Environment filtering / secret scrubbing | Y | N | N | Y | Y | Y | Y | P | N | N | P | N | P | P | N | P | N | N | Y |
 | E1 | Cold start / warm pool | P | - | P | N | N | - | P | P | P | Y | Y | Y | Y | Y | Y | ? | ? | Y | ? |
 | E2 | Snapshot, pause/resume, fork | N | - | N | P | P | N | N | Y | Y | Y | Y | P | P | Y | Y | P | N | N | N |
 | E3 | Persistence across sessions | N | - | P | Y | Y | P | P | Y | Y | Y | Y | Y | P | Y | Y | Y | N | N | N |
@@ -215,9 +215,17 @@ Columns: **pysb** PySandboxes, **RPy** RestrictedPython, **smol** smolagents, **
 | D2 | Self-host / SaaS / Kubernetes | P | - | P | P | P | P | P | P | Y | Y | Y | Y | P | Y | Y | Y | Y | Y | Y |
 | D3 | Enforcing code is open | Y | Y | Y | Y | Y | Y | Y | Y | P | P | Y | Y | Y | P | P | P | N | N | N |
 | G1 | SDKs, MCP, agent frameworks | Y | P | Y | P | Y | Y | Y | Y | Y | Y | Y | Y | Y | Y | Y | Y | Y | Y | Y |
-| G2 | Safety of results returned to the host | Y | - | Y | Y | P | - | ? | P | Y | Y | Y | Y | Y | P | ? | P | ? | ? | ? |
+| G2 | Safety of results returned to the host | Y | - | Y | Y | P | - | Y | P | Y | Y | Y | Y | Y | P | ? | P | ? | ? | ? |
 
-Twenty-two cells were changed on 2026-11-13. Four are OpenSandbox cells re-read at `e564cd1`: R2 and E3 went from `P` to `Y`
+Thirty-two cells were changed on 2026-11-13. A second pass re-read the code column by column and changed ten more
+(the tenth is E2B F3, `?` to `Y`: `envd` implements upload and download, and the legend's `Y` means a transfer exists):
+smolagents L3 and L4 (`P` to `N`, no network policy and no credential brokering in `remote_executors.py`),
+langchain-sandbox S1 and P5 (`P` to `N`, isolation comes from Deno flags per sandbox instance), Codex G2 (`?` to `Y`,
+plain-text output capped at 1 MiB, no deserialisation of objects), Daytona I1 (`Y` to `P`, Sysbox appears only in the
+documentation while the runner of the `v0.190.0` tag sets `Privileged: gpuIndex == nil`) and K1 (`P` to `N`, the sandbox
+environment is copied into the container unfiltered), microsandbox N5 (`P` to `Y`, DNS interception with rebinding defence
+and pinning, as for OpenShell and sandbox-runtime) and C6 (`P` to `N`, no approval mechanism in the docs or the policy types).
+The sandbox-runtime, OpenShell, llm-sandbox and agent-sandbox columns came back with no change that the code supports. Four are OpenSandbox cells re-read at `e564cd1`: R2 and E3 went from `P` to `Y`
 (a sandbox `timeout` and a per-command `timeout` in `specs/execd-api.yaml`; volume mounts and snapshot services in the server),
 and F1 and K1 went from `Y` to `P` (path rules exist only in the optional Landlock confinement, and `env_passthrough` is scoped to
 isolated sessions). O1 for Daytona went from `Y` to `P`: its audit controller
