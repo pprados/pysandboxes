@@ -187,7 +187,7 @@ Columns: **pysb** PySandboxes, **RPy** RestrictedPython, **smol** smolagents, **
 | L3 | Protocol-aware rules beyond HTTP | N | N | P | N | P | N | P | N | N | N | P | P | N | N | P | N | N | N | N |
 | L4 | Credential injection / brokering | N | N | P | N | Y | Y | Y | Y | P | N | Y | N | N | Y | Y | Y | N | P | Y |
 | L5 | Identity of the caller in network policy | N | N | N | N | Y | P | P | N | N | N | P | P | N | N | N | N | N | N | N |
-| F1 | Path-level read/write allow/deny | Y | N | N | Y | Y | Y | Y | Y | N | N | Y | P | P | N | N | N | ? | N | P |
+| F1 | Path-level read/write allow/deny | Y | N | N | Y | Y | Y | Y | Y | N | N | P | P | P | N | N | N | ? | N | P |
 | F2 | Copy-on-write / overlay / ephemeral rootfs | P | - | P | P | Y | N | P | Y | Y | Y | Y | N | P | N | ? | ? | Y | ? | ? |
 | F3 | Safe file transfer host and sandbox | P | - | N | - | P | P | P | Y | ? | Y | Y | Y | Y | ? | ? | P | P | ? | P |
 | S1 | Syscall filtering | P | N | N | P | Y | P | Y | N | P | N | P | N | P | Y | Y | - | ? | ? | ? |
@@ -203,12 +203,12 @@ Columns: **pysb** PySandboxes, **RPy** RestrictedPython, **smol** smolagents, **
 | C4 | Learning / advisor mode | Y | N | N | N | Y | N | P | N | N | N | N | N | N | N | N | N | N | N | N |
 | C5 | Formal verification of the policy | N | N | N | N | Y | N | N | N | N | N | N | N | N | N | N | N | N | N | N |
 | C6 | Human approval loop for denied actions | P | N | N | N | Y | Y | Y | P | N | N | N | N | N | N | N | N | N | N | N |
-| K1 | Environment filtering / secret scrubbing | Y | N | N | Y | Y | Y | Y | P | N | P | Y | N | P | P | N | P | N | N | Y |
+| K1 | Environment filtering / secret scrubbing | Y | N | N | Y | Y | Y | Y | P | N | P | P | N | P | P | N | P | N | N | Y |
 | E1 | Cold start / warm pool | P | - | P | N | N | - | P | P | P | Y | Y | Y | Y | Y | Y | ? | ? | Y | ? |
 | E2 | Snapshot, pause/resume, fork | N | - | N | P | P | N | N | Y | Y | Y | Y | P | P | Y | Y | P | N | N | N |
-| E3 | Persistence across sessions | N | - | P | Y | Y | P | P | Y | Y | Y | P | Y | P | Y | Y | Y | N | N | N |
+| E3 | Persistence across sessions | N | - | P | Y | Y | P | P | Y | Y | Y | Y | Y | P | Y | Y | Y | N | N | N |
 | R1 | CPU / memory limits | P | N | P | P | P | N | N | Y | Y | Y | Y | Y | P | Y | Y | P | ? | P | P |
-| R2 | Timeouts / operation budgets | Y | P | Y | Y | Y | N | Y | Y | Y | Y | P | P | Y | Y | Y | P | Y | Y | N |
+| R2 | Timeouts / operation budgets | Y | P | Y | Y | Y | N | Y | Y | Y | Y | Y | P | Y | Y | Y | P | Y | Y | N |
 | R3 | GPU | N | - | N | N | Y | N | N | N | N | Y | P | Y | N | Y | N | N | ? | P | ? |
 | O1 | Decision log, structured denial for the agent | P | P | P | N | Y | Y | P | P | P | P | Y | P | N | N | N | N | Y | P | P |
 | D1 | Linux / macOS / Windows | P | Y | Y | P | Y | P | Y | Y | P | P | P | N | P | - | - | - | - | - | Y |
@@ -217,7 +217,10 @@ Columns: **pysb** PySandboxes, **RPy** RestrictedPython, **smol** smolagents, **
 | G1 | SDKs, MCP, agent frameworks | Y | P | Y | P | Y | Y | Y | Y | Y | Y | Y | Y | Y | Y | Y | Y | Y | Y | Y |
 | G2 | Safety of results returned to the host | Y | - | Y | Y | P | - | ? | P | Y | Y | Y | Y | Y | P | ? | P | ? | ? | ? |
 
-Eighteen cells were changed on 2026-11-13. O1 for Daytona went from `Y` to `P`: its audit controller
+Twenty-two cells were changed on 2026-11-13. Four are OpenSandbox cells re-read at `e564cd1`: R2 and E3 went from `P` to `Y`
+(a sandbox `timeout` and a per-command `timeout` in `specs/execd-api.yaml`; volume mounts and snapshot services in the server),
+and F1 and K1 went from `Y` to `P` (path rules exist only in the optional Landlock confinement, and `env_passthrough` is scoped to
+isolated sessions). O1 for Daytona went from `Y` to `P`: its audit controller
 (`apps/api/src/admin/controllers/audit.controller.ts` in the `v0.190.0` tag) lists audit logs of API operations,
 and the runner's `netrules` package only holds a logger for rule set-up; no network decision log and no denial
 returned to the agent was found. Three more are in row S2, process execution control, where `Y` cells
