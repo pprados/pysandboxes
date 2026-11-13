@@ -189,7 +189,7 @@ Columns: **pysb** PySandboxes, **RPy** RestrictedPython, **smol** smolagents, **
 | F3 | Safe file transfer host and sandbox | P | - | N | - | P | P | P | Y | ? | Y | Y | Y | Y | ? | ? | P | P | ? | P |
 | S1 | Syscall filtering | P | N | N | P | Y | P | Y | N | P | N | P | N | P | Y | Y | - | ? | ? | ? |
 | S2 | Control of process execution | Y | N | P | Y | P | P | Y | P | P | Y | Y | Y | N | P | N | N | ? | ? | ? |
-| S3 | Code runs unprivileged by default (not root, not privileged) | P | - | N | - | P | Y | P | N | P | N | P | N | N | ? | N | ? | ? | ? | ? |
+| S3 | Code runs unprivileged by default (not root, not privileged) | P | - | N | - | P | Y | P | N | P | N | P | N | P | ? | N | ? | ? | ? | ? |
 | P1 | Import control | Y | N | Y | N | - | N | N | N | - | - | N | N | N | N | N | N | - | - | - |
 | P2 | Sensitive call control beyond imports | Y | N | P | N | - | N | N | N | - | - | N | N | N | N | N | N | - | - | - |
 | P3 | Control of `eval` / `exec` / `compile` | Y | P | Y | N | - | N | N | N | - | - | N | N | N | N | N | N | - | - | - |
@@ -200,7 +200,7 @@ Columns: **pysb** PySandboxes, **RPy** RestrictedPython, **smol** smolagents, **
 | C4 | Learning / advisor mode | Y | N | N | N | Y | N | P | N | N | N | N | N | N | N | N | N | N | N | N |
 | C5 | Formal verification of the policy | N | N | N | N | Y | N | N | N | N | N | N | N | N | N | N | N | N | N | N |
 | C6 | Human approval loop for denied actions | P | N | N | N | Y | Y | Y | P | N | N | N | N | N | N | N | N | N | N | N |
-| K1 | Environment filtering / secret scrubbing | Y | N | N | Y | Y | Y | Y | P | N | P | Y | N | N | P | N | P | N | N | Y |
+| K1 | Environment filtering / secret scrubbing | Y | N | N | Y | Y | Y | Y | P | N | P | Y | N | P | P | N | P | N | N | Y |
 | E1 | Cold start / warm pool | P | - | P | N | N | - | P | P | P | Y | Y | Y | Y | Y | Y | ? | ? | Y | ? |
 | E2 | Snapshot, pause/resume, fork | N | - | N | P | P | N | N | Y | Y | Y | Y | N | N | Y | Y | P | N | N | N |
 | E3 | Persistence across sessions | N | - | P | Y | Y | P | P | Y | Y | Y | P | Y | P | Y | Y | Y | N | N | N |
@@ -214,7 +214,9 @@ Columns: **pysb** PySandboxes, **RPy** RestrictedPython, **smol** smolagents, **
 | G1 | SDKs, MCP, agent frameworks | Y | P | Y | P | Y | Y | Y | Y | Y | Y | Y | Y | Y | Y | Y | Y | Y | Y | Y |
 | G2 | Safety of results returned to the host | Y | - | Y | Y | P | - | ? | P | Y | Y | Y | Y | Y | P | ? | P | ? | ? | ? |
 
-Two cells were changed on 2026-11-13. I3 for sandbox-runtime went from `N` to `P`, because its code at
+Four cells were changed on 2026-11-13. S3 and K1 for llm-sandbox went from `N` to `P`, because its local
+Bubblewrap backend (`bubblewrap.py` at `abdddb2`) runs with `--unshare-user` and `--cap-drop ALL` and starts
+from `--clearenv`, while its container backend still starts as root. I3 for sandbox-runtime went from `N` to `P`, because its code at
 `0bbebed0` offers a Windows backend choice (`windows.backend` set to `'mxc'`); on Linux and macOS it has one
 backend each. S1 for OpenSandbox went from `N` to `P`: at `e564cd1`, `components/execd/pkg/isolation` and
 `configs/isolation.example.toml` describe a seccomp denylist of about thirty syscalls (`mount`, `ptrace`,
