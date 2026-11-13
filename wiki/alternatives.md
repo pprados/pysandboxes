@@ -8,7 +8,7 @@ the code of this repository. The other solutions got one web search each that da
 page) was read and compared with the text, with uneven depth: for microsandbox, RestrictedPython and
 AWS AgentCore the pages read gave nothing new on network or isolation; the discrepancies found are
 corrected in the sections concerned (see the end of [Sources](#sources-and-commits-analysed)). The
-matrix was re-read against the code of the open-source projects on 2026-11-13, in three passes, and 36 cells were
+matrix was re-read against the code of the open-source projects on 2026-11-13, in three passes, and 38 cells were
 changed; the rows that no pass reached, and every cell of the closed services (documentation only), keep the
 evidence level of 2026-10-01. Verify claims before relying on them; projects
 change.*
@@ -189,11 +189,11 @@ Columns: **pysb** PySandboxes, **RPy** RestrictedPython, **smol** smolagents, **
 | L4 | Credential injection / brokering | N | N | N | N | Y | Y | Y | Y | P | N | Y | N | N | Y | Y | Y | N | P | Y |
 | L5 | Identity of the caller in network policy | N | N | N | N | Y | P | P | N | N | N | P | P | N | N | N | N | N | N | N |
 | F1 | Path-level read/write allow/deny | Y | N | N | Y | Y | Y | Y | Y | N | N | P | P | P | N | N | N | ? | N | P |
-| F2 | Copy-on-write / overlay / ephemeral rootfs | P | - | P | P | Y | N | P | Y | Y | Y | Y | N | P | N | ? | ? | Y | ? | ? |
+| F2 | Copy-on-write / overlay / ephemeral rootfs | P | - | P | P | Y | N | P | Y | Y | Y | Y | N | P | N | ? | ? | Y | ? | P |
 | F3 | Safe file transfer host and sandbox | P | - | N | - | P | P | P | Y | Y | Y | Y | Y | Y | ? | ? | P | P | ? | P |
 | S1 | Syscall filtering | P | N | N | N | Y | P | Y | N | P | N | P | N | P | Y | Y | - | ? | ? | ? |
 | S2 | Control of process execution | Y | N | P | Y | P | P | Y | P | P | N | P | P | N | P | N | N | ? | ? | ? |
-| S3 | Code runs unprivileged by default (not root, not privileged) | P | - | N | - | P | Y | P | N | P | N | P | N | P | ? | N | N | ? | ? | ? |
+| S3 | Code runs unprivileged by default (not root, not privileged) | P | - | N | - | P | Y | P | N | P | N | P | N | P | ? | N | N | ? | ? | N |
 | P1 | Import control | Y | N | Y | N | - | N | N | N | - | - | N | N | N | N | N | N | - | - | - |
 | P2 | Sensitive call control beyond imports | Y | N | P | N | - | N | N | N | - | - | N | N | N | N | N | N | - | - | - |
 | P3 | Control of `eval` / `exec` / `compile` | Y | P | Y | N | - | N | N | N | - | - | N | N | N | N | N | N | - | - | - |
@@ -218,7 +218,11 @@ Columns: **pysb** PySandboxes, **RPy** RestrictedPython, **smol** smolagents, **
 | G1 | SDKs, MCP, agent frameworks | Y | P | Y | P | Y | Y | Y | Y | Y | Y | Y | Y | Y | Y | Y | Y | Y | Y | Y |
 | G2 | Safety of results returned to the host | Y | - | Y | Y | P | - | Y | P | Y | Y | Y | Y | Y | P | ? | P | ? | ? | ? |
 
-Thirty-six cells were changed on 2026-11-13. A second pass re-read the code column by column and changed twelve more
+Thirty-eight cells were changed on 2026-11-13. The security page of Docker Sandboxes, read that day, says the agent has
+full control inside the microVM, including `sudo`, so S3 went from `?` to `N`, and that with `--clone` the repository is mounted
+read-only and the agent works on a private clone, so F2 went from `?` to `P`. The AgentCore overview and the Azure sessions
+overview were also re-read and give nothing that changes a cell (AgentCore lists CloudTrail logging and network modes, Azure
+lists Hyper-V isolation and prewarmed session pools). A second pass re-read the code column by column and changed twelve more
 (microsandbox C3 went from `N` to `P` because `msb modify` rotates secrets and their allowed hosts live, and K1 from `P` to `Y`
 because the host environment is never passed to the guest and secrets are placeholders; the last is E2B F3, `?` to `Y`: `envd` implements upload and download, and the legend's `Y` means a transfer exists):
 smolagents L3 and L4 (`P` to `N`, no network policy and no credential brokering in `remote_executors.py`),
