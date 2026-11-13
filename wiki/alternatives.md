@@ -690,9 +690,12 @@ These source locations support the key distinctions in the comparison:
 
 ## Where PySandboxes stands
 
-**What only PySandboxes does.** No other solution in this survey controls what the Python code itself does.
-That means imports, a registry of 152 sensitive functions, and code arriving as a string, which is parsed,
-rewritten and run under a budget. It is the only solution that confines one function rather than a process,
+**What only PySandboxes does.** Two other solutions in this survey also control what the Python code itself
+does: RestrictedPython, which rewrites the syntax tree, and the local executor of smolagents, which interprets
+it with an import list and a budget; neither has an OS boundary. PySandboxes is the only one to put Python-level
+rules inside a kernel boundary. It alone has a registry of 152 sensitive functions, and it alone treats code
+arriving as a string as its own layer, parsed, rewritten and run under a budget and a timeout. It is the only
+solution that confines one function rather than a process,
 a pod or a VM. It is one of two that write their own policy from observed behaviour; OpenShell is the other,
 with an advisor rather than a recording. Unlike most solutions, which avoid the problem by never
 unpickling, it returns real Python objects from the sandbox, and it unpickles them under a guard. And it lets the user choose among eight Linux boundaries, from Landlock with no extra binary, through namespaces
