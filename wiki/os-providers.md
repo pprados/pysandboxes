@@ -13,43 +13,43 @@ Add an OS provider to contain native code and direct system calls. OS providers 
 
 ## Which provider?
 
-Start here; the matrix below gives the detail behind each line.
+One line per provider, with only what separates them; each links to its own page. The control matrix, the container rows and the limits follow.
 
-| Situation | Provider |
-|---|---|
-| Default on Linux: nothing to install, no privilege, files and TCP ports | [`landlock`](landlock.md) |
-| Untrusted native code, or host and UDP filtering, with the lightest namespaces | [`bwrap`](bwrap.md) |
-| Untrusted native code, or host and UDP filtering, with only user namespaces, `slirp4netns` and `iptables` | [`unshare`](unshare.md) |
-| Strongest separation, in a VM (more than 20 s to start) | [`qemu`](qemu.md) |
-| Smaller QEMU machine, x86_64 Linux, with at most eight virtio-mmio transports | [`qemu-microvm`](qemu-microvm.md) |
-| Compiled code or kernel exploits, user-space kernel, starts in about a second | [`gvisor`](gvisor.md) |
-| Compiled code or kernel exploits, with its own guest kernel in a micro-VM (KVM, about a second), TCP filtered by address only, no IPv6, Linux only | [`smolvm`](smolvm.md) |
-| Resource limits and seccomp | [`firejail`](firejail.md) |
-| Inside Docker, Podman or Kubernetes | [`landlock`](landlock.md), [`qemu`](qemu.md) or [`qemu-microvm`](qemu-microvm.md) unprivileged; [`unshare`](unshare.md) or [`bwrap`](bwrap.md) with `--privileged`; [`smolvm`](smolvm.md) unprivileged, as a user of the `kvm` group with `/dev/kvm` (Docker `--device`, `--group-add`, `--user`; Podman also `--userns=keep-id`; Kubernetes through a device plugin); [`gvisor`](gvisor.md) with `--privileged` or its lowered confinement (see below) |
-| Files and ports on macOS (Seatbelt, no host filtering) | [`sandbox-exec`](sandbox-exec.md) |
-| Files and network on Windows, without administrator rights (AppContainer token, no host or port filtering) | [`appcontainer`](appcontainer.md) |
-| Process separation only, no OS boundary (also on macOS, and the fallback on Windows) | [`subprocess`](subprocess.md) |
-| No sandbox at all: plain Python, for comparison or trusted code | `none` |
+| Provider | OS | What isolates | Network filter | Start-up | Pick it when |
+|---|---|---|---|:---:|---|
+| `none` | Any | Nothing | ❌ | 0.1 s | Comparison, or trusted code |
+| [`subprocess`](subprocess.md) | Any | A separate process, no OS boundary | ❌ | 0.3 s | Mistakes, no attacker; fallback on macOS and Windows |
+| [`landlock`](landlock.md) | Linux 6.7+ | A kernel ruleset the process applies to itself | TCP ports only | 0.3 s | Default: nothing to install, no privilege |
+| [`bwrap`](bwrap.md) | Linux | Mount and network namespaces | Host, port, TCP and UDP | 0.3 s | Untrusted native code, lightest namespaces |
+| [`unshare`](unshare.md) | Linux | Namespaces, `slirp4netns`, `iptables` | Host, port, TCP and UDP | 1.4 s | Same as `bwrap`, with only user namespaces and these two tools |
+| [`firejail`](firejail.md) | Linux | Namespaces, setuid-root binary | Host, port, TCP and UDP | 0.5 s | Host already has it; adds resource limits and seccomp. Not in a container |
+| [`gvisor`](gvisor.md) | Linux | A user-space kernel (Sentry) | Host, port, TCP and UDP | 0.7 s | Kernel exploits, without a VM |
+| [`smolvm`](smolvm.md) | Linux, KVM | A micro-VM with its own kernel | TCP by address only, no IPv6 | 1 s | Kernel exploits, with a VM boundary, in about a second |
+| [`qemu`](qemu.md) | Linux | A full VM with its own kernel | Host, port, TCP and UDP | 13 s | Strongest separation; start-up paid once |
+| [`qemu-microvm`](qemu-microvm.md) | Linux x86_64 | A smaller VM, virtio-mmio only | Host, port, TCP and UDP | 20 s (KVM) | Smaller device model; at most eight host shares |
+| [`sandbox-exec`](sandbox-exec.md) | macOS | A Seatbelt profile (deprecated by Apple) | Port only, no host | <1 s | Files and ports on macOS |
+| [`appcontainer`](appcontainer.md) | Windows | An AppContainer token, no administrator needed | Network class only, no host or port | pending | Files and network on Windows |
 
-Two limits to know before choosing `landlock`: it denies a path but cannot hide it, and it does not protect the host's named Unix sockets (see [Host sockets under `/run`](#host-sockets-under-run)). Against untrusted native code, prefer `bwrap` or `unshare`.
+### Four families
+
+- **No boundary**: `none`, `subprocess`. Only the Python layer protects.
+- **Kernel rules or namespaces, same kernel as the host**: `landlock`, `bwrap`, `unshare`, `firejail`, plus `sandbox-exec` and `appcontainer` on their systems. Cheap (under 2 s). A kernel exploit reaches the host.
+- **Another kernel in user space**: `gvisor`. Sentry answers the guest; the host sees a small set of system calls.
+- **Another kernel in a VM**: `smolvm`, `qemu`, `qemu-microvm`. The host kernel is out of the guest's reach.
+
+### Differences that decide the choice
+
+- **Privilege**: none for every provider except `firejail` (setuid root) and the VM providers, which need the `kvm` group for acceleration.
+- **Host filtering**: `landlock`, `sandbox-exec` and `appcontainer` cannot filter by host, so native code is not stopped from reaching a host on an allowed port. The others can.
+- **Hiding a path**: `landlock` denies a path but cannot hide it, and does not keep the host's named Unix sockets out of reach (see [Host sockets under `/run`](#host-sockets-under-run)). Against untrusted native code prefer `bwrap` or `unshare`.
+- **Containers**: `landlock`, `qemu`, `qemu-microvm` and `smolvm` run unprivileged; `bwrap`, `unshare` and `gvisor` need `--privileged` or a lowered confinement; `firejail` never runs there.
+- **Same on all of them**: the Python guards (`import`, `python-api`, `eval-*`) belong to the Python layer, not to the provider. Keep it on and add one provider around it.
+
+Start-up times are one measure on one host, in orders of magnitude (see [What each costs](#what-each-costs)).
 
 ## All providers
 
-The providers that can wrap the Python sandbox are:
-
-| Technology                                                      | Implementation<br/>&amp;<br/>Configuration | Specifics                                                                    | Description                                                                                                                              |
-|-----------------------------------------------------------------|--------------------------------------------|------------------------------------------------------------------------------|------------------------------------------------------------------------------------------------------------------------------------------|
-| [subprocess](subprocess.md)                                     | [here](subprocess.md)                 | • no complementary security                                                  | Separate Python process of the same user, with no OS boundary. Runs on every platform.                                                   |
-| [bwrap](https://github.com/containers/bubblewrap)               | [here](bwrap.md)                      | • Disk mapping (without rename)<br/>• File filtering<br/>• Network filtering | This is a technology that allows isolating a Linux process at the disk and network levels.                                               |
-| [firejail](https://github.com/netblue30/firejail)               | [here](firejail.md)                   | • Disk mapping (without rename)<br/>• File filtering<br/>• Network filtering | This is a technology that allows isolating a Linux process at the disk and network levels.                                               |
-| [unshare](https://man7.org/linux/man-pages/man2/unshare.2.html) | [here](unshare.md)                    | • Disk mapping (without rename)<br/>• File filtering<br/>• Network filtering | This is a technology that allows isolating a Linux process at the disk and network levels using `unshare`, `slirp4netns` and `iptables`. |
-| [landlock](https://landlock.io/)                                | [here](landlock.md)                   | • Directory access<br/>• Network TCP port filtering                          | This is a technology that allows an auto isolation inside a Linux process.                                                               |
-| [qemu](https://www.qemu.org/)                            | [here](qemu.md)                       | • Total emulation of OS and CPU                                              | No need of privilege. Use KVM if it's possible, else use the emulation.                                                                  |
-| [qemu-microvm](https://www.qemu.org/docs/master/system/i386/microvm.html) | [here](qemu-microvm.md) | • Separate guest kernel<br/>• virtio-mmio only<br/>• Linux x86_64 | Direct kernel boot; KVM recommended. Eight transport limit; TCG is much slower. |
-| [gvisor](https://gvisor.dev)                             | [here](gvisor.md)                     | • User-space kernel (Sentry)<br/>• Disk mapping<br/>• File filtering<br/>• Network filtering | `runsc` in a private network namespace filtered by `iptables`, with `slirp4netns`. |
-| [smolvm](https://github.com/smol-machines/smolvm) | [here](smolvm.md) | • Micro-VM with its own kernel (KVM)<br/>• Disk mapping (directories)<br/>• Network filtering by address | `smolvm machine run` on an OCI image, the channel over a Unix socket; no namespace or `iptables` on the host. |
-| sandbox-exec | [here](sandbox-exec.md) | • Seatbelt path and port filtering<br/>• Deprecated by Apple<br/>• No remote host/IP filtering | Legacy macOS-only profile launcher. |
-| [appcontainer](appcontainer.md) | [here](appcontainer.md) | • File ACLs<br/>• AppContainer network capabilities<br/>• Job Object | Windows-only provider; its administrator and standard-user suites pass, and `cross-os.yml` runs them on the Windows runner. |
+The same providers, control by control:
 
 The `none` column means plain Python with no sandbox. `py-sandbox` shows the Python layer. Each OS column shows that provider's controls; it does not include Python controls. In practice, OS providers wrap the Python layer.
 
@@ -57,7 +57,7 @@ A ❌ means the provider does not enforce that control. The Python layer may sti
 
 [`sandbox-exec`](sandbox-exec.md) is the macOS provider. Apple has deprecated the command, and it creates no namespace, so it is not a VM boundary. See [the provider page](sandbox-exec.md) before selecting it.
 
-| Guard                    | none | py-sandbox | landlock  |  unshare  |   bwrap   | firejail |       qemu       | gvisor | smolvm | sandbox-exec | appcontainer¹ |
+| Guard                    | none | py-sandbox | [landlock](landlock.md)  |  [unshare](unshare.md)  |   [bwrap](bwrap.md)   | [firejail](firejail.md) |       [qemu](qemu.md)       | [gvisor](gvisor.md) | [smolvm](smolvm.md) | [sandbox-exec](sandbox-exec.md) | [appcontainer](appcontainer.md)¹ |
 |--------------------------|:----:|:----------:|:---------:|:---------:|:---------:|:------:|:----------------:|:--------:| :--------: | :----------: |:-----------:|
 | Isolation                |  ❌   |  Process   | Linux ABI | Namespace | Namespace | Namespace | VM+<br/>emulator | User-space<br/>kernel | MicroVM+<br/>own kernel | Seatbelt | AppContainer |
 | Host privilege           | None |    None    |   None    | None⁷ | None | **setuid root**⁶ | None<br/>(`kvm` group) | None | None<br/>(`kvm` group) | None | None |
@@ -157,16 +157,16 @@ To pin a provider so the environment cannot downgrade it, write it literally, e.
 
 | Provider | Unix socket |
 |---|---|
-| subprocess | ✅ |
-| landlock | ✅ |
-| bwrap | ✅ |
-| firejail | ✅ |
-| unshare | ✅ |
-| sandbox-exec | ✅ macOS: Seatbelt lets the sandbox accept on the inherited socket, with no network rule |
-| appcontainer | ❌ Windows Python has no `socket.AF_UNIX`; the channel stays on TCP |
-| qemu | ✅ QEMU creates the socket (`hostfwd=unix:`); the guest keeps serving TCP behind the forward |
-| gvisor | ❌ the guest cannot accept on a handed-down socket, and `--host-uds=open` would let it reach host sockets |
-| smolvm | ✅ the guest listens on a Unix socket that `--expose-socket` makes reachable on the host, and needs no network for it; `remote-endpoint=tcp` is an error |
+| [subprocess](subprocess.md) | ✅ |
+| [landlock](landlock.md) | ✅ |
+| [bwrap](bwrap.md) | ✅ |
+| [firejail](firejail.md) | ✅ |
+| [unshare](unshare.md) | ✅ |
+| [sandbox-exec](sandbox-exec.md) | ✅ macOS: Seatbelt lets the sandbox accept on the inherited socket, with no network rule |
+| [appcontainer](appcontainer.md) | ❌ Windows Python has no `socket.AF_UNIX`; the channel stays on TCP |
+| [qemu](qemu.md) | ✅ QEMU creates the socket (`hostfwd=unix:`); the guest keeps serving TCP behind the forward |
+| [gvisor](gvisor.md) | ❌ the guest cannot accept on a handed-down socket, and `--host-uds=open` would let it reach host sockets |
+| [smolvm](smolvm.md) | ✅ the guest listens on a Unix socket that `--expose-socket` makes reachable on the host, and needs no network for it; `remote-endpoint=tcp` is an error |
 
 Not supported by this layer: Windows named pipes (uvicorn cannot serve on them) and anonymous pipes (no accept loop).
 
@@ -209,12 +209,12 @@ keep `py-sandbox` on, and put one OS provider around it (see [Recommendations](#
 
 | Threat | Typical code | Python layer | OS provider | What stops the attack |
 |---|---|:---:|---|---|
-| Mistakes, no attacker | Your own scripts | on | `subprocess` | Process separation and the guards. No OS boundary |
-| Hostile Python, no native code | LLM-generated code, plugins | on | `landlock` (default) | The Python guards, plus a kernel ruleset on files and TCP ports |
-| Hostile native code | Dependencies with C extensions, `ctypes`, database drivers | on | `bwrap` or `unshare` | Mount and network namespaces: a path that is not exposed does not exist, the network is filtered |
-| Hostile native code, kernel exploits | Code that may attack the kernel itself | on | `gvisor` | The guest talks to a user-space kernel (Sentry), which makes a small set of host system calls |
-| Worst case, or another CPU | Code you cannot reason about | on | `qemu` | A VM with its own Linux kernel: the host kernel is out of the guest's reach |
-| Same as `qemu`, with a smaller virtual machine | Code you cannot reason about, on Linux x86_64, with at most eight host shares | on | `qemu-microvm` | A VM with its own Linux kernel, booted directly, with virtio-mmio devices only and no PCI or ACPI. Same isolation class as `qemu`, not a stronger one, and not faster to start |
+| Mistakes, no attacker | Your own scripts | on | [`subprocess`](subprocess.md) | Process separation and the guards. No OS boundary |
+| Hostile Python, no native code | LLM-generated code, plugins | on | [`landlock`](landlock.md) (default) | The Python guards, plus a kernel ruleset on files and TCP ports |
+| Hostile native code | Dependencies with C extensions, `ctypes`, database drivers | on | [`bwrap`](bwrap.md) or [`unshare`](unshare.md) | Mount and network namespaces: a path that is not exposed does not exist, the network is filtered |
+| Hostile native code, kernel exploits | Code that may attack the kernel itself | on | [`gvisor`](gvisor.md) | The guest talks to a user-space kernel (Sentry), which makes a small set of host system calls |
+| Worst case, or another CPU | Code you cannot reason about | on | [`qemu`](qemu.md) | A VM with its own Linux kernel: the host kernel is out of the guest's reach |
+| Same as `qemu`, with a smaller virtual machine | Code you cannot reason about, on Linux x86_64, with at most eight host shares | on | [`qemu-microvm`](qemu-microvm.md) | A VM with its own Linux kernel, booted directly, with virtio-mmio devices only and no PCI or ACPI. Same isolation class as `qemu`, not a stronger one, and not faster to start |
 
 `firejail` is a variant of the namespace row for hosts that already have it: it adds resource limits and a seccomp
 filter. `sandbox-exec` (macOS) and `appcontainer` (Windows) are the choices on those systems.
@@ -227,15 +227,15 @@ Measured on one host with `py-sandbox=false`, one run each. Start-up counts the 
 | Provider | Start-up | 50 000 `os.stat` | Needs | Network filter |
 |---|---:|---:|---|:---:|
 | `none` | 0.13 s | 0.02 s | Nothing | ❌ |
-| `subprocess` | 0.30 s | 0.02 s | Nothing | ❌ |
-| `landlock` | 0.30 s | 0.02 s | Linux 6.7+ (Landlock ABI v4) | TCP ports |
-| `bwrap` | 0.31 s | 0.03 s | `bwrap`, user namespaces; filtering also `slirp4netns`, `iptables` | ✅ |
-| `firejail` | 0.51 s | 0.02 s | `firejail` | ✅ |
-| `unshare` | 1.43 s | 0.03 s | User namespaces, `slirp4netns`, `iptables` | ✅ |
-| `gvisor` (`systrap`) | 0.74 s | 0.16 s | `runsc`, `slirp4netns`, `iptables`, `/dev/net/tun` | ✅ |
-| `smolvm` | 1.0 s | not measured | `smolvm`, `/dev/kvm`, a guest image (`make build-image-smolvm`) | ✅ |
-| `qemu` | 12.8 s | 0.06 s | `qemu-system`; KVM makes it faster | ✅ |
-| `qemu-microvm` | 20.4 s KVM<br/>110.3 s TCG | — | Linux x86_64, `qemu-system-x86_64`, `7zip`; KVM recommended | ✅ |
+| [`subprocess`](subprocess.md) | 0.30 s | 0.02 s | Nothing | ❌ |
+| [`landlock`](landlock.md) | 0.30 s | 0.02 s | Linux 6.7+ (Landlock ABI v4) | TCP ports |
+| [`bwrap`](bwrap.md) | 0.31 s | 0.03 s | `bwrap`, user namespaces; filtering also `slirp4netns`, `iptables` | ✅ |
+| [`firejail`](firejail.md) | 0.51 s | 0.02 s | `firejail` | ✅ |
+| [`unshare`](unshare.md) | 1.43 s | 0.03 s | User namespaces, `slirp4netns`, `iptables` | ✅ |
+| [`gvisor`](gvisor.md) (`systrap`) | 0.74 s | 0.16 s | `runsc`, `slirp4netns`, `iptables`, `/dev/net/tun` | ✅ |
+| [`smolvm`](smolvm.md) | 1.0 s | not measured | `smolvm`, `/dev/kvm`, a guest image (`make build-image-smolvm`) | ✅ |
+| [`qemu`](qemu.md) | 12.8 s | 0.06 s | `qemu-system`; KVM makes it faster | ✅ |
+| [`qemu-microvm`](qemu-microvm.md) | 20.4 s KVM<br/>110.3 s TCG | — | Linux x86_64, `qemu-system-x86_64`, `7zip`; KVM recommended | ✅ |
 
 Three consequences:
 
