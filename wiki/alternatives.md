@@ -8,7 +8,7 @@ the code of this repository. The other solutions got one web search each that da
 page) was read and compared with the text, with uneven depth: for microsandbox, RestrictedPython and
 AWS AgentCore the pages read gave nothing new on network or isolation; the discrepancies found are
 corrected in the sections concerned (see the end of [Sources](#sources-and-commits-analysed)). The
-matrix was re-read against the code of the open-source projects on 2026-11-13, in three passes, and 39 cells were
+matrix was re-read against the code of the open-source projects on 2026-11-13, in three passes, and 41 cells were
 changed; the rows that no pass reached, and every cell of the closed services (documentation only), keep the
 evidence level of 2026-10-01. Verify claims before relying on them; projects
 change.*
@@ -174,7 +174,7 @@ Columns: **pysb** PySandboxes, **RPy** RestrictedPython, **smol** smolagents, **
 
 | ID | Feature | pysb | RPy | smol | lcsb | OShl | srt | Cdx | msb | E2B | Dayt | OSbx | k8s | llms | Modl | Verc | CF | AWS | Azur | DkSb |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
-| I1 | Boundary that holds against hostile native code | P | N | P | Y | Y | Y | P | Y | Y | P | P | P | P | Y | Y | Y | P | Y | Y |
+| I1 | Boundary that holds against hostile native code | P | N | P | Y | Y | Y | P | Y | Y | P | P | P | P | Y | Y | Y | Y | Y | Y |
 | I2 | Host-side confinement of the runtime or VMM itself | P | - | ? | N | P | Y | Y | N | P | P | Y | N | - | ? | Y | ? | ? | ? | ? |
 | I3 | Choice of isolation backends | Y | Y | Y | N | Y | P | P | N | N | P | Y | Y | Y | Y | N | N | N | N | N |
 | N2 | IP/CIDR and port rules | Y | N | N | P | Y | Y | P | Y | P | Y | Y | Y | N | Y | Y | P | P | N | P |
@@ -211,14 +211,18 @@ Columns: **pysb** PySandboxes, **RPy** RestrictedPython, **smol** smolagents, **
 | R1 | CPU / memory limits | P | N | P | P | P | N | N | Y | Y | Y | Y | Y | P | Y | Y | P | ? | P | P |
 | R2 | Timeouts / operation budgets | Y | P | Y | Y | Y | N | Y | Y | Y | Y | Y | P | Y | Y | Y | P | Y | Y | N |
 | R3 | GPU | N | - | N | N | Y | N | N | N | N | Y | P | Y | N | Y | N | N | ? | P | ? |
-| O1 | Decision log, structured denial for the agent | P | P | P | N | Y | Y | P | P | P | P | Y | P | N | N | N | N | Y | P | P |
+| O1 | Decision log, structured denial for the agent | P | P | P | N | Y | Y | P | P | P | P | Y | P | N | N | N | N | P | P | P |
 | D1 | Linux / macOS / Windows | P | Y | Y | P | Y | P | Y | Y | P | P | P | N | P | - | - | - | - | - | Y |
 | D2 | Self-host / SaaS / Kubernetes | P | - | P | P | P | P | P | P | Y | Y | Y | Y | P | Y | Y | Y | Y | Y | Y |
 | D3 | Enforcing code is open | Y | Y | Y | Y | Y | Y | Y | Y | P | P | Y | Y | Y | P | P | P | N | N | N |
 | G1 | SDKs, MCP, agent frameworks | Y | P | Y | P | Y | Y | Y | Y | Y | Y | Y | Y | Y | Y | Y | Y | Y | Y | Y |
 | G2 | Safety of results returned to the host | Y | - | Y | Y | P | - | Y | P | Y | Y | Y | Y | Y | P | ? | P | ? | ? | ? |
 
-Thirty-nine cells were changed on 2026-11-13. AgentCore E3 went from `N` to `Y`: its file system configuration page lets a code
+Forty-one cells were changed on 2026-11-13. The AgentCore resource, session and observability pages, read that day, say each session runs
+in a dedicated microVM with its own CPU, memory and file system, whose memory is sanitised at the end (I1 went from `P` to `Y`), that the
+timeout is 900 seconds by default and up to 8 hours (R2 stays `Y`), and that the observability on offer is the output of each call,
+CloudWatch metrics and CloudTrail, with no record of refused actions (O1 went from `Y` to `P`, as for Daytona). The network modes are
+sandbox (limited access to AWS services such as S3), public and VPC. AgentCore E3 went from `N` to `Y`: its file system configuration page lets a code
 interpreter mount Amazon S3 Files or EFS access points, whose data is "persisted and managed in your own AWS account" and shared
 across sessions. The Azure session pool page, read the same day, says untrusted code has full access to the container, including its
 environment variables, secrets and files, and that egress is a per-pool setting, which agrees with K1 and C2. The security page of Docker Sandboxes, read that day, says the agent has
