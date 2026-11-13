@@ -748,6 +748,27 @@ unpickling, it returns real Python objects from the sandbox, and it unpickles th
 | Azure dynamic sessions | [Container Apps sessions](https://learn.microsoft.com/en-us/azure/container-apps/sessions) |
 | Docker Sandboxes | [Docker Sandboxes documentation](https://docs.docker.com/ai/sandboxes/security/) |
 
+Commits read again on 2026-11-13, next to the ones above (clones of the default branch, or of the tag for
+Daytona; a keyword search plus the files named in each entry, not a full analysis):
+
+| Solution | Read again at | Date of that commit |
+|---|---|---|
+| RestrictedPython | `9d7aeb26` | 2026-11-04 |
+| smolagents | `96f33fa` | 2026-10-06 |
+| langchain-sandbox | `fac037c` (unchanged, archived) | 2026-01-14 |
+| OpenShell | `7cfa0c09` | 2026-11-13 |
+| sandbox-runtime | `0bbebed0` | 2026-11-12 |
+| Codex | `69231e1` | 2026-11-13 |
+| microsandbox | `28bdced5` | 2026-11-12 |
+| E2B (`e2b-dev/infra`, not the SDK or runtime above) | `ee78f06` | 2026-11-13 |
+| Daytona | tag `v0.190.0` (`01c502bb`, unchanged, frozen) | 2026-06-23 |
+| OpenSandbox | `e564cd1` | 2026-11-13 |
+| Kubernetes agent-sandbox | `13470fe` | 2026-11-12 |
+| llm-sandbox | `abdddb2` | 2026-11-06 |
+
+The six closed services were compared with their documentation pages only (Modal, Vercel, Cloudflare, AWS
+AgentCore, Azure, Docker Sandboxes), read on the same day.
+
 CVE numbers were checked on 2026-10-01 against NVD, OSV and the GitHub Advisory Database. The ones added on
 2026-11-13 come from search results and were not looked up in those registries.
 
