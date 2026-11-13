@@ -226,7 +226,12 @@ cells of microsandbox, Daytona and agent-sandbox (the latter only passes `seccom
 The microsandbox column was re-read against the code at `28bdced5` for I2, I3, N2, C3, L5, S1, R1, R2, R3, E2 and
 D1 (no libkrun alternative, `Destination::Cidr` rules, no live policy update, no GPU or caller-identity code,
 a per-job `timeout_ms`, fork and snapshot with `--cow-mem` in the README, `cfg(target_os = "windows")` code in
-the metrics crate) and none of those cells changed. No other cell was re-derived from code. Two rows stand out. The language-level rows (P1 to P5) are empty for every solution outside family 1.
+the metrics crate) and none of those cells changed. The OpenSandbox column was re-read at `e564cd1` for N2, N3,
+N4, L2, C6, R1, R2, R3, D1 and E3 and none of those cells changed either: the egress `EgressRule` carries a
+target, ports and port ranges but no method, path or header matcher (hence `P` for L2, which rests on
+mitmproxy addons), the nftables manager says UDP and QUIC rely on DNS-driven refresh, the create request
+takes `timeout_seconds` up to 10800 and `cpu`, `memory` and `gpu` limits, no approval flow appears in the
+egress code, and the execd build skips non-Linux targets. No other cell was re-derived from code. Two rows stand out. The language-level rows (P1 to P5) are empty for every solution outside family 1.
 Learning or advisor mode (C4) exists only in PySandboxes and OpenShell, and partly in Codex, which adds one
 allow rule per human approval.
 
