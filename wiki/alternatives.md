@@ -172,7 +172,7 @@ Columns: **pysb** PySandboxes, **RPy** RestrictedPython, **smol** smolagents, **
 |---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
 | I1 | Boundary that holds against hostile native code | P | N | P | Y | Y | Y | P | Y | Y | Y | P | P | P | Y | Y | Y | P | Y | Y |
 | I2 | Host-side confinement of the runtime or VMM itself | P | - | ? | N | P | Y | Y | N | P | P | Y | N | - | ? | Y | ? | ? | ? | ? |
-| I3 | Choice of isolation backends | Y | Y | Y | N | Y | N | P | N | N | P | Y | Y | Y | Y | N | N | N | N | N |
+| I3 | Choice of isolation backends | Y | Y | Y | N | Y | P | P | N | N | P | Y | Y | Y | Y | N | N | N | N | N |
 | N2 | IP/CIDR and port rules | Y | N | N | P | Y | Y | P | Y | P | Y | Y | Y | N | Y | Y | P | P | N | P |
 | N3 | UDP handling | P | N | N | ? | Y | Y | P | Y | P | P | P | P | P | P | ? | N | P | ? | P |
 | N4 | ICMP handling | N | N | N | ? | N | N | P | P | N | N | P | N | P | N | ? | N | ? | ? | N |
@@ -214,7 +214,9 @@ Columns: **pysb** PySandboxes, **RPy** RestrictedPython, **smol** smolagents, **
 | G1 | SDKs, MCP, agent frameworks | Y | P | Y | P | Y | Y | Y | Y | Y | Y | Y | Y | Y | Y | Y | Y | Y | Y | Y |
 | G2 | Safety of results returned to the host | Y | - | Y | Y | P | - | ? | P | Y | Y | Y | Y | Y | P | ? | P | ? | ? | ? |
 
-Two rows stand out. The language-level rows (P1 to P5) are empty for every solution outside family 1.
+One cell was changed on 2026-11-13: I3 for sandbox-runtime went from `N` to `P`, because its code at
+`0bbebed0` offers a Windows backend choice (`windows.backend` set to `'mxc'`); on Linux and macOS it has one
+backend each. No other cell was re-derived from code. Two rows stand out. The language-level rows (P1 to P5) are empty for every solution outside family 1.
 Learning or advisor mode (C4) exists only in PySandboxes and OpenShell, and partly in Codex, which adds one
 allow rule per human approval.
 
