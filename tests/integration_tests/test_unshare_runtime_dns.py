@@ -32,6 +32,11 @@ PROVIDERS = tuple(
 )
 
 
+def _stderr_excerpt(stderr: str) -> str:
+    """The start of a probe's stderr as well as its end: the cause is logged first, the traceback comes last."""
+    return stderr if len(stderr) <= 6000 else f"{stderr[:3000]}\n[...]\n{stderr[-3000:]}"
+
+
 def _skip_reason(provider: str) -> str | None:
     return (
         unsupported_platform_reason(provider)
@@ -63,7 +68,7 @@ def outcome(tmp_path_factory: pytest.TempPathFactory, layers: str, provider: str
         text=True,
         timeout=300,
     )
-    assert result.returncode == 0, result.stderr[-3000:]
+    assert result.returncode == 0, _stderr_excerpt(result.stderr)
     return json.loads(result.stdout.strip().splitlines()[-1])
 
 
@@ -82,7 +87,7 @@ def one_shot(tmp_path_factory: pytest.TempPathFactory, provider: str) -> tuple[d
         text=True,
         timeout=300,
     )
-    assert result.returncode == 0, result.stderr[-3000:]
+    assert result.returncode == 0, _stderr_excerpt(result.stderr)
     sandbox_line, probe_line = _json_lines(result.stdout)[-2:]
     return sandbox_line, probe_line
 
