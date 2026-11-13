@@ -15,11 +15,22 @@ selected operators, enforces budgets, and guards stores. Evaluation runs in
 the host process; `eval-*` is not an OS boundary.
 
 The findings marked reproduced below come from in-memory probes run during the
-2026-10-16 audit; there is no committed probe file. They were not re-run on
-2026-11-13. Instead, each one was re-checked by reading the code at commit
-`2601d77b` (release 0.12.0): all four mechanisms are still present, so the
-reproduced label is kept and the code reading is the current evidence. A
-probe on the current commit would turn that reading into a reproduction.
+2026-10-16 audit; there is no committed probe file. On 2026-11-13, at commit
+`2601d77b` (release 0.12.0), the first three were replayed with real
+`guard_eval.guarded_eval` calls under a permissive profile built with
+`eval_rules.parse_rules` (Python 3.14.10), each with a negative control. All three
+reproduced:
+
+- `names={"__sb_getattr__": getattr}` turns the refusal `'gi_frame' is denied by the eval guard`
+  into a returned dict holding the caller's globals (`__name__` present).
+- `a += [2]` run in `exec` mode on a supplied list leaves `[1, 2]`, and `a[0][0] = 9` on a
+  supplied nested list leaves `[[9]]`. The direct store `a[0] = 9` is refused
+  (`'list[...] =' is denied`), so the control holds.
+- With `eval-max-alloc=1000`, `(1 << 7900) * (1 << 7900)` returns a 1,976-byte integer, while
+  `[0] * 5000` is refused (`a 5000-element repetition exceeds eval-max-alloc=1000`).
+
+The fourth finding (exception hooks in the parent) was not replayed; it keeps the 2026-10-16
+label and the code reading at `2601d77b`. The probe scripts were kept outside the repository.
 Tests cited here cover specific regression cases and do not establish universal
 safety.
 
