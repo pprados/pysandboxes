@@ -1,6 +1,6 @@
 # Security model
 
-The [README](../README.md) gives the three layers and the limits in a few lines. This page explains the reasoning and lists the filters.
+The [README](../README.md) gives the three layers and the limits in a few lines. This page explains the reasoning and lists the filters. It was checked against release 0.12.0 (commit `2601d77b`) on 2026-11-13: the number of sensitive functions, their categories and the list of OS providers were read in the code that day.
 
 ## Why
 
@@ -87,3 +87,4 @@ Learning mode records supported accesses observed during a run, and gives an ini
 - [Security assessment of the OS boundary](audit-native-guard-study.md): what each OS provider holds against native code.
 - [Weaknesses](weaknesses.md): known limits and residual risks.
 - [Provider comparison](os-providers.md): what each OS mechanism enforces.
+- [Alternatives](alternatives.md): how this model compares with eighteen other solutions, and where they do better.

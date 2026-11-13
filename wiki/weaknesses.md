@@ -4,6 +4,8 @@
 
 This page summarizes limitations found in the current code and focused probes. Each item names whether the behavior was reproduced or established from code. A reproduced result applies to the tested configuration and environment; it does not prove that all providers or deployments behave identically.
 
+The items were rechecked on 2026-11-13 against release 0.12.0 (commit `2601d77b`). The detailed probes and the commands that reproduced them are in the [Python-layer](audit-python-security.md), [`eval-*`](audit-eval-security.md) and [OS-boundary](audit-native-guard-study.md) assessments.
+
 PySandboxes combines Python API guards with an optional OS provider. Python guards mediate supported Python calls; they are not a boundary against hostile native code in the same process. `none` and `subprocess` do not add a kernel boundary. Kernel-backed providers must be evaluated separately for their platform, kernel, configuration, and exposed host resources.
 
 Detailed evidence and attack paths are in the [Python-layer assessment](audit-python-security.md), the [`eval-*` assessment](audit-eval-security.md), and the [native and OS-boundary assessment](audit-native-guard-study.md).
