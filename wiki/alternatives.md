@@ -318,8 +318,13 @@ allow rule per human approval.
   ([`seccomp-unix-block.c`](https://github.com/anthropics/sandbox-runtime/blob/5d196e0937ccdd9bedb83b27879a7a2ecd3a0dd2/vendor/seccomp-src/seccomp-unix-block.c#L92-L121)).
 - **Weaknesses**: reads are open by default. Network is unrestricted when `allowedDomains` is undefined. The
   vendor acknowledges domain fronting
-  ([Claude Code sandboxing](https://code.claude.com/docs/en/sandboxing#security-limitations)). One policy
-  per command, no learning mode. One low-severity advisory,
+  ([Claude Code sandboxing](https://code.claude.com/docs/en/sandboxing#security-limitations)). The README
+  read on 2026-11-13 now documents per-command network allow lists (`registerCommandNetworkLists`, added on
+  top of the configured list for the life of one command) and `:port` suffixes on domain entries, so "one
+  policy per command" no longer holds for the network; the filesystem policy is still global. It also
+  states that all network access is denied by default and that an empty `allowedDomains` means no network,
+  which the analysed commit did not do when the field was undefined; whether the library now closes that case
+  was not checked in code. No learning mode. One low-severity advisory,
   [CVE-2025-66479](https://github.com/advisories/GHSA-9gqj-5w7c-vx47), fixed in 0.0.16. The releases page,
   read on 2026-11-13, lists v0.0.81 (20 October) as the newest, a release whose notes say every change is on
   Windows; the project is still labelled a research preview, and the commit analysed here predates all of it.
