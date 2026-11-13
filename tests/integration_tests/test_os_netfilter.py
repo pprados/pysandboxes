@@ -62,7 +62,14 @@ except OSError as e:
 
 def _params() -> list:
     return [
-        pytest.param(provider, mode, marks=pytest.mark.skipif(bool(reason), reason=reason or ""))
+        pytest.param(
+            provider,
+            mode,
+            marks=[
+                pytest.mark.skipif(bool(reason), reason=reason or ""),
+                *([pytest.mark.slow] if provider.endswith("-tcg") else []),
+            ],
+        )
         for provider in _PROVIDERS
         for reason in (
             provider_skip_reason(provider)
