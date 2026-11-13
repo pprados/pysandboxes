@@ -1827,7 +1827,6 @@ requires-dist = [
     { name = "typing-extensions", specifier = ">=4.0.0" },
     { name = "uvicorn", specifier = ">=0.34.0" },
 ]
-provides-extras = ["all", "bwrap", "firejail", "landlock", "sandbox-exec", "subprocess", "unshare"]
 
 [package.metadata.requires-dev]
 dev = [
@@ -1855,6 +1854,7 @@ test = [
     { name = "pytest-asyncio", specifier = ">=1.2.0" },
     { name = "pytest-dotenv", specifier = ">=0.5.2" },
     { name = "pytest-mock", specifier = ">=3.10.0" },
+    { name = "pytest-rerunfailures", specifier = ">=16.7" },
     { name = "pytestarch", specifier = ">=4.0.1" },
     { name = "pyyaml", specifier = ">=6.0" },
     { name = "requests", specifier = ">=2.33.0" },
