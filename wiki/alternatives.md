@@ -439,7 +439,8 @@ allow rule per human approval.
 ### Modal Sandboxes
 
 - **Bet**: gVisor, or a VM, plus a small set of network settings validated by the client.
-- **Strengths**: block, CIDR list or domain list, mutually exclusive and checked before the call. Header
+- **Strengths**: block, CIDR list or domain list, checked before the call. `block_network=True` excludes both
+  lists, while the two lists can be combined additively (Modal's networking page, read on 2026-11-13). Header
   injection with `$KEY` templates, where the secret never enters the sandbox. GPU, and GPU memory snapshots
   driven by gVisor's checkpoint.
 - **Weaknesses**: network open by default. The domain list only covers TLS on port 443, matched by SNI.
@@ -472,7 +473,9 @@ allow rule per human approval.
 - **Strengths**: as expressive as code can be: rules with state, changed without a redeploy. Credentials
   reached through fictitious host names (`*.sandbox.internal`) that exist only inside the interception.
 - **Weaknesses**: nothing validates the policy, and every application rewrites its own. With internet on,
-  nothing filters. A cross-tenant leak of residual disk data (dm-thin pools without block zeroing) was fixed
+  nothing filters. The overview page, read on 2026-11-13 (last updated 2026-09-30), now presents two sandbox
+  environments, and says each container instance is a microVM with its own kernel and network, with an
+  `enableInternet` switch at start; only the container environment was read. A cross-tenant leak of residual disk data (dm-thin pools without block zeroing) was fixed
   in September 2026 ([Cloudflare's disclosure](https://blog.cloudflare.com/containers-cross-tenant-vulnerability/)).
 
 ### AWS AgentCore, Azure dynamic sessions, Docker Sandboxes
