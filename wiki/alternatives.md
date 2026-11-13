@@ -484,7 +484,14 @@ allow rule per human approval.
   resolvers. A bare `Sandbox` gets none of that. The router's default authoriser is `AllowAll`. The core API reached `v1beta1` with v0.5.0 on 2026-06-24 and
   the quickstart now covers gVisor on KIND and Kata on minikube. The README read on 2026-11-13 repeats that the
   project delegates isolation to `RuntimeClass` runtimes and pins `v1.0.2` in its install example; sources
-  still disagree on the latest release, so the analysed commit is the only firm reference.
+  still disagree on the latest release, so the analysed commit is the only firm reference. Code read on
+  2026-11-13 at commit `13470fe` (2026-11-12): `extensions/controllers/utils.go` still applies a "secure by
+  default" mode only when the template's `NetworkPolicyManagement` is empty or `Managed` and it has no
+  `networkPolicy`; in that mode it sets `DNSPolicy` to `None` with the public resolvers `8.8.8.8` and
+  `1.1.1.1`, and it turns off the service-account token mount whenever the template does not say otherwise.
+  Both the core and the extensions APIs are at `v1beta1`, and the router's `AllowAll` authoriser is still the
+  default (`sandbox-router/authz/authorizer.go`). The `ipBlock` exceptions that give the "everything except
+  private and metadata ranges" egress were not located again in the controllers.
 
 ### llm-sandbox
 
