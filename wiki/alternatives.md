@@ -258,7 +258,13 @@ automatic `approval_mode` and `prover_delta` audit events back C6, `openshell-oc
 backs R3, and R1 stays `P` because only a PID limit was found, not memory or CPU. The agent-sandbox column was also read for E1, E3, R2 and S3: a `SandboxWarmPool` type with `Recreate` and
 `OnReplenish` update strategies backs E1, `volumeClaimTemplates` back E3, a `Lifecycle` with a `shutdownTime`
 backs R2, and a search for `runAsNonRoot` and `runAsUser` in the controllers finds nothing, so S3 stays `N`.
-The llm-sandbox column was also read for E1, R1, R2, S1 and O1: a `pool` package with Docker, Kubernetes and
+The Daytona column was read at the `v0.190.0` tag for N2, C3, E1, E2, F3, O1, R1 and R2 and none of those cells
+changed: `NetworkAllowList` and `NetworkBlockAll` feed `netRulesManager` in `runner/pkg/docker/create.go` (N2), the
+runner has an update-network-settings path (`docker/network.go`, C3), the API has warm-pool migrations (E1), a
+snapshot controller and a backup DTO exist in the runner (E2), the toolbox daemon has file upload and download
+(F3), the API has an audit controller (O1), the runner DTO carries `cpu` and `memory` (R1) and the sandbox DTOs
+carry auto-stop, auto-archive and auto-delete intervals (R2). The llm-sandbox column was also read for E1, R1,
+R2, S1 and O1: a `pool` package with Docker, Kubernetes and
 Podman pools backs E1, `default_timeout` and `execution_timeout` back R2, limits only through the pass-through
 `runtime_configs` keep R1 at `P`, a `security/seccomp.py` module backs S1, and the policy's issue severities
 are not applied by `run()`, so O1 stays `N`. The smolagents column was read at
