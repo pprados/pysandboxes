@@ -4,9 +4,12 @@
 Open-source projects were checked at the commits listed in
 [Sources](#sources-and-commits-analysed). Closed services were assessed from vendor documentation, security
 pages, and independent reviews. The PySandboxes rows, cells and paragraphs were refreshed on 2026-11-13 from
-the code of this repository. The other solutions got one web search each that day (see the end of
-[Sources](#sources-and-commits-analysed)); the source-code analysis, the analysed commits and the feature
-matrix are still those of 2026-10-01 and may be out of date. Verify claims before relying on them; projects
+the code of this repository. The other solutions got one web search each that day, and a primary page of each (README, documentation page or releases
+page) was read and compared with the text, with uneven depth: for microsandbox, RestrictedPython and
+AWS AgentCore the pages read gave nothing new on network or isolation; the discrepancies found are
+corrected in the sections concerned (see the end of [Sources](#sources-and-commits-analysed)). The
+source-code analysis, the analysed commits and the 45-feature matrix are still those of 2026-10-01 and may
+be out of date. Verify claims before relying on them; projects
 change.*
 
 This page compares PySandboxes with eighteen solutions: embeddable frameworks, self-hosted platforms, and cloud
@@ -55,7 +58,7 @@ labelled.
 | [Daytona](https://github.com/daytonaio/daytona) | Platform | Docker container under Sysbox, `--privileged` by default | AGPL-3.0, frozen at v0.190.0 |
 | [OpenSandbox](https://github.com/opensandbox-group/OpenSandbox) | Platform, Docker or Kubernetes | runc by default; gVisor, Kata or Firecracker as options | Apache-2.0 |
 | [Kubernetes agent-sandbox](https://github.com/kubernetes-sigs/agent-sandbox) | Kubernetes controller | Whatever the `RuntimeClass` provides: runc, gVisor or Kata | Apache-2.0 |
-| [llm-sandbox](https://github.com/vndee/llm-sandbox) | Python library | The Docker, Podman or Kubernetes container, unhardened by default | MIT |
+| [llm-sandbox](https://github.com/vndee/llm-sandbox) | Python library | The Docker, Podman or Kubernetes container, unhardened by default; the README of 2026-11-13 adds Bubblewrap, NsJail and Windows backends not analysed here | MIT |
 | [Modal Sandboxes](https://modal.com/docs/guide/sandbox-networking) | Cloud service, [open client](https://github.com/modal-labs/modal-client) | gVisor, or a VM on request | Closed platform |
 | [Vercel Sandbox](https://vercel.com/docs/sandbox/concepts/firewall) | Cloud service, [open client](https://github.com/vercel/sandbox) | Firecracker microVM | Closed platform |
 | [Cloudflare Sandbox](https://developers.cloudflare.com/sandbox/) | Cloud service, [open client](https://github.com/cloudflare/sandbox-sdk) | Container inside a Firecracker microVM | Closed platform |
@@ -427,12 +430,17 @@ allow rule per human approval.
 - **Weaknesses**: its own threat model says "Agent Sandbox itself does not implement isolation". The
   template's default egress allows everything except private and metadata ranges, and DNS goes to public
   resolvers. A bare `Sandbox` gets none of that. The router's default authoriser is `AllowAll`. The core API reached `v1beta1` with v0.5.0 on 2026-06-24 and
-  the quickstart now covers gVisor on KIND and Kata on minikube; sources disagree on the latest release, so
-  the analysed commit is the only firm reference.
+  the quickstart now covers gVisor on KIND and Kata on minikube. The README read on 2026-11-13 repeats that the
+  project delegates isolation to `RuntimeClass` runtimes and pins `v1.0.2` in its install example; sources
+  still disagree on the latest release, so the analysed commit is the only firm reference.
 
 ### llm-sandbox
 
-- **Bet**: orchestration convenience over containers you already run.
+- **Bet**: orchestration convenience over containers you already run. The README read on 2026-11-13 now also
+  lists local backends without a daemon: Bubblewrap, NsJail, Windows MXC and WSL2 Bubblewrap, next to Docker,
+  Podman and Kubernetes. The analysed commit has only the container backends, and the new ones were not
+  analysed, so the "containers" description in the landscape table and the weaknesses below apply to the
+  analysed commit only.
 - **Strengths**: fail-closed tar extraction (`tarfile.data_filter`), written after
   GHSA-crfw-xvcm-hjxj (found on the repository, not yet in the global database). Package-name allow-lists
   per ecosystem, against shell injection.
