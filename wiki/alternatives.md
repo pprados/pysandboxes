@@ -210,14 +210,17 @@ Columns: **pysb** PySandboxes, **RPy** RestrictedPython, **smol** smolagents, **
 | R1 | CPU / memory limits | P | N | P | P | P | N | N | Y | Y | Y | Y | Y | P | Y | Y | P | ? | P | P |
 | R2 | Timeouts / operation budgets | Y | P | Y | Y | Y | N | Y | Y | Y | Y | P | P | Y | Y | Y | P | Y | Y | N |
 | R3 | GPU | N | - | N | N | Y | N | N | N | N | Y | P | Y | N | Y | N | N | ? | P | ? |
-| O1 | Decision log, structured denial for the agent | P | P | P | N | Y | Y | P | P | P | Y | Y | P | N | N | N | N | Y | P | P |
+| O1 | Decision log, structured denial for the agent | P | P | P | N | Y | Y | P | P | P | P | Y | P | N | N | N | N | Y | P | P |
 | D1 | Linux / macOS / Windows | P | Y | Y | P | Y | P | Y | Y | P | P | P | N | P | - | - | - | - | - | Y |
 | D2 | Self-host / SaaS / Kubernetes | P | - | P | P | P | P | P | P | Y | Y | Y | Y | P | Y | Y | Y | Y | Y | Y |
 | D3 | Enforcing code is open | Y | Y | Y | Y | Y | Y | Y | Y | P | P | Y | Y | Y | P | P | P | N | N | N |
 | G1 | SDKs, MCP, agent frameworks | Y | P | Y | P | Y | Y | Y | Y | Y | Y | Y | Y | Y | Y | Y | Y | Y | Y | Y |
 | G2 | Safety of results returned to the host | Y | - | Y | Y | P | - | ? | P | Y | Y | Y | Y | Y | P | ? | P | ? | ? | ? |
 
-Seventeen cells were changed on 2026-11-13. Three are in row S2, process execution control, where `Y` cells
+Eighteen cells were changed on 2026-11-13. O1 for Daytona went from `Y` to `P`: its audit controller
+(`apps/api/src/admin/controllers/audit.controller.ts` in the `v0.190.0` tag) lists audit logs of API operations,
+and the runner's `netrules` package only holds a logger for rule set-up; no network decision log and no denial
+returned to the agent was found. Three more are in row S2, process execution control, where `Y` cells
 had no support in the code read. Daytona went from `Y` to `N`: a search of the `v0.190.0` tag for command
 allow-lists or execution policies finds nothing. agent-sandbox went from `Y` to `P`: the only command allow-lists
 found at `13470fe` are in its `examples` (an `ALLOWED_COMMANDS` set in two example servers and an example
