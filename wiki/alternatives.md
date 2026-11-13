@@ -320,9 +320,9 @@ allow rule per human approval.
   vendor acknowledges domain fronting
   ([Claude Code sandboxing](https://code.claude.com/docs/en/sandboxing#security-limitations)). One policy
   per command, no learning mode. One low-severity advisory,
-  [CVE-2025-66479](https://github.com/advisories/GHSA-9gqj-5w7c-vx47), fixed in 0.0.16. The releases page
-  (search result of 2026-11-13) lists v0.0.78 as the newest, with Windows support described as alpha and the
-  project still labelled a research preview; the commit analysed here predates that.
+  [CVE-2025-66479](https://github.com/advisories/GHSA-9gqj-5w7c-vx47), fixed in 0.0.16. The releases page,
+  read on 2026-11-13, lists v0.0.81 (20 October) as the newest, a release whose notes say every change is on
+  Windows; the project is still labelled a research preview, and the commit analysed here predates all of it.
 
 ### OpenAI Codex sandbox
 
@@ -423,8 +423,8 @@ allow rule per human approval.
   per ecosystem, against shell injection.
 - **Weaknesses**: root, open network and no limits by default. `runtime_configs` is passed through unfiltered,
   as its own documentation warns. `SecurityPolicy` is a regex that `run()` never calls. The archive-extraction advisory
-  (GHSA-crfw-xvcm-hjxj) was fixed in 0.3.45 on 2026-09-28, and 0.3.46 followed on 2026-10-16 (search result of
-  2026-11-13); its severity and CVE identifier were not found. The README still calls the policies advisory.
+  (GHSA-crfw-xvcm-hjxj) was fixed in 0.3.45 on 2026-09-28, and 0.3.46 followed, titled "Native Linux and experimental Windows backends"
+  (releases page read on 2026-11-13; its notes say Windows build success is not evidence that the enforcement was exercised); its severity and CVE identifier were not found. The README still calls the policies advisory.
 
 ### Modal Sandboxes
 
