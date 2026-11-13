@@ -8,7 +8,7 @@ the code of this repository. The other solutions got one web search each that da
 page) was read and compared with the text, with uneven depth: for microsandbox, RestrictedPython and
 AWS AgentCore the pages read gave nothing new on network or isolation; the discrepancies found are
 corrected in the sections concerned (see the end of [Sources](#sources-and-commits-analysed)). The
-matrix was re-read against the code of the open-source projects on 2026-11-13, in three passes, and 41 cells were
+matrix was re-read against the code of the open-source projects on 2026-11-13, in three passes, and 42 cells were
 changed; the rows that no pass reached, and every cell of the closed services (documentation only), keep the
 evidence level of 2026-10-01. Verify claims before relying on them; projects
 change.*
@@ -190,7 +190,7 @@ Columns: **pysb** PySandboxes, **RPy** RestrictedPython, **smol** smolagents, **
 | L5 | Identity of the caller in network policy | N | N | N | N | Y | P | P | N | N | N | P | P | N | N | N | N | N | N | N |
 | F1 | Path-level read/write allow/deny | Y | N | N | Y | Y | Y | Y | Y | N | N | P | P | P | N | N | N | ? | N | P |
 | F2 | Copy-on-write / overlay / ephemeral rootfs | P | - | P | P | Y | N | P | Y | Y | Y | Y | N | P | N | ? | ? | Y | ? | P |
-| F3 | Safe file transfer host and sandbox | P | - | N | - | P | P | P | Y | Y | Y | Y | Y | Y | ? | ? | P | P | ? | P |
+| F3 | Safe file transfer host and sandbox | P | - | N | - | P | P | P | Y | Y | Y | Y | Y | Y | ? | ? | P | P | Y | P |
 | S1 | Syscall filtering | P | N | N | N | Y | P | Y | N | P | N | P | N | P | Y | Y | - | ? | ? | ? |
 | S2 | Control of process execution | Y | N | P | Y | P | P | Y | P | P | N | P | P | N | P | N | N | ? | ? | ? |
 | S3 | Code runs unprivileged by default (not root, not privileged) | P | - | N | - | P | Y | P | N | P | N | P | N | P | ? | N | N | ? | ? | N |
@@ -218,7 +218,8 @@ Columns: **pysb** PySandboxes, **RPy** RestrictedPython, **smol** smolagents, **
 | G1 | SDKs, MCP, agent frameworks | Y | P | Y | P | Y | Y | Y | Y | Y | Y | Y | Y | Y | Y | Y | Y | Y | Y | Y |
 | G2 | Safety of results returned to the host | Y | - | Y | Y | P | - | Y | P | Y | Y | Y | Y | Y | P | ? | P | ? | ? | ? |
 
-Forty-one cells were changed on 2026-11-13. The AgentCore resource, session and observability pages, read that day, say each session runs
+Forty-two cells were changed on 2026-11-13. Azure F3 went from `?` to `Y`: the page of its code interpreter sessions lists a REST
+API that uploads and downloads files to and from a session, and says each session is isolated by a Hyper-V boundary. The AgentCore resource, session and observability pages, read that day, say each session runs
 in a dedicated microVM with its own CPU, memory and file system, whose memory is sanitised at the end (I1 went from `P` to `Y`), that the
 timeout is 900 seconds by default and up to 8 hours (R2 stays `Y`), and that the observability on offer is the output of each call,
 CloudWatch metrics and CloudTrail, with no record of refused actions (O1 went from `Y` to `P`, as for Daytona). The network modes are
