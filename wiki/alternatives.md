@@ -8,7 +8,7 @@ the code of this repository. The other solutions got one web search each that da
 page) was read and compared with the text, with uneven depth: for microsandbox, RestrictedPython and
 AWS AgentCore the pages read gave nothing new on network or isolation; the discrepancies found are
 corrected in the sections concerned (see the end of [Sources](#sources-and-commits-analysed)). The
-matrix was re-read against the code of the open-source projects on 2026-11-13, in three passes, and 35 cells were
+matrix was re-read against the code of the open-source projects on 2026-11-13, in three passes, and 36 cells were
 changed; the rows that no pass reached, and every cell of the closed services (documentation only), keep the
 evidence level of 2026-10-01. Verify claims before relying on them; projects
 change.*
@@ -193,7 +193,7 @@ Columns: **pysb** PySandboxes, **RPy** RestrictedPython, **smol** smolagents, **
 | F3 | Safe file transfer host and sandbox | P | - | N | - | P | P | P | Y | Y | Y | Y | Y | Y | ? | ? | P | P | ? | P |
 | S1 | Syscall filtering | P | N | N | N | Y | P | Y | N | P | N | P | N | P | Y | Y | - | ? | ? | ? |
 | S2 | Control of process execution | Y | N | P | Y | P | P | Y | P | P | N | P | P | N | P | N | N | ? | ? | ? |
-| S3 | Code runs unprivileged by default (not root, not privileged) | P | - | N | - | P | Y | P | N | P | N | P | N | P | ? | N | ? | ? | ? | ? |
+| S3 | Code runs unprivileged by default (not root, not privileged) | P | - | N | - | P | Y | P | N | P | N | P | N | P | ? | N | N | ? | ? | ? |
 | P1 | Import control | Y | N | Y | N | - | N | N | N | - | - | N | N | N | N | N | N | - | - | - |
 | P2 | Sensitive call control beyond imports | Y | N | P | N | - | N | N | N | - | - | N | N | N | N | N | N | - | - | - |
 | P3 | Control of `eval` / `exec` / `compile` | Y | P | Y | N | - | N | N | N | - | - | N | N | N | N | N | N | - | - | - |
@@ -218,7 +218,7 @@ Columns: **pysb** PySandboxes, **RPy** RestrictedPython, **smol** smolagents, **
 | G1 | SDKs, MCP, agent frameworks | Y | P | Y | P | Y | Y | Y | Y | Y | Y | Y | Y | Y | Y | Y | Y | Y | Y | Y |
 | G2 | Safety of results returned to the host | Y | - | Y | Y | P | - | Y | P | Y | Y | Y | Y | Y | P | ? | P | ? | ? | ? |
 
-Thirty-five cells were changed on 2026-11-13. A second pass re-read the code column by column and changed twelve more
+Thirty-six cells were changed on 2026-11-13. A second pass re-read the code column by column and changed twelve more
 (microsandbox C3 went from `N` to `P` because `msb modify` rotates secrets and their allowed hosts live, and K1 from `P` to `Y`
 because the host environment is never passed to the guest and secrets are placeholders; the last is E2B F3, `?` to `Y`: `envd` implements upload and download, and the legend's `Y` means a transfer exists):
 smolagents L3 and L4 (`P` to `N`, no network policy and no credential brokering in `remote_executors.py`),
@@ -227,7 +227,7 @@ plain-text output capped at 1 MiB, no deserialisation of objects), Daytona I1 (`
 documentation while the runner of the `v0.190.0` tag sets `Privileged: gpuIndex == nil`) and K1 (`P` to `N`, the sandbox
 environment is copied into the container unfiltered), microsandbox N5 (`P` to `Y`, DNS interception with rebinding defence
 and pinning, as for OpenShell and sandbox-runtime) and C6 (`P` to `N`, no approval mechanism in the docs or the policy types).
-Cloudflare C2 went from `N` to `P` after reading its Sandbox security page, which says a container starts with `enableInternet: false`.
+Cloudflare C2 went from `N` to `P` and S3 from `?` to `N` after reading its Sandbox security page, which says a container starts with `enableInternet: false` and that every process has the capabilities of `root`.
 The sandbox-runtime, OpenShell, llm-sandbox and agent-sandbox columns came back with no change that the code supports. A last pass by hand
 looked for file-level evidence on the rows not yet read for microsandbox (its security and sandbox documentation confirms N2, N6, F1, F2, F3, D1 and G1), Codex (network proxy, domain matcher, MITM, credential broker), OpenShell
 (`policy_update.rs`, binary rules in the policy schema), Daytona (no `SecurityOpt`, no private-range check, toolbox file API) and E2B
