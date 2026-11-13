@@ -222,8 +222,9 @@ had no support in the code read. Daytona went from `Y` to `N`: a search of the `
 allow-lists or execution policies finds nothing. agent-sandbox went from `Y` to `P`: the only command allow-lists
 found at `13470fe` are in its `examples` (an `ALLOWED_COMMANDS` set in two example servers and an example
 `command-governance` policy), not in the controllers or the API. OpenSandbox went from `Y` to `P`: at `e564cd1`
-its execd isolation drops capabilities and sets a seccomp floor but has no allow-list of programs, and reserves
-`execve` for its own launcher. L2 for OpenShell went from `P` to `Y`: the rule structures of
+its execd isolation has no allow-list of programs; an optional hardening floor (capability drop, `no_new_privs`,
+a seccomp floor) and an optional Landlock confinement that allows only system paths and a few writable ones are
+both off by default (`configs/isolation.example.toml`), and `execve` is reserved for the launcher. L2 for OpenShell went from `P` to `Y`: the rule structures of
 `openshell-policy-schema/src/lib.rs` at `7cfa0c09` carry `method`, `path` and a `query` map of matchers (short or
 expanded form), which is what the entry for OpenShell and the layer-7 paragraph above already say, and
 `openshell-supervisor-network` evaluates them in a Rego policy. C3 for Azure dynamic sessions went from `Y` to `?`: neither the
