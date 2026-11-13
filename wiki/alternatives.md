@@ -174,8 +174,8 @@ Columns: **pysb** PySandboxes, **RPy** RestrictedPython, **smol** smolagents, **
 | I2 | Host-side confinement of the runtime or VMM itself | P | - | ? | N | P | Y | Y | N | P | P | Y | N | - | ? | Y | ? | ? | ? | ? |
 | I3 | Choice of isolation backends | Y | Y | Y | N | Y | P | P | N | N | P | Y | Y | Y | Y | N | N | N | N | N |
 | N2 | IP/CIDR and port rules | Y | N | N | P | Y | Y | P | Y | P | Y | Y | Y | N | Y | Y | P | P | N | P |
-| N3 | UDP handling | P | N | N | ? | Y | Y | P | Y | P | P | P | P | P | P | ? | N | P | ? | P |
-| N4 | ICMP handling | N | N | N | ? | N | N | P | P | N | N | P | N | P | N | ? | N | ? | ? | N |
+| N3 | UDP handling | P | N | N | ? | Y | Y | P | Y | P | P | P | P | N | P | ? | N | P | ? | P |
+| N4 | ICMP handling | N | N | N | ? | N | N | P | P | P | P | P | N | N | N | ? | N | ? | ? | N |
 | N5 | DNS mediation | P | N | N | N | Y | Y | P | P | P | N | Y | P | N | P | P | ? | N | ? | Y |
 | N6 | SSRF: private ranges, metadata, rebinding | P | N | N | N | Y | Y | Y | Y | Y | N | P | P | N | ? | N | N | ? | ? | Y |
 | N7 | Domain/FQDN rules | Y | N | N | P | Y | Y | P | Y | Y | N | Y | N | N | Y | Y | Y | N | N | Y |
@@ -214,7 +214,11 @@ Columns: **pysb** PySandboxes, **RPy** RestrictedPython, **smol** smolagents, **
 | G1 | SDKs, MCP, agent frameworks | Y | P | Y | P | Y | Y | Y | Y | Y | Y | Y | Y | Y | Y | Y | Y | Y | Y | Y |
 | G2 | Safety of results returned to the host | Y | - | Y | Y | P | - | ? | P | Y | Y | Y | Y | Y | P | ? | P | ? | ? | ? |
 
-Eight cells were changed on 2026-11-13. N7 for Daytona went from `P` to `N`: in the runner of the `v0.190.0` tag,
+Twelve cells were changed on 2026-11-13. Four of them are consistency corrections against the table of network
+protocols above, not new code readings. llm-sandbox went from `P` to `N` for N3 and N4, because that table says
+UDP and ICMP are "not mediated" and no rule can name either (the same standard as PySandboxes' `N` for ICMP).
+E2B and Daytona went from `N` to `P` for N4, because that table says their ICMP handling is the same as their
+UDP handling, a CIDR filter, and N3 already gives both `P`. N7 for Daytona went from `P` to `N`: in the runner of the `v0.190.0` tag,
 `domainAllowList` is declared in `pkg/api/dto/sandbox.go` and read by no Go code outside the generated
 documentation, so only the IPv4 CIDR list is enforced, as the Daytona section already said. E2 for agent-sandbox went from `N` to `P`: at `13470fe` the `Sandbox`
 API has an `operatingMode` of `Suspended`, with a `Suspended` condition that turns true once the backing Pod is
