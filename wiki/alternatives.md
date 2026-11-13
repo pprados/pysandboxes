@@ -304,7 +304,11 @@ allow rule per human approval.
   [NVIDIA's August 2026 security bulletin](https://nvidia.custhelp.com/app/answers/detail/a_id/5872) (65083,
   65085, 65086, 65091, 65092 and 65093, fixed in v0.0.34), as seen in a search result on 2026-11-13; the
   bulletin was not read in full. The same search lists releases up to v0.1.6 (v0.1.5 on 2026-10-20), later
-  than the commit analysed here.
+  than the commit analysed here. The project README, read the same day, announces "a stable release cadence,
+  new isolation primitives, an expanded extension surface" for 0.1.x, SDKs in Python, TypeScript, Go and Rust,
+  and a move of the code to the `ai-openshell` organisation with governance going to the CNCF. The new
+  isolation primitives are not named there, so the Landlock and seccomp description above was not rechecked
+  against 0.1.x.
 
 ### Anthropic sandbox-runtime
 
