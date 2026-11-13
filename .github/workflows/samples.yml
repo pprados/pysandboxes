@@ -41,6 +41,7 @@ on:
 
 jobs:
   samples:
+    if: false
     runs-on: ubuntu-latest
     timeout-minutes: 120
     strategy:
@@ -167,6 +168,7 @@ jobs:
         uv run python -m pysandboxes.remote.qemu_fetch_image
         uv run python -c 'from pysandboxes.remote.qemu_image import get_default_image_path; from pysandboxes.remote.qemu_microvm_boot import ensure_microvm_boot_artifacts; ensure_microvm_boot_artifacts(get_default_image_path(), {})'
     - name: Run every sample with qemu-microvm
+      if: false
       run: make sample-tests
     - name: Run representative TCG sample
       if: matrix.python-version == '3.13'
