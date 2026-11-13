@@ -51,7 +51,7 @@ labelled.
 | [smolagents](https://github.com/huggingface/smolagents) | Agent framework | None for the local AST interpreter. The remote executors delegate to Docker, E2B, Modal or Blaxel | Apache-2.0 |
 | [langchain-sandbox](https://github.com/langchain-ai/langchain-sandbox) | Python library, **archived** | Pyodide (CPython compiled to WASM) under Deno permissions | MIT |
 | [NVIDIA OpenShell](https://github.com/NVIDIA/OpenShell) | Agent runtime, self-hosted | Landlock, seccomp-notify broker, seccomp kill-list, then a container or a microVM | Apache-2.0 |
-| [Anthropic sandbox-runtime](https://github.com/anthropics/sandbox-runtime) | CLI and library (Claude Code) | bubblewrap and seccomp on Linux, Seatbelt on macOS, plus a host-side proxy | Apache-2.0 |
+| [Anthropic sandbox-runtime](https://github.com/anthropics/sandbox-runtime) | CLI and library (Claude Code) | bubblewrap and seccomp on Linux, Seatbelt on macOS, an alpha Windows backend (a dedicated local account with a firewall rule and a write-restricted token, or `mxc`), plus a host-side proxy | Apache-2.0 |
 | [OpenAI Codex sandbox](https://github.com/openai/codex) | Sandbox built into the Codex CLI | Seatbelt on macOS, bubblewrap and seccomp on Linux, restricted token and WFP on Windows, or MXC | Apache-2.0 |
 | [microsandbox](https://github.com/superradcompany/microsandbox) | Local microVM runtime | libkrun microVM (KVM, Hypervisor.framework, WHP) | Apache-2.0 |
 | [E2B](https://github.com/e2b-dev/E2B) | Platform, SaaS or [self-hosted](https://github.com/e2b-dev/runtime) | Firecracker microVM | Apache-2.0 (open core) |
@@ -97,7 +97,8 @@ code, with lifecycle features such as snapshots and persistent volumes. Network 
 the guest may still run with broad privileges.
 
 **4. Orchestrate containers.** agent-sandbox, OpenSandbox, llm-sandbox and Daytona rely on a container
-runtime selected by the operator. Their guarantees depend on that runtime and on configured policy.
+runtime selected by the operator (llm-sandbox also has local Bubblewrap and NsJail backends, and OpenSandbox
+can use gVisor, Kata or Firecracker). Their guarantees depend on that runtime and on configured policy.
 
 **5. Run Python as WebAssembly.** langchain-sandbox combines Pyodide and Deno permissions; the project is
 archived.
