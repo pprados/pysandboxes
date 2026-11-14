@@ -36,7 +36,7 @@ PROVIDERS = (
     "qemu",
     "qemu-microvm",
 )
-SLOW = {"qemu", "qemu-microvm", "qemu-microvm-tcg"}
+SLOW = {"qemu", "qemu-tcg", "qemu-microvm", "qemu-microvm-tcg"}
 CACHED_TREES = (
     ROOT,
     Path(sys.prefix),
