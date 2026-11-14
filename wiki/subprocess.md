@@ -64,7 +64,7 @@ The same file with `os-sandbox=bwrap` adds the kernel boundary; nothing else cha
 
 ## Cost
 
-About 0.30 s of start-up and no measurable overhead on file operations, the same as `landlock`. See
+About +0.10s of start-up over a bare interpreter and no measurable overhead on file operations, the same as `landlock`. See
 [What each costs](os-providers.md#what-each-costs).
 
 ## Availability and tests

@@ -15,19 +15,19 @@ Add an OS provider to contain native code and direct system calls. OS providers 
 
 One line per provider, with only what separates them; each links to its own page. The control matrix, the container rows and the limits follow.
 
-| Provider | OS | What isolates | Network filter | Start-up | Pick it when |
+| Provider | OS | What isolates | Network filter | Start-up, cold / warm | Pick it when |
 |---|---|---|---|:---:|---|
-| `none` | Any | Nothing | ❌ | 0.1 s | Comparison, or trusted code |
-| [`subprocess`](subprocess.md) | Any | A separate process, no OS boundary | ❌ | 0.3 s | Mistakes, no attacker; fallback on macOS and Windows |
-| [`landlock`](landlock.md) | Linux 6.7+ | A kernel ruleset the process applies to itself | TCP ports only | 0.3 s | Default: nothing to install, no privilege |
-| [`bwrap`](bwrap.md) | Linux | Mount and network namespaces | Host, port, TCP and UDP | 0.3 s | Untrusted native code, lightest namespaces |
-| [`unshare`](unshare.md) | Linux | Namespaces, `slirp4netns`, `iptables` | Host, port, TCP and UDP | 1.4 s | Same as `bwrap`, with only user namespaces and these two tools |
-| [`firejail`](firejail.md) | Linux | Namespaces, setuid-root binary | Host, port, TCP and UDP | 0.5 s | Host already has it; adds resource limits and seccomp. Not in a container |
-| [`gvisor`](gvisor.md) | Linux | A user-space kernel (Sentry) | Host, port, TCP and UDP | 0.7 s | Kernel exploits, without a VM |
-| [`smolvm`](smolvm.md) | Linux, KVM | A micro-VM with its own kernel | TCP by address only, no IPv6 | 1 s | Kernel exploits, with a VM boundary, in about a second |
-| [`qemu`](qemu.md) | Linux | A full VM with its own kernel | Host, port, TCP and UDP | 13 s | Strongest separation; start-up paid once |
-| [`qemu-microvm`](qemu-microvm.md) | Linux x86_64 | A smaller VM, virtio-mmio only | Host, port, TCP and UDP | 20 s (KVM) | Smaller device model; at most eight host shares |
-| [`sandbox-exec`](sandbox-exec.md) | macOS | A Seatbelt profile (deprecated by Apple) | Port only, no host | <1 s | Files and ports on macOS |
+| `none` | Any | Nothing | ❌ | 0.21s / 0.15s (base) | Comparison, or trusted code |
+| [`subprocess`](subprocess.md) | Any | A separate process, no OS boundary | ❌ | +0.10s / +0.11s | Mistakes, no attacker; fallback on macOS and Windows |
+| [`landlock`](landlock.md) | Linux 6.7+ | A kernel ruleset the process applies to itself | TCP ports only | +0.12s / +0.11s | Default: nothing to install, no privilege |
+| [`bwrap`](bwrap.md) | Linux | Mount and network namespaces | Host, port, TCP and UDP | +0.12s / +0.12s | Untrusted native code, lightest namespaces |
+| [`unshare`](unshare.md) | Linux | Namespaces, `slirp4netns`, `iptables` | Host, port, TCP and UDP | +1.27s / +1.25s | Same as `bwrap`, with only user namespaces and these two tools |
+| [`firejail`](firejail.md) | Linux | Namespaces, setuid-root binary | Host, port, TCP and UDP | +0.34s / +0.33s | Host already has it; adds resource limits and seccomp. Not in a container |
+| [`gvisor`](gvisor.md) | Linux | A user-space kernel (Sentry) | Host, port, TCP and UDP | +0.42s / +0.38s | Kernel exploits, without a VM |
+| [`smolvm`](smolvm.md) | Linux, KVM | A micro-VM with its own kernel | TCP by address only, no IPv6 | +0.75s / +0.68s | Kernel exploits, with a VM boundary, in under a second |
+| [`qemu`](qemu.md) | Linux | A full VM with its own kernel | Host, port, TCP and UDP | +12.88s / +12.40s | Strongest separation; start-up paid once |
+| [`qemu-microvm`](qemu-microvm.md) | Linux x86_64 | A smaller VM, virtio-mmio only | Host, port, TCP and UDP | +14.57s / +13.92s (KVM) | Smaller device model; at most eight host shares |
+| [`sandbox-exec`](sandbox-exec.md) | macOS | A Seatbelt profile (deprecated by Apple) | Port only, no host | not measured | Files and ports on macOS |
 | [`appcontainer`](appcontainer.md) | Windows | An AppContainer token, no administrator needed | Network class only, no host or port | pending | Files and network on Windows |
 
 ### Four families
@@ -45,7 +45,7 @@ One line per provider, with only what separates them; each links to its own page
 - **Containers**: `landlock`, `qemu`, `qemu-microvm` and `smolvm` run unprivileged; `bwrap`, `unshare` and `gvisor` need `--privileged` or a lowered confinement; `firejail` never runs there.
 - **Same on all of them**: the Python guards (`import`, `python-api`, `eval-*`) belong to the Python layer, not to the provider. Keep it on and add one provider around it.
 
-Start-up times are one measure on one host, in orders of magnitude (see [What each costs](#what-each-costs)).
+Start-up times are the extra time over `none`, the bare interpreter, on one host, cold and warm (see [What each costs](#what-each-costs)).
 
 ## All providers
 
@@ -87,7 +87,7 @@ A ❌ means the provider does not enforce that control. The Python layer may sti
 | **Extra**                |      |            |           |           |           |        |                  |  | |  |  |
 | • Resource limits        |  ❌   |     ❌      |     ❌     |     ❌     |     ❌     |     ✅  |        ✅         | ❌ | ✅ | ❌ | ❌ |
 | • Seccomp                |  ❌   |     ❌      |     ❌     |     ❌     |     ❌     |   ✅    |        ✅         | ❌ | ❌ | ❌ | n/a |
-| • Latency                | <1s  |    <1s     |    <1s    |    <1s    |    <1s    |    <1s |      >20s        | ~1s | ~1s | <1s | Pending |
+| • Start-up, cold (extra over `none`) | 0.21s (base) | n/a | +0.12s | +1.27s | +0.12s | +0.34s | +12.88s | +0.42s | +0.75s | not measured | Pending |
 | **OS**                   | Any  |    Any     |   Linux   |   Linux   |   Linux   |  Linux |      Linux       | Linux | Linux | macOS | Windows |
 
 ¹ `appcontainer` is Windows-only: the Docker and Kubernetes rows do not apply. ² `ignore=` covers only paths present at launch, and their names may remain listable. ³ AppContainer denies outbound network access by default. An `ALLOW` `net=` rule grants a broad public-Internet or private-network capability; AppContainer itself does not filter host, port, protocol, or loopback. The Python guard checks the first three only while enabled, so native code can bypass those checks. Loopback is blocked by AppContainer even when a rule allows it. ⁴ `smolvm` filters TCP by address, never by port: a TCP rule with a port opens every port of its address, and a port on any address stays closed. A UDP rule keeps its port. ⁵ `smolvm` needs no privilege and no capability, only `/dev/kvm` and a non-root user in its group, so the privileged rows add nothing and the `SYS_ADMIN` and `NET_ADMIN` rows are not needed. Docker: `--device /dev/kvm --group-add <gid> --user`. Rootless Podman: the same with `--userns=keep-id`, which is what leaves the device usable to the user. Kubernetes: a pod with no `securityContext` that asks a device plugin for the device (`resources.limits`), or a privileged pod that mounts `/dev/kvm`; the project's tests use [a plugin manifest](../tests/containers_tests/kube-kvm-device-plugin.yaml) for the first. ⁶ The `firejail` binary is setuid root, so the jail and its network namespace belong to the root user namespace: an unprivileged user cannot enter them (`nsenter -t <pid> -U -n` fails with `EPERM`) and `firejail --join-network` is reserved to root. The daemon therefore cannot open an address in the jail while the program runs, and `net-resolve=runtime` needs the daemon to run as root; without root the profile is refused. `net-resolve=pinned` needs no privilege. ⁷ Unprivileged user namespaces must be allowed (`kernel.unprivileged_userns_clone=1`, and AppArmor may need relaxing on recent Ubuntu); see [unshare](unshare.md). ⁸ `net-resolve=runtime` (see [DNS](dns.md)). `unshare`, `bwrap`, `gvisor` and `qemu` (also `qemu-microvm`) open the address in the sandbox's own firewall when the name resolves. `landlock`, `sandbox-exec` and `appcontainer` only filter by port or network class: the kernel opens the port of the name to any host and the Python guard judges the host, so native code is not filtered. `none` runs no guard and ignores the key; it logs one warning, whatever the key says, that it adds no OS boundary.
@@ -221,21 +221,34 @@ filter. `sandbox-exec` (macOS) and `appcontainer` (Windows) are the choices on t
 
 ### What each costs
 
-Measured on one host with `py-sandbox=false`, one run each. Start-up counts the Python interpreter (0.13 s with
-`os-sandbox=none`). Read orders of magnitude, not a benchmark: run your own workload.
+Measured with `scripts/bench_startup.py` on one host (24 cores, pinned to the 8 performance cores, KVM available, no
+other load), `py-sandbox=false`, the median of 7 runs (3 for the VMs, 2 for TCG). Start-up is the time of
+`python-sb -c pass`, **minus the same command under `os-sandbox=none`**: each cell is what the provider adds to the bare
+interpreter, which takes 0.21s cold and 0.15s warm.
 
-| Provider | Start-up | 50 000 `os.stat` | Needs | Network filter |
-|---|---:|---:|---|:---:|
-| `none` | 0.13 s | 0.02 s | Nothing | ❌ |
-| [`subprocess`](subprocess.md) | 0.30 s | 0.02 s | Nothing | ❌ |
-| [`landlock`](landlock.md) | 0.30 s | 0.02 s | Linux 6.7+ (Landlock ABI v4) | TCP ports |
-| [`bwrap`](bwrap.md) | 0.31 s | 0.03 s | `bwrap`, user namespaces; filtering also `slirp4netns`, `iptables` | ✅ |
-| [`firejail`](firejail.md) | 0.51 s | 0.02 s | `firejail` | ✅ |
-| [`unshare`](unshare.md) | 1.43 s | 0.03 s | User namespaces, `slirp4netns`, `iptables` | ✅ |
-| [`gvisor`](gvisor.md) (`systrap`) | 0.74 s | 0.16 s | `runsc`, `slirp4netns`, `iptables`, `/dev/net/tun` | ✅ |
-| [`smolvm`](smolvm.md) | 1.0 s | not measured | `smolvm`, `/dev/kvm`, a guest image (`make build-image-smolvm`) | ✅ |
-| [`qemu`](qemu.md) | 12.8 s | 0.06 s | `qemu-system`; KVM makes it faster | ✅ |
-| [`qemu-microvm`](qemu-microvm.md) | 20.4 s KVM<br/>110.3 s TCG | — | Linux x86_64, `qemu-system-x86_64`, `7zip`; KVM recommended | ✅ |
+- **Cold**: a fresh process, after the page cache of the interpreter, the provider binaries and the guest images was
+  evicted (`posix_fadvise`). The libraries shared with the rest of the system stay cached.
+- **Warm**: the same command again, with the caches hot.
+- **Call**: the round trip of a call into a sandbox that is already running, in milliseconds (not subtracted: `none`
+  makes the call in the same process).
+
+Read orders of magnitude, not a benchmark: run your own workload.
+
+| Provider | Start-up, cold | Start-up, warm | Call | 50 000 `os.stat` | Needs | Network filter |
+|---|---:|---:|---:|---:|---|:---:|
+| `none` | 0.21s (base) | 0.15s (base) | 0.0001 ms | 0.02 s | Nothing | ❌ |
+| [`subprocess`](subprocess.md) | +0.10s | +0.11s | 0.49 ms | 0.02 s | Nothing | ❌ |
+| [`landlock`](landlock.md) | +0.12s | +0.11s | 0.53 ms | 0.02 s | Linux 6.7+ (Landlock ABI v4) | TCP ports |
+| [`bwrap`](bwrap.md) | +0.12s | +0.12s | 0.49 ms | 0.03 s | `bwrap`, user namespaces; filtering also `slirp4netns`, `iptables` | ✅ |
+| [`firejail`](firejail.md) | +0.34s | +0.33s | 0.51 ms | 0.02 s | `firejail` | ✅ |
+| [`unshare`](unshare.md) | +1.27s | +1.25s | 0.46 ms | 0.03 s | User namespaces, `slirp4netns`, `iptables` | ✅ |
+| [`gvisor`](gvisor.md) (`systrap`) | +0.42s | +0.38s | 1.02 ms | 0.16 s | `runsc`, `slirp4netns`, `iptables`, `/dev/net/tun` | ✅ |
+| [`smolvm`](smolvm.md) | +0.75s | +0.68s | not measured | not measured | `smolvm`, `/dev/kvm`, a guest image (`make build-image-smolvm`) | ✅ |
+| [`qemu`](qemu.md) | +12.88s | +12.40s | 0.69 ms | 0.06 s | `qemu-system`; KVM makes it faster | ✅ |
+| [`qemu-microvm`](qemu-microvm.md) | +14.57s KVM<br/>+92.13s TCG | +13.92s KVM<br/>+92.26s TCG | 0.90 ms KVM<br/>1209 ms TCG | — | Linux x86_64, `qemu-system-x86_64`, `7zip`; KVM recommended | ✅ |
+
+The `os.stat` column comes from an earlier single run and was not measured again. `smolvm` starts, but a call into its
+guest fails there (`Could not determine home directory`), so its call time is missing.
 
 Three consequences:
 
@@ -243,7 +256,7 @@ Three consequences:
   others, while a loop of `stat`, `open` or socket calls is 6 to 8 times slower. Its `ptrace` and `kvm` platforms are
   slower still on this host (see [gVisor](gvisor.md)).
 - `qemu` and `qemu-microvm` pay once, at start-up. Keep the sandbox alive across calls (`with sandboxes():`) instead of starting one per
-  call. Measured here, `qemu-microvm` starts slower than `qemu` (20.4 s with KVM and 110.3 s without, against 12.8 s for `qemu` in the table above):
+  call. Measured here, `qemu-microvm` starts slower than `qemu` (+14.57s with KVM and +92.13s without, against +12.88s for `qemu` in the table above):
   choose it for its smaller device model, not for speed, and prefer `qemu` when the program needs more than eight
   host shares. A TCG run carries no KVM isolation claim (see [QEMU microvm](qemu-microvm.md#limits)).
 - `landlock`, `bwrap` and `firejail` cost almost nothing, which is why the default is not the strongest provider: go

@@ -25,7 +25,7 @@ The host starts a QEMU virtual machine with a cloud image (Debian/Ubuntu) and a 
 
 | Aspect              | Detail                                                                                                                        |
 | ------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
-| **Startup latency** | VM boot + cloud-init + bootstrap: typically **20–40 s** before the sandbox responds (vs. about a second for a subprocess).    |
+| **Startup latency** | VM boot + cloud-init + bootstrap: with KVM, **+12.9s** cold and **+12.4s** warm over a bare interpreter before the sandbox responds (vs. +0.10s for a subprocess); see [what each costs](os-providers.md#what-each-costs).    |
 | **Resources**       | Dedicated RAM for the VM (default 2 GiB), shared CPU; heavier than a namespace.                                               |
 | **Dependencies**    | Cloud image to download (Debian/Ubuntu), `genisoimage` or `mkisofs` for the NoCloud ISO, QEMU binary.                         |
 | **Debug**           | Kernel/cloud-init output is hidden by default; set `qemu.show_boot_console=true` and inspect the console log to troubleshoot. |

@@ -56,13 +56,13 @@ The OCI spec is written under the run directory: read-only root, `/tmp` as a tmp
 
 The guest never calls the host kernel: the Sentry, gVisor's kernel written in Go and run in user space, answers each system call. The platform is only the way the call is caught, so the files, network and environment rules are the same on the three, and none of them boots a Linux kernel (`qemu` does).
 
-| Platform | Mechanism | Needs | 50 000 `os.stat` | Whole run |
+| Platform | Mechanism | Needs | 50 000 `os.stat` | Start-up, cold / warm |
 |----------|-----------|-------|:---:|:---:|
-| `systrap` | seccomp filter: a system call raises a signal the Sentry handles | nothing special, works in a container or a VM | 0.17 s | 0.8 s |
-| `ptrace` | the Sentry stops the guest's threads at each call with `ptrace`, one context switch per call | `ptrace` allowed; the most widely supported | 0.42 s | 1.1 s |
-| `kvm` | the Sentry runs as the kernel of a KVM virtual machine, the guest as its user space | read-write `/dev/kvm`; slow in nested virtualization | 0.36 s | 0.9 s |
+| `systrap` | seccomp filter: a system call raises a signal the Sentry handles | nothing special, works in a container or a VM | 0.17 s | +0.42s / +0.38s |
+| `ptrace` | the Sentry stops the guest's threads at each call with `ptrace`, one context switch per call | `ptrace` allowed; the most widely supported | 0.42 s | +0.46s / +0.42s |
+| `kvm` | the Sentry runs as the kernel of a KVM virtual machine, the guest as its user space | read-write `/dev/kvm`; slow in nested virtualization | 0.36 s | +0.43s / +0.39s |
 
-`kvm` is not a Linux VM with a kernel of its own: it is still the Sentry, it makes the same host system calls, and it adds the host's KVM code to what the guest can reach. It pays off on bare metal for programs that make many system calls. Measured on one host, `py-sandbox=false`, one run each: an order of magnitude, not a benchmark. `unavailable_reason()` runs a guest on the default platform only: a missing `/dev/kvm` shows when the guest starts, not before.
+`kvm` is not a Linux VM with a kernel of its own: it is still the Sentry, it makes the same host system calls, and it adds the host's KVM code to what the guest can reach. It pays off on bare metal for programs that make many system calls. Start-up is the extra time over `os-sandbox=none` (median of 7 runs, `py-sandbox=false`, see [what each costs](os-providers.md#what-each-costs)); the `os.stat` column comes from an earlier single run. An order of magnitude, not a benchmark. `unavailable_reason()` runs a guest on the default platform only: a missing `/dev/kvm` shows when the guest starts, not before.
 
 ## Using with Docker
 
