@@ -77,6 +77,36 @@ def test_an_address_the_resolution_of_an_allowed_name_returned_is_allowed(dns: D
     assert check("api.example.com") == [ip_address("192.0.2.7")]
 
 
+def test_a_name_resolved_only_through_the_socktype_fallback_is_still_learned(monkeypatch: pytest.MonkeyPatch) -> None:
+    """``_check_address_with_rules`` retries a failed resolution once, with the socket's own type.
+
+    Before the fix, that second, successful attempt left ``use_hostname`` false, so the address was never handed to
+    ``_learn_from_resolution`` and a ``net=`` name rule that explicitly allows the host could not open it: the
+    connection was refused by the implicit default policy instead.
+    """
+    calls: list[int] = []
+
+    def fake_getaddrinfo(
+        host: str, port: Any = 0, family: int = 0, type: int = 0, proto: int = 0, flags: int = 0
+    ) -> Any:
+        calls.append(type)
+        if type == 0:
+            raise socket.gaierror(socket.EAI_NONAME, "Name or service not known")
+        return [(socket.AF_INET, socket.SOCK_STREAM, 6, "", ("192.0.2.7", port))]
+
+    monkeypatch.setattr(socket, "getaddrinfo", fake_getaddrinfo)
+    monkeypatch.setattr(gs, "_rules_loaded", True)
+    monkeypatch.setattr(gs, "_rules", ())
+    monkeypatch.setattr(gs, "_pin_dns", ImmutableDict({}))
+    monkeypatch.setattr(gs, "_learned", {})
+    monkeypatch.setattr(gs, "_name_rules", ())
+    gs.getaddrinfo.cache_clear()
+    arm(HTTPS)
+
+    assert check("api.example.com") == [ip_address("192.0.2.7")]
+    assert calls == [0, socket.SOCK_STREAM]
+
+
 def test_nothing_is_learned_without_name_rules_so_the_default_policy_refuses(dns: Dns) -> None:
     dns.answers["api.example.com"] = ["192.0.2.7"]
 

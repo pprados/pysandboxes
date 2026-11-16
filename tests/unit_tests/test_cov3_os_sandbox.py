@@ -87,6 +87,9 @@ def test_a_sync_shutdown_without_a_daemon_still_consumes_a_pending_start() -> No
 
 
 def test_a_failing_sync_shutdown_reraises_the_provider_error() -> None:
+    """The provider's own error still reaches the caller; the dead daemon is not kept as if it were
+    still running, or the next `_start()` would just hand it back with the counter incremented.
+    """
     daemon = _Daemon(shutdown_error=_Boom("vm refused to stop"))
     _os_sandbox._set_current_daemon(daemon)
     _os_sandbox._startup_counter = 1
@@ -94,8 +97,8 @@ def test_a_failing_sync_shutdown_reraises_the_provider_error() -> None:
     with pytest.raises(_Boom, match="vm refused to stop"):
         _os_sandbox.shutdown_daemon()
 
-    assert _os_sandbox._current_daemon is daemon
-    assert _os_sandbox._startup_counter == 1
+    assert _os_sandbox._current_daemon is None
+    assert _os_sandbox._startup_counter == 0
 
 
 def test_a_stuck_sync_shutdown_times_out(monkeypatch: pytest.MonkeyPatch) -> None:

@@ -139,6 +139,22 @@ class TestBwrapArgs:
         assert (str(tmp_path), str(tmp_path)) in _triples(args, "--bind")
         assert (str(writable), str(writable)) not in _triples(args, "--ro-bind")
 
+    def test_a_path_exposed_both_ways_ends_up_read_only(self, tmp_path: Path) -> None:
+        """The narrower right wins, same as gvisor and smolvm: the last bind on a path decides."""
+        shared = tmp_path / "shared"
+        rules = EmptyRules._replace(
+            file_rules=(FSExposeRule(str(shared), True, _CONFIG), FSExposeRule(str(shared), False, _CONFIG))
+        )
+
+        args = _args(tmp_path, rules)
+
+        binds = [
+            args[i]
+            for i, arg in enumerate(args)
+            if arg in ("--bind", "--ro-bind") and i + 1 < len(args) and args[i + 1] == str(shared)
+        ]
+        assert binds[-1] == "--ro-bind"
+
     def test_an_ignored_file_is_masked_with_a_placeholder(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
@@ -166,18 +182,71 @@ class TestBwrapArgs:
         assert Path(masks[str(project / ".env")]).is_file()
         assert Path(masks[str(project / "data")]).is_dir()
 
+    def test_an_ignored_file_under_an_exposed_path_outside_cwd_is_masked(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """``ignore=`` must mask a match anywhere the sandbox can reach, not only under cwd."""
+        cwd = tmp_path / "cwd"
+        cwd.mkdir()
+        data = tmp_path / "data"
+        data.mkdir()
+        (data / ".env").write_text("SECRET=1")
+        temp = tmp_path / "temp"
+        temp.mkdir()
+        monkeypatch.chdir(cwd)
+        rules = EmptyRules._replace(
+            file_rules=(FSExposeRule(str(data) + "/", False, _CONFIG), IgnoreRule(".env", _CONFIG))
+        )
+
+        with patch.object(bwrap_sse_daemon, "which_command", return_value="/usr/bin/bwrap"):
+            args = list(BWrapSSEDaemon("token")._bwrap_args(rules, {}, tmp_path / "pipe", temp))
+
+        masks = {dest: src for src, dest in _triples(args, "--bind")}
+        assert str(data / ".env") in masks
+        assert Path(masks[str(data / ".env")]).is_file()
+
+    def test_without_the_ignore_rule_the_same_file_is_not_masked(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Negative control for the test above: the rule, not the exposure, causes the mask."""
+        cwd = tmp_path / "cwd"
+        cwd.mkdir()
+        data = tmp_path / "data"
+        data.mkdir()
+        (data / ".env").write_text("SECRET=1")
+        temp = tmp_path / "temp"
+        temp.mkdir()
+        monkeypatch.chdir(cwd)
+        rules = EmptyRules._replace(file_rules=(FSExposeRule(str(data) + "/", False, _CONFIG),))
+
+        with patch.object(bwrap_sse_daemon, "which_command", return_value="/usr/bin/bwrap"):
+            args = list(BWrapSSEDaemon("token")._bwrap_args(rules, {}, tmp_path / "pipe", temp))
+
+        masks = {dest: src for src, dest in _triples(args, "--bind")}
+        assert str(data / ".env") not in masks
+
 
 class TestIgnoreMaskHelpers:
-    def test_ignore_patterns_are_resolved_below_the_current_directory(self, tmp_path: Path) -> None:
+    def test_ignore_patterns_are_resolved_below_every_root(self, tmp_path: Path) -> None:
         (tmp_path / "sub").mkdir()
         (tmp_path / ".env").write_text("")
         (tmp_path / "sub" / ".env").write_text("")
         (tmp_path / "other").write_text("")
 
-        found = _resolve_ignore_paths(str(tmp_path), [IgnoreRule(".env", _CONFIG)])
+        found = _resolve_ignore_paths([str(tmp_path)], [IgnoreRule(".env", _CONFIG)])
 
-        assert sorted(found) == [".env", str(Path("sub") / ".env")]
-        assert _resolve_ignore_paths(str(tmp_path), []) == []
+        assert sorted(found) == sorted([str(tmp_path / ".env"), str(tmp_path / "sub" / ".env")])
+        assert _resolve_ignore_paths([str(tmp_path)], []) == []
+
+    def test_a_match_under_an_exposed_path_outside_the_current_directory_is_found(self, tmp_path: Path) -> None:
+        cwd, exposed = tmp_path / "cwd", tmp_path / "exposed"
+        cwd.mkdir()
+        exposed.mkdir()
+        (exposed / ".env").write_text("")
+
+        found = _resolve_ignore_paths([str(cwd), str(exposed)], [IgnoreRule(".env", _CONFIG)])
+
+        assert found == [str(exposed / ".env")]
 
     @pytest.mark.parametrize(
         ("path", "inside"),
@@ -211,7 +280,9 @@ class TestIgnoreMaskHelpers:
         (exposed / "leaves").symlink_to("../outside/secret")
         (exposed / ".env").write_text("")
 
-        targets = _ignore_mask_targets(str(exposed), ["missing", "leaves", ".env"], [str(exposed)])
+        targets = _ignore_mask_targets(
+            [str(exposed / "missing"), str(exposed / "leaves"), str(exposed / ".env")], [str(exposed)]
+        )
 
         assert targets == [str(exposed / ".env")]
 

@@ -53,7 +53,11 @@ def _restore_pickle(
     """
     if not (isinstance(keys, tuple) and isinstance(values, tuple)) or len(keys) != len(values):
         raise ValueError("Invalid ImmutableDict state: keys and values must be two tuples of the same length")
-    if len(set(keys)) != len(keys):
+    try:
+        has_duplicate = len(set(keys)) != len(keys)
+    except TypeError as e:
+        raise ValueError("Invalid ImmutableDict state: a key is not hashable") from e
+    if has_duplicate:
         raise ValueError("Invalid ImmutableDict state: a key is repeated")
     return cast("ImmutableDict[KeyType, ValueType]", tuple.__new__(ImmutableDict, (keys, values)))
 

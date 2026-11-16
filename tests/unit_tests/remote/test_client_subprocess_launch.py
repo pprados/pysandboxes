@@ -128,6 +128,17 @@ class TestLaunchWithFifo:
         finally:
             os.umask(old)
 
+    def test_the_preexec_fn_sets_pdeathsig(self, tmp_path: Path) -> None:
+        """The launcher's own crash must not leave the sandbox process running unsupervised."""
+        launch = _Launch(tmp_path)
+        calls: list[str] = []
+
+        with patch.object(csd, "set_pdeathsig", lambda: calls.append("set")):
+            launch.run()
+            launch.calls[0][1]["preexec_fn"]()
+
+        assert calls == ["set"]
+
     def test_optional_arguments_are_passed_only_when_given(self, tmp_path: Path) -> None:
         launch = _Launch(tmp_path)
 
@@ -230,111 +241,6 @@ class TestDebugLaunch:
         _Launch(tmp_path).run()
 
         assert not (tmp_path / "tmp").exists()
-
-
-class _Fed:
-    """A stream reader that serves the lines it was given, then EOF."""
-
-    def __init__(self, *lines: bytes) -> None:
-        self.lines = list(lines)
-
-    async def readline(self) -> bytes:
-        return self.lines.pop(0) if self.lines else b""
-
-
-class TestReadStream:
-    def test_each_line_is_decoded_stripped_and_given_to_the_callback(self) -> None:
-        seen: list[str] = []
-
-        asyncio.run(csd._read_stream(_Fed("  héllo \n".encode(), b"two\r\n"), seen.append))  # type: ignore[arg-type]
-
-        assert seen == ["héllo", "two"]
-
-    def test_a_blank_line_does_not_end_the_stream(self) -> None:
-        seen: list[str] = []
-
-        asyncio.run(csd._read_stream(_Fed(b"a\n", b"\n", b"b\n"), seen.append))  # type: ignore[arg-type]
-
-        assert seen == ["a", "", "b"]
-
-    def test_the_end_of_the_stream_ends_the_reading(self) -> None:
-        seen: list[str] = []
-
-        asyncio.run(csd._read_stream(_Fed(), seen.append))  # type: ignore[arg-type]
-
-        assert seen == []
-
-
-class _Writer:
-    def __init__(self, fail_on: int | None = None) -> None:
-        self.data: list[bytes] = []
-        self.drained = 0
-        self.fail_on = fail_on
-        self.failed = False
-
-    def write(self, data: bytes) -> None:
-        if self.fail_on is not None and len(self.data) == self.fail_on and not self.failed:
-            self.failed = True
-            raise BrokenPipeError()
-        self.data.append(data)
-
-    async def drain(self) -> None:
-        self.drained += 1
-
-
-class _Stdin:
-    def __init__(self, *lines: str) -> None:
-        self.lines = list(lines)
-
-    def fileno(self) -> int:
-        return 99
-
-    def readline(self) -> str:
-        return self.lines.pop(0) if self.lines else ""
-
-
-@pytest.mark.skipif(sys.platform == "win32", reason="the FIFO launch path and the pty forwarding are POSIX")
-class TestWriteStream:
-    def _run(self, writer: _Writer, stdin: _Stdin) -> dict[str, Any]:
-        record: dict[str, Any] = {"restored": []}
-        master, slave = os.pipe()
-        record["master"] = master
-
-        with (
-            patch("pty.openpty", return_value=(master, slave)),
-            patch("termios.tcgetattr", return_value="old-settings"),
-            patch("termios.tcsetattr", side_effect=lambda *a: record["restored"].append(a)),
-            patch("tty.setraw", side_effect=lambda fd: record.setdefault("raw", fd)),
-            patch.object(csd, "sys", SimpleNamespace(stdin=stdin)),
-        ):
-            asyncio.run(asyncio.wait_for(csd._write_stream(writer), 10))  # type: ignore[arg-type]
-        os.close(slave)
-        return record
-
-    def test_each_line_is_forwarded_encoded_and_flushed_until_the_end_of_input(self) -> None:
-        writer = _Writer()
-
-        self._run(writer, _Stdin("héllo\n", "two\n"))
-
-        assert writer.data == ["héllo\n".encode(), b"two\n"]
-        assert writer.drained == 2
-
-    def test_the_terminal_is_made_raw_then_restored_and_the_pty_master_closed(self) -> None:
-        record = self._run(_Writer(), _Stdin("a\n"))
-
-        assert record["raw"] == 99
-        (restored,) = record["restored"]
-        assert restored[0] == 99 and restored[2] == "old-settings"
-        with pytest.raises(OSError):
-            os.fstat(record["master"])
-
-    def test_a_write_error_ends_the_forwarding_but_still_restores_the_terminal(self) -> None:
-        writer = _Writer(fail_on=1)
-
-        record = self._run(writer, _Stdin("a\n", "b\n", "c\n"))
-
-        assert writer.data == [b"a\n"]
-        assert len(record["restored"]) == 1
 
 
 class TestFindFreePort:

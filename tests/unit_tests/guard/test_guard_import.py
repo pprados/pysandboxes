@@ -159,7 +159,12 @@ def test_a_single_item_wider_than_the_limit_is_kept() -> None:
 
 
 def test_the_import_functions_are_patched() -> None:
-    assert set(patch_rules(learn=False)) == {"builtins.__import__", "importlib.__import__", "importlib.import_module"}
+    assert set(patch_rules(learn=False)) == {
+        "builtins.__import__",
+        "importlib.__import__",
+        "importlib.import_module",
+        "importlib._bootstrap_external._LoaderBasics.exec_module",
+    }
 
 
 def _imported(name: str, *args: Any, **kwargs: Any) -> str:

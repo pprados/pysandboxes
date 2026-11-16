@@ -200,10 +200,10 @@ def parse_rules(
             value = rule.rule.split("=", 1)[1].strip()
             try:
                 port = int(value)
-                if port < 0:
+                if port < 0 or port > 65535:
                     errors.append(
                         (
-                            f"{format_ruleref(rule)}: Port must be a positive value",
+                            f"{format_ruleref(rule)}: Port must be between 0 and 65535",
                             rule.path,
                             rule.ln,
                         )

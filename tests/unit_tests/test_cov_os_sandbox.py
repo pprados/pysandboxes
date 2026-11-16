@@ -35,6 +35,7 @@ class _Daemon(FakeDaemon):
 
     instances: list["_Daemon"] = []
     start_error: Exception | None = None
+    shutdown_error: Exception | None = None
     process: _Process | None = None
     start_gate: asyncio.Event | None = None
 
@@ -68,6 +69,9 @@ class _Daemon(FakeDaemon):
 
     async def _shutdown(self, graceful_shutdown: bool = True) -> None:
         self.shutdowns.append(graceful_shutdown)
+        shutdown_error = type(self).shutdown_error
+        if shutdown_error is not None:
+            raise shutdown_error
         self._is_started = False
 
 
@@ -82,6 +86,7 @@ def _fake_provider(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
     monkeypatch.setattr(_os_sandbox, "_async_start_lock", asyncio.Lock())
     monkeypatch.setattr(_Daemon, "instances", [])
     monkeypatch.setattr(_Daemon, "start_error", None)
+    monkeypatch.setattr(_Daemon, "shutdown_error", None)
     monkeypatch.setattr(_Daemon, "process", None)
     monkeypatch.setattr(_Daemon, "start_gate", None)
     _os_sandbox._current_daemon = None
@@ -204,6 +209,60 @@ async def test_a_refused_extra_shutdown_does_not_corrupt_the_refcount() -> None:
 
     assert daemon.shutdowns == []
     assert _os_sandbox._current_daemon is daemon
+
+
+async def test_a_full_shutdown_gives_back_the_private_loop(monkeypatch: pytest.MonkeyPatch) -> None:
+    """`sandboxes().__aexit__`/`__exit__` reach the daemon shutdown through this function directly, not
+    through the `shutdown_daemon()` sync wrapper, which calls `_reset_sandbox_loop()` itself. The reset must
+    happen here too, and only once the counter actually reaches zero, or a `with sandboxes():` that created a
+    private loop never stops its background thread.
+    """
+    reset_calls = 0
+
+    def _count_reset() -> None:
+        nonlocal reset_calls
+        reset_calls += 1
+
+    monkeypatch.setattr(_os_sandbox, "_reset_sandbox_loop", _count_reset)
+
+    await _start()
+    await _start()
+    assert _os_sandbox._startup_counter == 2
+
+    await _os_sandbox.async_shutdown_daemon()  # 2 -> 1: not the last one, the loop must stay
+    assert reset_calls == 0
+
+    await _os_sandbox.async_shutdown_daemon()  # 1 -> 0: the last one, the loop must be given back
+    assert reset_calls == 1
+
+
+async def test_a_failed_shutdown_still_wipes_the_daemon_state(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A daemon whose `_shutdown` raises must not be mistaken for one still running: without a `finally`
+    that clears it anyway, the next `_start()` would just hand back this dead object with the counter
+    incremented, and a `none`-provider flag the failed `_shutdown` never got to clear would stay stuck.
+    """
+    from pysandboxes.tools import is_in_sandbox, set_is_in_sandbox
+
+    set_is_in_sandbox(True)  # what the `none` provider's `_start` would have done
+    try:
+        monkeypatch.setattr(_Daemon, "shutdown_error", _Boom("shutdown failed"))
+        dead = await _start()
+        assert isinstance(dead, _Daemon)
+
+        with pytest.raises(_Boom, match="shutdown failed"):
+            await _os_sandbox.async_shutdown_daemon()
+
+        assert _os_sandbox._current_daemon is None
+        assert _os_sandbox._startup_counter == 0
+        assert not is_in_sandbox()
+
+        monkeypatch.setattr(_Daemon, "shutdown_error", None)
+        fresh = await _start()
+        assert isinstance(fresh, _Daemon)
+        assert fresh is not dead
+    finally:
+        if is_in_sandbox():
+            set_is_in_sandbox(False)
 
 
 async def test_python_args_reach_the_provider() -> None:
@@ -337,6 +396,25 @@ def test_sync_start_and_shutdown_count_the_same_way() -> None:
 
     with pytest.raises(ValueError, match="more times than started"):
         _os_sandbox.shutdown_daemon()
+
+
+def test_async_shutdown_after_a_sync_start_also_gives_back_the_private_loop() -> None:
+    """`sandboxes().__exit__` reaches the daemon through `async_shutdown_daemon` directly, never through the
+    `shutdown_daemon()` sync wrapper used above: the private loop thread a sync `start_daemon()` creates must
+    be stopped from that path too, or every `with sandboxes():` leaks it.
+    """
+    import pysandboxes.private_loop as private_loop
+
+    daemon = _os_sandbox.start_daemon(_rules(), envs={}, log_level=0)
+    assert isinstance(daemon, _Daemon)
+    thread = private_loop._thread
+    assert thread is not None and thread.is_alive()
+
+    asyncio.run(_os_sandbox.async_shutdown_daemon())
+
+    thread.join(timeout=5)
+    assert not thread.is_alive()
+    assert private_loop._background_loop_ref is None
 
 
 def test_a_sync_start_that_times_out_kills_what_it_launched(monkeypatch: pytest.MonkeyPatch) -> None:

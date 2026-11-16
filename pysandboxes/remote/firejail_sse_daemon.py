@@ -55,6 +55,9 @@ from .tools import (
     suggest_package_installation,
     which_command,
 )
+from .tools import (
+    resolve_ignore_paths as _resolve_ignore_paths,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -260,14 +263,14 @@ class FireJailSSEDaemon(BaseSubProcessDaemon):
             if rule.rule.startswith("firejail."):
                 firejail_param = rule.rule[len("firejail.") :]
                 if firejail_param.startswith("net="):
-                    net = firejail_param.split("=")[1]
+                    net = firejail_param.partition("=")[2]
                     # TODO: check net?
                 elif firejail_param.startswith("seccomp="):
-                    firejail_params["seccomp"] = firejail_param.split("=")[1]
+                    firejail_params["seccomp"] = firejail_param.partition("=")[2]
                 elif firejail_param.startswith("seccomp.keep="):
-                    firejail_params["seccomp.keep"] = firejail_param.split("=")[1]
+                    firejail_params["seccomp.keep"] = firejail_param.partition("=")[2]
                 elif firejail_param.startswith("seccomp.block="):
-                    firejail_params["seccomp.block"] = firejail_param.split("=")[1]
+                    firejail_params["seccomp.block"] = firejail_param.partition("=")[2]
                 elif firejail_param.startswith("rlimit-"):
                     key, _, value = firejail_param.partition("=")
                     firejail_params[key] = value
@@ -361,7 +364,6 @@ class FireJailSSEDaemon(BaseSubProcessDaemon):
                     restricted_network_explicit_yes = True
                     break
 
-        need_root = False
         args = [str(which_command("firejail"))]
         for k, v in all_rules.os_sandbox_params.items():  # type: ignore[attr-defined]
             args.append(f"--{k}={v}")
@@ -421,9 +423,14 @@ class FireJailSSEDaemon(BaseSubProcessDaemon):
                 if sp not in whitelist:
                     _follow_links(Path(sp), whitelist)
 
-        # Add ignore files rules
-        for ignore_rule in (r for r in all_rules.file_rules if isinstance(r, IgnoreRule)):
-            args.append(f"--blacklist={ignore_rule.source}")
+        # Add ignore files rules: --blacklist only hides a literal path, so a pattern is first
+        # resolved to the real paths it matches, wherever the sandbox can reach them: under cwd
+        # or under an exposed path, not only under cwd (same scope as bwrap and unshare).
+        current_dir = os.getcwd()
+        ignore_rules = [r for r in all_rules.file_rules if isinstance(r, IgnoreRule)]
+        exposed_paths = [r.path for r in all_rules.file_rules if isinstance(r, FSExposeRule)]
+        for full_host in _resolve_ignore_paths([current_dir, *exposed_paths], ignore_rules):
+            args.append(f"--blacklist={os.path.normpath(full_host)}")
 
         # Ensure temp dir is whitelisted so firejail can read netfilter fifos and config pipe
         if pipe_path:
@@ -444,6 +451,8 @@ class FireJailSSEDaemon(BaseSubProcessDaemon):
             norm = path.rstrip("/") or "/"
             return norm == "/etc"
 
+        read_only_paths: list[str] = []
+        read_write_paths: list[str] = []
         for rule in sorted(
             (r for r in all_rules.file_rules if isinstance(r, FSExposeRule)),
             key=lambda x: len(x.path),
@@ -462,10 +471,15 @@ class FireJailSSEDaemon(BaseSubProcessDaemon):
                     args.append(f"--whitelist={rule.path}")
                 whitelist.add(rule.path)
             if not skip_path:
-                if not rule.write:
-                    args.append(f"--read-only={rule.path}")
-                else:
-                    args.append(f"--read-write={rule.path}")
+                (read_write_paths if rule.write else read_only_paths).append(rule.path)
+
+        # --read-write first, then --read-only last: firejail applies them in command-line
+        # order, last one wins, so a path exposed both ways ends up read-only, the narrower
+        # right winning, same as bwrap, unshare, gvisor and smolvm.
+        for path in read_write_paths:
+            args.append(f"--read-write={path}")
+        for path in read_only_paths:
+            args.append(f"--read-only={path}")
 
         # A --whitelist on a device rebuilds /dev from the listed files alone: multiprocessing loses its semaphores.
         if any(r.path.startswith("/dev/") for r in all_rules.file_rules if isinstance(r, FSExposeRule)):
@@ -505,18 +519,16 @@ class FireJailSSEDaemon(BaseSubProcessDaemon):
                     "net-resolve=runtime needs a network namespace: 'restricted-network yes' keeps the host's."
                 )
             if not skip_network_setup:
-                dns_servers = [ip for ip in get_upstream_dns() if isinstance(ip, IPv4Address)]
+                # Inside the jail's own network namespace, the host's loopback resolver is not
+                # reachable: keep only the servers --dns can actually reach.
+                dns_servers = [ip for ip in get_upstream_dns() if isinstance(ip, IPv4Address) and not ip.is_loopback]
 
                 if runtime:
                     # The sandbox asks a DNS address that nothing owns; the jail's nat table sends it to the resolver.
                     args.append(f"--dns={SLIRP_DNS}")
                 elif dns_servers:
                     for dns in dns_servers:
-                        if not dns.is_loopback:
-                            # Change to other, because inside the firejail, the loopback is not accessible
-                            for dns in dns_servers:
-                                args.append(f"--dns={dns}")
-                            break
+                        args.append(f"--dns={dns}")
                 else:
                     # TODO: see https://github.com/netblue30/firejail/discussions/6931
                     # for pin_dns in dns_server_v6:
@@ -603,9 +615,6 @@ class FireJailSSEDaemon(BaseSubProcessDaemon):
         args.extend(["/usr/bin/env", "-i"])
         for env, val in all_rules.envs.items():  # type: ignore[attr-defined]
             args.append(f"{env}={val}")
-
-        if need_root:
-            logger.warning("Firejail needs root to run")
 
         return args, all_rules
 

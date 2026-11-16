@@ -142,6 +142,25 @@ def test_a_net_parameter_of_the_profile_is_parsed_and_the_others_are_kept() -> N
     assert [rule.rule for rule in others] == ["something-else"]
 
 
+def test_a_parameter_value_containing_an_equals_sign_is_not_truncated() -> None:
+    """``split("=")[1]`` kept only the text up to the first ``=``; ``partition`` keeps all of it."""
+    rules = [
+        ConfigLine("firejail.net=br0=eth1", Path(), 1),
+        ConfigLine("firejail.seccomp=/profiles/a=b.bpf", Path(), 2),
+        ConfigLine("firejail.seccomp.keep=read=1,write", Path(), 3),
+        ConfigLine("firejail.seccomp.block=open=2", Path(), 4),
+    ]
+
+    params, _ = FireJailSSEDaemon("token").parse_rules(rules, [])
+
+    assert dict(params) == {
+        "net": "br0=eth1",
+        "seccomp": "/profiles/a=b.bpf",
+        "seccomp.keep": "read=1,write",
+        "seccomp.block": "open=2",
+    }
+
+
 class TestFirejailArgs:
     def test_the_template_is_applied_and_a_profile_limit_replaces_its_default(self, tmp_path: Path) -> None:
         rules = EmptyRules._replace(os_sandbox_params=ImmutableDict({"rlimit-as": "5m"}))
@@ -213,10 +232,15 @@ class TestFirejailArgs:
         else:
             assert whitelisted
 
-    def test_an_ignored_file_is_blacklisted(self, tmp_path: Path) -> None:
+    def test_an_ignored_file_is_blacklisted(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        cwd = tmp_path / "cwd"
+        cwd.mkdir()
+        (cwd / ".env").write_text("SECRET=1", encoding="utf-8")
+        monkeypatch.chdir(cwd)
+
         args = _args(tmp_path, EmptyRules._replace(file_rules=(IgnoreRule(".env", _CONFIG),)))
 
-        assert "--blacklist=.env" in args
+        assert f"--blacklist={cwd / '.env'}" in args
 
     def test_the_pipe_directory_is_created_and_read_only(self, tmp_path: Path) -> None:
         pipe = tmp_path / "run" / "pipe"
@@ -298,6 +322,20 @@ class TestExposedPaths:
         assert "--whitelist=/a/" in args
         assert "--read-only=/a/" in args
 
+    def test_a_path_exposed_both_ways_ends_up_read_only(self, tmp_path: Path) -> None:
+        """firejail applies --read-write/--read-only in order, last one wins: the narrower
+        right must come last, same as bwrap, unshare, gvisor and smolvm."""
+        args = _args(
+            tmp_path,
+            self._rules(
+                FSExposeRule("/srv/data/", False, _CONFIG),
+                FSExposeRule("/srv/data/", True, _CONFIG),
+            ),
+        )
+
+        flags = [a for a in args if a in ("--read-write=/srv/data/", "--read-only=/srv/data/")]
+        assert flags[-1] == "--read-only=/srv/data/"
+
     @pytest.mark.parametrize("path", ["/etc/", "/etc/ssl/", "/proc/", "/tmp/"])
     def test_the_paths_firejail_refuses_are_not_whitelisted(self, tmp_path: Path, path: str) -> None:
         args = _args(tmp_path, self._rules(FSExposeRule(path, False, _CONFIG)))
@@ -341,7 +379,9 @@ class TestNetwork:
 
         args = _args(tmp_path, _with_socket_rule(), dns=dns)
 
-        assert [a for a in args if a.startswith("--dns=")] == ["--dns=8.8.8.8", "--dns=127.0.0.1"]
+        # Inside the jail's network namespace the host loopback is not reachable: only the
+        # routable resolver is passed to --dns, never the loopback one.
+        assert [a for a in args if a.startswith("--dns=")] == ["--dns=8.8.8.8"]
 
     @pytest.mark.parametrize("dns", [[], [IPv4Address("127.0.0.1")]])
     def test_loopback_only_resolvers_are_not_given_to_the_jail(self, tmp_path: Path, dns: list[Any]) -> None:

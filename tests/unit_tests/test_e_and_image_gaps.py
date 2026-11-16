@@ -11,6 +11,7 @@ import pytest
 
 from pysandboxes.e import (
     _DENIALS_ATTRIBUTE,
+    RuleApiPermissionError,
     RuleFileNotFoundError,
     RulePermissionError,
     attach_sandbox_denials,
@@ -67,6 +68,23 @@ class TestDenials:
 
         assert getattr(error, _DENIALS_ATTRIBUTE) == ["RulePermissionError: refused by a rule"]
         assert sandbox_denials(error) == ["RulePermissionError: refused by a rule"]
+
+    def test_two_chained_denials_are_returned_outermost_first(self) -> None:
+        """The denial the caller is holding precedes the one that triggered it."""
+        try:
+            try:
+                raise RuleFileNotFoundError("root cause: file denied")
+            except RuleFileNotFoundError as root_cause:
+                raise RuleApiPermissionError("qual", "cat") from root_cause
+        except RuleApiPermissionError as wrapped:
+            error: BaseException = wrapped
+
+        assert sandbox_denials(error) == [
+            "RuleApiPermissionError: qual() is denied by the API guard (category: cat).\n"
+            "Add `python-api=ALLOW:qual` for this function only, or `python-api=ALLOW:cat` for "
+            "the whole category.",
+            "RuleFileNotFoundError: root cause: file denied",
+        ]
 
 
 class TestImageHelpers:

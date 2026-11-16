@@ -39,6 +39,13 @@ def _huge() -> str:
     return "x" * (10 * 1024 * 1024)
 
 
+def _print_huge() -> str:
+    # A single write of an oversized chunk, not the result: the call that goes over the
+    # SSE line budget happens while streaming, not while building the final reply.
+    print("y" * (10 * 1024 * 1024))
+    return "ok"
+
+
 async def _forever() -> None:
     await asyncio.sleep(60)
 
@@ -138,6 +145,24 @@ async def test_an_oversized_reply_is_refused_with_an_error_event() -> None:
 
     assert len(events) == 1
     assert "error" in events[0]
+
+
+async def test_an_oversized_stdout_chunk_is_refused_with_an_error_event() -> None:
+    """A single print() over the SSE line budget must be refused as it streams, not let through
+    to the parent's HTTP reader, which would otherwise refuse it opaquely."""
+    events = await _events(f"{_MODULE}:_print_huge")
+
+    assert len(events) == 1
+    assert "error" in events[0]
+
+
+async def test_the_final_event_does_not_repeat_the_streamed_output() -> None:
+    """stdout/stderr were already streamed as they were produced; the caller never reads them
+    from the final event (it returns on "result" first), so resending them there is pure waste
+    and risks the line-size check for output that already got through."""
+    events = await _events(f"{_MODULE}:_speak", "hi")
+
+    assert "stdout" not in events[-1] and "stderr" not in events[-1]
 
 
 @pytest.mark.parametrize("learning", [True, False])

@@ -233,3 +233,35 @@ class TestWatchdogAttempts:
 
         assert self._run(daemon, stop_after=6) == 6
         assert not daemon._failure
+
+    def test_a_restart_that_fails_kills_the_process_it_already_launched(self) -> None:
+        """`_re_start` can launch a new process and still fail (e.g. the ping loop giving up):
+        nothing else ever kills that process once the watchdog task ends."""
+        daemon = self._daemon()
+        new_process = _Proc()
+
+        async def failing_restart(*args: Any, **kwargs: Any) -> None:
+            daemon._process = new_process  # type: ignore[assignment]
+            raise SandBoxError("never answered")
+
+        async def scenario() -> None:
+            with patch.object(SubProcessDaemon, "_re_start", AsyncMock(side_effect=failing_restart)):
+                await daemon.watchdog(None, envs={}, log_level=0, init_fn=None)  # type: ignore[arg-type]
+
+        asyncio.run(asyncio.wait_for(scenario(), 5))
+
+        assert new_process.killed == 1
+        assert daemon._process is None
+        assert daemon.is_started is False
+        assert daemon._failure
+
+
+class _Proc:
+    def __init__(self) -> None:
+        self.killed = 0
+
+    def kill(self) -> None:
+        self.killed += 1
+
+    async def wait(self) -> int:
+        return 0

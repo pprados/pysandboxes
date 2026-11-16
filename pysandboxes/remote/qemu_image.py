@@ -276,6 +276,8 @@ def download_image(
         req = urllib.request.Request(url, headers={"User-Agent": "pysandboxes-qemu-provider/1.0"})
         # Url validated by _validate_download_url in get_download_url
         with urllib.request.urlopen(req, timeout=DOWNLOAD_TIMEOUT) as resp:
+            if url.lower().startswith("https://") and not resp.geturl().lower().startswith("https://"):
+                raise OSError(f"Refusing https to http redirect for {url} -> {resp.geturl()}")
             if resp.status != 200:
                 raise OSError(f"Download failed: HTTP {resp.status} for {url}")
             total = resp.headers.get("Content-Length")

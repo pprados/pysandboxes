@@ -20,7 +20,7 @@ def _ignore(pattern: str) -> IgnoreRule:
 def test_no_ignore_rule_masks_nothing(tmp_path: Path) -> None:
     (tmp_path / ".env").write_text("SECRET=1")
 
-    assert _resolve_ignore_paths(str(tmp_path), []) == []
+    assert _resolve_ignore_paths([str(tmp_path)], []) == []
 
 
 def test_ignored_files_and_directories_are_found_at_any_depth(tmp_path: Path) -> None:
@@ -31,13 +31,22 @@ def test_ignored_files_and_directories_are_found_at_any_depth(tmp_path: Path) ->
     (tmp_path / "app" / "main.py").write_text("")
     (tmp_path / "secrets").mkdir()
 
-    masked = _resolve_ignore_paths(str(tmp_path), [_ignore(".env"), _ignore("*.pem"), _ignore("secrets")])
+    masked = _resolve_ignore_paths([str(tmp_path)], [_ignore(".env"), _ignore("*.pem"), _ignore("secrets")])
 
-    assert sorted(masked) == [".env", "app/conf/.env", "app/keys.pem", "secrets"]
+    assert sorted(masked) == sorted(str(tmp_path / p) for p in (".env", "app/conf/.env", "app/keys.pem", "secrets"))
 
 
 def test_a_missing_directory_masks_nothing(tmp_path: Path) -> None:
-    assert _resolve_ignore_paths(str(tmp_path / "missing"), [_ignore(".env")]) == []
+    assert _resolve_ignore_paths([str(tmp_path / "missing")], [_ignore(".env")]) == []
+
+
+def test_a_match_under_an_exposed_path_outside_the_current_directory_is_found(tmp_path: Path) -> None:
+    cwd, exposed = tmp_path / "cwd", tmp_path / "exposed"
+    cwd.mkdir()
+    exposed.mkdir()
+    (exposed / ".env").write_text("SECRET=1")
+
+    assert _resolve_ignore_paths([str(cwd), str(exposed)], [_ignore(".env")]) == [str(exposed / ".env")]
 
 
 def test_profile_parameters_become_unshare_flags() -> None:

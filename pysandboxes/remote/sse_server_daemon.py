@@ -150,10 +150,19 @@ async def sandbox_daemon(
             elif "exception" in msg or "done" in msg:
                 break
             elif "stdout" in msg:
-                yield _sse_msg(json.dumps(msg))
+                reply = _sse_msg(json.dumps(msg))
+                check_sse_line(reply)
+                yield reply
             elif "stderr" in msg:
-                yield _sse_msg(json.dumps(msg))
+                reply = _sse_msg(json.dumps(msg))
+                check_sse_line(reply)
+                yield reply
         result = await async_fut
+        # Already streamed above as it was produced; the caller never reads it from this
+        # final payload (it returns on "result"/"exception" first), so keeping it here would
+        # only resend it whole and risk the line-size check below for no reason.
+        result.pop("stdout", None)
+        result.pop("stderr", None)
         if "result" in result:
             logger.debug("(%s) ... return %s", session_id, repr(result["result"])[:40])
             result["result"] = to_b85(result["result"])

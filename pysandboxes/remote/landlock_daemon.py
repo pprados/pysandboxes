@@ -239,27 +239,6 @@ def _collect_landlock_net_ports(
     return all_ports
 
 
-def _get_critical_dns_paths() -> list[str]:
-    # Essential files for name resolution
-    base_files: list[str] = [
-        "/etc/hosts",
-        "/etc/resolv.conf",
-        "/etc/nsswitch.conf",
-        "/lib",
-        "/usr/lib",
-    ]
-
-    resolved_paths: set[str] = set()
-    for p in base_files:
-        path_obj = Path(p)
-        if path_obj.exists():
-            resolved_paths.add(str(path_obj.resolve()))
-            # Also add the parent directory for some NSS modules
-            resolved_paths.add(str(path_obj.parent.resolve()))
-
-    return list(resolved_paths)
-
-
 def _apply_landlock(
     paths: list[tuple[str, bool]],
     net_ports: list[tuple[int, bool, bool]] | None = None,

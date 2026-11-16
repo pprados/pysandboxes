@@ -892,7 +892,6 @@ def _check_address_with_rules(
             # Resolve hostname to IP addresses using the socket instance's family,
             # type, and proto
             infos = resolve(hostname, 0, family)
-            use_hostname = True
         except socket.gaierror:
             # Fallback if the specific proto causes issues, try with
             # proto=0 (OS default for family/type)
@@ -902,6 +901,9 @@ def _check_address_with_rules(
                 infos = resolve(hostname, 0, family, socktype=socket_kind.value, proto=0)
             except socket.gaierror as e:
                 raise ValueError(f"Invalid hostname or IP address (resolution failed): {hostname}") from e
+        # Reached only once ip_address(hostname) failed, so any resolution obtained above -- on
+        # either attempt -- is a real hostname lookup, not a literal address.
+        use_hostname = True
         # %% Analyse ips
         ip_objects = []
         for _, _, _, _, sockaddr in infos:

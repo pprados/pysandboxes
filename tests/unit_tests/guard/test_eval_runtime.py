@@ -198,6 +198,17 @@ def test_binop_refuses_a_sequence_repetition_over_the_budget(state: EvalState) -
         __sb_binop__("*", [0], 10**10)
 
 
+def test_binop_refuses_a_huge_integer_multiplication_before_computing(state: EvalState) -> None:
+    """`left * right` of two plain ints reached the operator with no bit-size check, unlike `**`."""
+    with pytest.raises(RuleEvalPermissionError, match="eval-max-alloc"):
+        __sb_binop__("*", 1 << 7900, 1 << 7900)
+
+
+def test_binop_multiplication_by_a_bool_is_not_mistaken_for_a_big_int(state: EvalState) -> None:
+    assert __sb_binop__("*", True, 7) == 7
+    assert __sb_binop__("*", 7, False) == 0
+
+
 @pytest.fixture
 def regex_state() -> Iterator[EvalState]:
     rules = DEFAULT_RULES._replace(attribute=_names("match", "IGNORECASE"), magic=_names())

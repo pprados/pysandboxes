@@ -54,9 +54,10 @@ def test_spaces_around_the_value_do_not_matter() -> None:
     assert qemu_start_timeout({"start_timeout": " 120.5 "}) == 120.5
 
 
-@pytest.mark.parametrize("value", ["", "soon", "0", "-30"])
+@pytest.mark.parametrize("value", ["", "soon", "0", "-30", "nan", "inf", "-inf"])
 def test_a_value_that_is_not_a_positive_duration_falls_back(value: str, with_kvm: None) -> None:
-    """Waiting forever, or not at all, would be worse than ignoring the rule."""
+    """Waiting forever, or not at all, would be worse than ignoring the rule: `float()` parses
+    "nan" and "inf" without raising, so `<= 0` alone would let both through."""
     assert qemu_start_timeout({"start_timeout": value}) == float(TIMEOUT_FOR_START_DAEMON_QEMU)
 
 
@@ -78,7 +79,7 @@ def test_the_profile_rule_wins_over_the_environment(with_kvm: None, monkeypatch:
     assert qemu_start_timeout({"start_timeout": "45"}) == 45.0
 
 
-@pytest.mark.parametrize("value", ["", "soon", "0", "-30"])
+@pytest.mark.parametrize("value", ["", "soon", "0", "-30", "nan", "inf", "-inf"])
 def test_an_environment_value_that_is_not_a_positive_duration_is_ignored(
     value: str, with_kvm: None, monkeypatch: pytest.MonkeyPatch
 ) -> None:

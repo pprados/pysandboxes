@@ -964,6 +964,19 @@ def _file_rules_mounts(
     return mount_specs, mount_list
 
 
+_QEMU_VIRTFS_SECURITY_MODELS = frozenset({"passthrough", "mapped-xattr", "mapped-file", "none"})
+
+
+def _qemu_escape_value(value: str) -> str:
+    """Escape a value embedded in a QEMU option string (``-drive``, ``-virtfs``, ``-netdev``).
+
+    QEMU's option parser splits each argument on ``,``; a literal comma in a path must be
+    doubled (QEMU's own escape convention) or it is read as the start of another sub-option,
+    for example turning a mount's ``readonly=on`` off or adding an unrelated option.
+    """
+    return value.replace(",", ",,")
+
+
 def _virtfs_security_model(host_path: Path, configured: str) -> str:
     """Return the 9p ``security_model`` for one mount.
 
@@ -982,7 +995,12 @@ def _virtfs_security_model(host_path: Path, configured: str) -> str:
         return "none"
     configured = configured.strip().lower()
     # QEMU has no security_model=auto; treat as mapped-xattr (guest-friendly default).
-    return "mapped-xattr" if configured in ("auto", "") else configured
+    if configured in ("auto", ""):
+        return "mapped-xattr"
+    if configured not in _QEMU_VIRTFS_SECURITY_MODELS:
+        logger.warning("Invalid qemu.virtfs_security_model %r; using default %r", configured, "mapped-xattr")
+        return "mapped-xattr"
+    return configured
 
 
 def _qemu_binary() -> str:
@@ -1374,7 +1392,8 @@ class QemuSSEDaemon(VMSSEDaemon):
             virtfs_args.extend(
                 [
                     "-virtfs",
-                    f"local,path={host_path!s},id={tag},security_model={security},mount_tag={tag}{readonly}",
+                    f"local,path={_qemu_escape_value(str(host_path))},id={tag},"
+                    f"security_model={security},mount_tag={tag}{readonly}",
                 ]
             )
             logger.debug("qemu 9p: %s -> %s", tag, guest_path)
@@ -1388,10 +1407,13 @@ class QemuSSEDaemon(VMSSEDaemon):
 
         # Ubuntu cloud images use .img extension but are QCOW2 format (see Ubuntu docs)
         use_qcow2 = image_path.suffix == ".qcow2" or (image_path.suffix == ".img" and "cloudimg" in image_path.name)
+        drive_image_file = _qemu_escape_value(str(image_path))
         drive_image = (
-            f"file={image_path!s},format=qcow2,if=virtio" if use_qcow2 else f"file={image_path!s},format=raw,if=virtio"
+            f"file={drive_image_file},format=qcow2,if=virtio"
+            if use_qcow2
+            else f"file={drive_image_file},format=raw,if=virtio"
         )
-        drive_nocloud = f"file={nocloud_iso!s},format=raw,if=virtio"
+        drive_nocloud = f"file={_qemu_escape_value(str(nocloud_iso))},format=raw,if=virtio"
         cmd: Args = [
             _qemu_binary(),
             *enable_kvm,
@@ -1728,13 +1750,13 @@ class QemuMicrovmSSEDaemon(QemuSSEDaemon):
             "console=ttyS0 root=/dev/sda1 ro reboot=t",
             "-snapshot",
             "-drive",
-            f"id=root,file={image},format={image_format},if=none",
+            f"id=root,file={_qemu_escape_value(str(image))},format={image_format},if=none",
             "-device",
             "virtio-scsi-device,id=scsi0",
             "-device",
             "scsi-hd,drive=root,bus=scsi0.0,channel=0,scsi-id=0,lun=0",
             "-drive",
-            f"id=cidata,file={seed},format=raw,if=none,readonly=on",
+            f"id=cidata,file={_qemu_escape_value(str(seed))},format=raw,if=none,readonly=on",
             "-device",
             "scsi-cd,drive=cidata,bus=scsi0.0,channel=0,scsi-id=1,lun=0",
             "-netdev",
@@ -1750,7 +1772,7 @@ class QemuMicrovmSSEDaemon(QemuSSEDaemon):
             cmd.extend(
                 [
                     "-fsdev",
-                    f"local,id={tag},path={host},security_model={security}{readonly}",
+                    f"local,id={tag},path={_qemu_escape_value(str(host))},security_model={security}{readonly}",
                     "-device",
                     f"virtio-9p-{'pci' if pcie else 'device'},fsdev={tag},mount_tag={tag}",
                 ]

@@ -9,6 +9,7 @@ real program, a refused call stops before the original function runs.
 import asyncio
 import importlib
 import importlib.machinery
+import importlib.util
 import logging
 import pickle
 import subprocess
@@ -369,7 +370,84 @@ def test_find_spec_denies_even_when_running_inside_the_sandbox(monkeypatch: pyte
             guard_import.GuardFinder().find_spec("subprocess", None, None)
 
 
-# 8. Small defects.
+# 8. A loader built outside `find_spec` (`spec_from_file_location` + `exec_module`) never asks
+#    `GuardFinder`, so no `python-import=` rule can grant or deny it; `_vetted_loaders` refuses
+#    it instead, in the user's own code only.
+
+
+def _spec_for(tmp_path: Path, name: str, body: str = "MARKER = 1\n") -> importlib.machinery.ModuleSpec:
+    path = tmp_path / f"{name.replace('.', '_')}.py"
+    path.write_text(body, encoding="utf-8")
+    spec = importlib.util.spec_from_file_location(name, path)
+    assert spec is not None and spec.loader is not None
+    return spec
+
+
+def test_a_loader_built_outside_find_spec_is_refused_in_the_users_code(tmp_path: Path) -> None:
+    spec = _spec_for(tmp_path, "sidedoor")
+    module = importlib.util.module_from_spec(spec)
+    with _import_rules():  # deny-all
+        with user_code():
+            with pytest.raises(RuleModuleNotFoundError, match="never vetted"):
+                spec.loader.exec_module(module)  # type: ignore[union-attr]
+
+
+def test_a_forged_module_name_does_not_rescue_an_unverified_loader(tmp_path: Path) -> None:
+    """``pysandboxes`` itself is always allowed by name, yet the loader was never vetted by
+    ``find_spec``, so claiming that name does not let an arbitrary file run."""
+    spec = _spec_for(tmp_path, "pysandboxes")
+    module = importlib.util.module_from_spec(spec)
+    with _import_rules():  # deny-all; "pysandboxes" would pass _is_import_allowed anyway
+        with user_code():
+            with pytest.raises(RuleModuleNotFoundError):
+                spec.loader.exec_module(module)  # type: ignore[union-attr]
+
+
+def test_a_loader_built_outside_find_spec_still_works_outside_the_users_code(tmp_path: Path) -> None:
+    """Only the user's own code is judged: framework and test-harness code that builds its own
+    loader, as ``python_in_sb.py`` and this test suite both do, keeps working."""
+    spec = _spec_for(tmp_path, "sidedoor_framework")
+    module = importlib.util.module_from_spec(spec)
+    with _import_rules():  # deny-all; irrelevant outside user_code()
+        spec.loader.exec_module(module)  # type: ignore[union-attr]
+    assert module.MARKER == 1  # type: ignore[attr-defined]
+
+
+def test_a_loader_vetted_through_judge_user_import_is_then_accepted(tmp_path: Path) -> None:
+    """A caller that judges its own spec, outside ``find_spec`` (``python_in_sb.py``'s package
+    loading), vets the loader the same way by passing it to ``_judge_user_import``."""
+    spec = _spec_for(tmp_path, "vetted_sidedoor")
+    module = importlib.util.module_from_spec(spec)
+    with _import_rules("vetted_sidedoor"):
+        with user_code():
+            guard_import._judge_user_import("vetted_sidedoor", spec.loader)
+            spec.loader.exec_module(module)  # type: ignore[union-attr]
+    assert module.MARKER == 1  # type: ignore[attr-defined]
+
+
+def test_a_real_import_through_find_spec_is_accepted_pyc_cache_included(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """An ordinary import must keep working: ``find_spec`` vets the loader it approves, so
+    ``GuardLoader.exec_module``'s delegation to it is not refused. Importing a second time,
+    after evicting it, exercises the ``.pyc``-cache read the first import wrote."""
+    module_path = tmp_path / "ordinary_import.py"
+    module_path.write_text("VALUE = 1\n", encoding="utf-8")
+    monkeypatch.syspath_prepend(str(tmp_path))
+    try:
+        with _import_rules("ordinary_import"):
+            with user_code():
+                module = importlib.import_module("ordinary_import")
+                assert module.VALUE == 1  # type: ignore[attr-defined]
+                del sys.modules["ordinary_import"]
+                importlib.invalidate_caches()
+                module = importlib.import_module("ordinary_import")
+                assert module.VALUE == 1  # type: ignore[attr-defined]
+    finally:
+        sys.modules.pop("ordinary_import", None)
+
+
+# 9. Small defects.
 
 
 def test_the_already_activated_message_names_the_import_guard(caplog: pytest.LogCaptureFixture) -> None:

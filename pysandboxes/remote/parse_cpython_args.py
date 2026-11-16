@@ -108,6 +108,11 @@ def parse_python_cmd_line(
     if split_pos != -1:  # pragma: no mutate
         python_run_args = args[split_pos:]
         args = args[:split_pos]
+    if python_run_args and python_run_args[0] == "--":
+        # CPython consumes the "--" end-of-options marker; the next token, if any, is the
+        # script name, never the literal string "--" (which python_in_sb() would then try
+        # to open as a file).
+        python_run_args = python_run_args[1:]
 
     pysandboxes_config: Path = Path(CONFIG_NAME)
     named_config: Path | None = None

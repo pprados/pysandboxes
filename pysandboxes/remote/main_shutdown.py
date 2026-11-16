@@ -6,8 +6,8 @@ This module handles the graceful shutdown of sandbox daemons, including
 learning mode cleanup and rule generation when the daemon terminates.
 """
 
+import asyncio
 import logging
-import time
 
 from pysandboxes.learning import generate_config_from_learning, is_learning_mode
 from pysandboxes.private_loop import purge_loop
@@ -24,7 +24,6 @@ async def daemon_shutdown(graceful_shutdown: bool) -> None:
     """
     from pysandboxes._os_sandbox import async_shutdown_daemon, async_stop_daemon
 
-    global _current_daemon
     if is_learning_mode():
         generate_config_from_learning()
 
@@ -33,7 +32,10 @@ async def daemon_shutdown(graceful_shutdown: bool) -> None:
         await async_stop_daemon(max_pending=1)  # 1 for me
 
         async def _delay_for_send_the_response() -> None:
-            time.sleep(POLLING_DELAY)
+            # await, not time.sleep(): this task runs on the sandbox loop, and a blocking sleep
+            # would stall it for the whole delay, including the in-flight SSE response this
+            # delay exists to let go out first.
+            await asyncio.sleep(POLLING_DELAY)
             # And after, daemon_shutdown the daemon and exit
             await purge_loop()  # Remove all pending task
             await async_shutdown_daemon(graceful_shutdown=False)

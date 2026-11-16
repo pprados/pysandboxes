@@ -60,7 +60,7 @@ from .parameters import (
     TIMEOUT_FOR_START_DAEMON,
     TIMEOUT_FOR_STOP_DAEMON,
 )
-from .tools import SSE_READ_BUFSIZE, is_transient_connection_error
+from .tools import SSE_READ_BUFSIZE, is_transient_connection_error, set_pdeathsig
 
 logger = logging.getLogger(__name__)
 
@@ -91,51 +91,6 @@ def get_log_formatter() -> str:
 def use_rich_handler() -> bool:
     root_handlers = logging.getLogger().handlers
     return any(h.__class__.__name__ == "RichHandler" for h in root_handlers)
-
-
-async def _write_stream(child_stdin_writer: asyncio.StreamWriter) -> None:
-    """Write stdin data to child process.
-
-    Args:
-        child_stdin_writer: Stream writer for child process stdin.
-    """
-    import pty
-    import termios
-    import tty
-
-    master_fd, slave_fd = pty.openpty()
-    old_settings = termios.tcgetattr(sys.stdin.fileno())
-    try:
-        tty.setraw(sys.stdin.fileno())
-
-        while True:
-            try:
-                line: str = await asyncio.to_thread(sys.stdin.readline)
-                if not line:  # EOF (End Of File)
-                    break
-                child_stdin_writer.write(line.encode("utf-8"))
-                await child_stdin_writer.drain()
-            except Exception:
-                break
-    finally:
-        termios.tcsetattr(sys.stdin.fileno(), termios.TCSADRAIN, old_settings)
-        if master_fd:
-            os.close(master_fd)
-
-
-async def _read_stream(stream: asyncio.StreamReader, callback: Callable[[str], None]) -> None:
-    """Read data from stream and call callback for each line.
-
-    Args:
-        stream: Stream reader to read from.
-        callback: Function to call with each line of output.
-    """
-    while True:
-        line: bytes = await stream.readline()
-        if line:
-            callback(line.decode("utf-8").strip())
-        else:
-            break
 
 
 async def _open_fifo_for_write(pipe_path: Path, process: Process) -> int:
@@ -246,6 +201,9 @@ async def launch_sandbox(
             if extra_preexec_fn:
                 extra_preexec_fn()
             os.umask(0o006)  # Only user:RW
+            # The launcher's own crash or a `kill -9` must not leave the sandbox process
+            # (or the VM it starts) running unsupervised.
+            set_pdeathsig()
 
         logger.debug("Start process: " + " ".join((repr(c) if " " in c else c for c in cmd)))
         subprocess_kwargs: dict[str, Any] = dict(env=_child_env(envs))
@@ -484,13 +442,20 @@ class BaseSubProcessDaemon(BaseSSESandbox):
         self.port = find_free_port() if all_rules.port == -1 else all_rules.port  # pragma: no mutate
         self._choose_endpoint(all_rules)
 
-        await self._re_start(
-            all_rules,
-            envs=envs,
-            log_level=log_level,
-            init_fn=init_fn,
-            first=True,
-        )
+        try:
+            await self._re_start(
+                all_rules,
+                envs=envs,
+                log_level=log_level,
+                init_fn=init_fn,
+                first=True,
+            )
+        except BaseException:
+            # `_choose_endpoint` above may have created a private Unix-socket directory; the
+            # caller only kills `_process` on a failed start (`_kill_unstarted_sandbox`), so
+            # that directory would otherwise leak.
+            self._release_endpoint()
+            raise
         self._watchdog = asyncio.create_task(
             self.watchdog(all_rules, envs=envs, log_level=log_level, init_fn=init_fn),
             name="ControlDaemon",
@@ -546,7 +511,22 @@ class BaseSubProcessDaemon(BaseSSESandbox):
                 await asyncio.sleep(wait_time)
                 # await self._shutdown()
                 self._last_reset = time.time()
-                await self._re_start(all_rules, envs=envs, log_level=log_level, init_fn=init_fn)
+                try:
+                    await self._re_start(all_rules, envs=envs, log_level=log_level, init_fn=init_fn)
+                except CancelledError:
+                    raise
+                except Exception:
+                    # `_re_start` may have already launched a new process before failing (e.g. the
+                    # ping loop giving up): nothing else ever kills it once this task ends.
+                    logger.exception("watchdog: restart failed")
+                    if self._process is not None:
+                        self._process.kill()
+                        await self._process.wait()
+                        self._process = None
+                    self._failure = "The sandbox process could not be restarted."
+                    self._accept_incoming = False
+                    self._is_started = False
+                    return
         except CancelledError:
             pass  # Ignore
 
@@ -818,6 +798,17 @@ class BaseSubProcessDaemon(BaseSSESandbox):
                     # answers. Leaving here would skip the wait for its process, and the host would exit
                     # with the sandbox still alive, holding the stdout and stderr pipes of whoever started it.
                     logger.debug("Remote daemon_shutdown ended without an answer: %r", error)
+        except OSError:
+            pass
+        except (SystemExit, KeyboardInterrupt):
+            raise
+        except RuntimeError:
+            pass  # Ignore
+        except Exception:
+            logger.exception("Unknown error in _shutdown")
+        finally:
+            # The kill/wait below must run whatever happened above: an exception from the
+            # remote daemon_shutdown call, caught or not, must not leave the process running.
             if graceful_shutdown:
                 if self._process:
                     try:
@@ -826,21 +817,10 @@ class BaseSubProcessDaemon(BaseSSESandbox):
                         logger.warning("Kill the sandbox daemon")
                         self._process.kill()
                     logger.debug("Sandbox daemon is terminated")
-                    self._process = None
             else:
                 logger.info("Kill the sandbox daemon (graceful_shutdown=%s)", graceful_shutdown)
                 if self._process:
                     self._process.kill()
-        except OSError:
-            pass
-        except (SystemExit, KeyboardInterrupt):
-            raise
-        except RuntimeError:
-            pass  # Ignore
-        except Exception as e:
-            logger.exception("Unknown error in _shutdown")
-            assert e is None, f"Unknown error in _shutdown {e}"
-        finally:
             self._close_job_handle()
             self._process = None
             self._is_started = False

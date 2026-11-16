@@ -276,7 +276,7 @@ class sandboxes:
                     else:
                         return handler(signum, frame)
                 elif handler == signal.SIG_DFL:
-                    if not is_in_sandbox():
+                    if self._owns_a_real_daemon():
                         asyncio.run_coroutine_threadsafe(self._stop_daemon(), get_sandbox_loop()).result()
                     signal.raise_signal(signum)
                 return None
@@ -341,6 +341,16 @@ class sandboxes:
         self._daemon: BaseDaemon | None = None
         self._lock = threading.Lock()
 
+    def _owns_a_real_daemon(self) -> bool:
+        """Whether `self._daemon` is a real provider this instance started and must stop.
+
+        Checked instead of `is_in_sandbox()` at exit time: the `none` provider's `_start` flips that flag to
+        simulate being the sandboxed child, so it still reads true once started and a check at exit time would
+        wrongly skip the stop, leaving the daemon (and the flag) stuck armed. `__enter__` sets `FakeDaemon`
+        only for a nested call, so the daemon's own type is the one thing `_start` cannot move.
+        """
+        return self._daemon is not None and not isinstance(self._daemon, FakeDaemon)
+
     # ── synchronous API ────────────────────────────────
     def __enter__(self) -> BaseDaemon:
         """Start the sandbox daemon for synchronous context manager.
@@ -392,7 +402,7 @@ class sandboxes:
         Stop the sandbox daemon.
         """
         self._unregister_signals_handlers()
-        if not is_in_sandbox():
+        if self._owns_a_real_daemon():
             asyncio.run_coroutine_threadsafe(self._stop_daemon(), get_sandbox_loop()).result()
         self._daemon = None
         return
@@ -454,7 +464,7 @@ class sandboxes:
         Stop the sandbox daemon.
         """
         self._unregister_signals_handlers()
-        if not is_in_sandbox():
+        if self._owns_a_real_daemon():
             await self._stop_daemon()
         self._daemon = None
         return False

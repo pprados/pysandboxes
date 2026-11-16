@@ -394,7 +394,26 @@ class TestMounts:
         assert readonly(cwd) not in harness.mounts
         assert mounted(ro, "/mnt/ro") in harness.mounts and readonly("/mnt/ro") in harness.mounts
         assert mounted(rw, "/mnt/rw") in harness.mounts and readonly("/mnt/rw") not in harness.mounts
-        assert harness.mounts.index(mounted(ro, "/mnt/ro")) < harness.mounts.index(mounted(rw, "/mnt/rw"))
+        # Read-write mounts go first, read-only last: a path exposed both ways ends up read-only.
+        assert harness.mounts.index(mounted(rw, "/mnt/rw")) < harness.mounts.index(mounted(ro, "/mnt/ro"))
+
+    def test_a_path_exposed_both_ways_ends_up_read_only(
+        self, harness: _Run, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
+        """The narrower right wins, same as bwrap, gvisor and smolvm."""
+        shared = tmp_path / "shared"
+        shared.mkdir()
+        config = _config(
+            harness.root,
+            mounts_ro=[(str(shared), "/mnt/shared")],
+            mounts_rw=[(str(shared), "/mnt/shared")],
+        )
+
+        _main(harness, monkeypatch, tmp_path, config, "prog")
+
+        readonly = ["mount", "-o", "remount,ro,bind,nosuid,nodev", f"{harness.root}/mnt/shared"]
+        related = [cmd for cmd in harness.mounts if cmd[-1] == f"{harness.root}/mnt/shared"]
+        assert related[-1] == readonly
 
     def test_no_current_directory_means_no_mount_of_it(
         self, harness: _Run, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
@@ -444,7 +463,7 @@ class TestIgnoredPaths:
         cwd = self._mounted_cwd(harness, tmp_path)
         (harness.root / str(cwd).lstrip("/") / "secret.txt").write_text("x")
         (harness.root / "tmp").mkdir(parents=True, exist_ok=True)
-        config = _config(harness.root, current_dir=str(cwd), ignore_paths=["secret.txt"])
+        config = _config(harness.root, current_dir=str(cwd), ignore_paths=[str(cwd / "secret.txt")])
 
         _main(harness, monkeypatch, tmp_path, config, "prog")
 
@@ -459,7 +478,7 @@ class TestIgnoredPaths:
         cwd = self._mounted_cwd(harness, tmp_path)
         (harness.root / str(cwd).lstrip("/") / "private").mkdir()
         (harness.root / "tmp").mkdir(parents=True, exist_ok=True)
-        config = _config(harness.root, current_dir=str(cwd), ignore_paths=["/private"])
+        config = _config(harness.root, current_dir=str(cwd), ignore_paths=[str(cwd / "private")])
 
         _main(harness, monkeypatch, tmp_path, config, "prog")
 
@@ -471,7 +490,7 @@ class TestIgnoredPaths:
         self, harness: _Run, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
     ) -> None:
         cwd = self._mounted_cwd(harness, tmp_path)
-        config = _config(harness.root, current_dir=str(cwd), ignore_paths=["absent"])
+        config = _config(harness.root, current_dir=str(cwd), ignore_paths=[str(cwd / "absent")])
 
         _main(harness, monkeypatch, tmp_path, config, "prog")
 
@@ -495,7 +514,7 @@ class TestIgnoredPaths:
                     raise subprocess.CalledProcessError(1, cmd)
 
         monkeypatch.setattr(unshare_setup, "_run", failing_first)
-        config = _config(harness.root, current_dir=str(cwd), ignore_paths=["a", "b"])
+        config = _config(harness.root, current_dir=str(cwd), ignore_paths=[str(cwd / "a"), str(cwd / "b")])
 
         _main(harness, monkeypatch, tmp_path, config, "prog")
 
@@ -527,6 +546,27 @@ class TestNameResolution:
         sources = {m[3]: m[2] for m in harness.mounts if m[:2] == ["mount", "--bind"]}
         assert sources[f"{harness.root}/etc/resolv.conf"] == os.path.realpath("/etc/resolv.conf")
         assert sources[f"{harness.root}/etc/hosts"] == os.path.realpath("/etc/hosts")
+
+    def test_the_host_resolv_conf_and_hosts_are_remounted_read_only(
+        self, harness: _Run, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
+        """Without this, a write to /etc/resolv.conf in the sandbox lands on the host's real file."""
+        _main(harness, monkeypatch, tmp_path, _config(harness.root), "prog")
+
+        readonly = ["mount", "-o", "remount,ro,bind,nosuid,nodev"]
+        assert readonly + [f"{harness.root}/etc/resolv.conf"] in harness.mounts
+        assert readonly + [f"{harness.root}/etc/hosts"] in harness.mounts
+
+    def test_the_configured_resolv_conf_and_hosts_are_also_read_only(
+        self, harness: _Run, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
+        config = _config(harness.root, dns_servers=["192.0.2.53"], hosts=["192.0.2.9 api.test"])
+
+        _main(harness, monkeypatch, tmp_path, config, "prog")
+
+        readonly = ["mount", "-o", "remount,ro,bind,nosuid,nodev"]
+        assert readonly + [f"{harness.root}/etc/resolv.conf"] in harness.mounts
+        assert readonly + [f"{harness.root}/etc/hosts"] in harness.mounts
 
 
 class TestNetworkProbeDetails:
@@ -663,15 +703,24 @@ class TestMountDetails:
 
 
 class TestIgnoredPathDetails:
-    def test_without_a_current_directory_a_listed_path_is_still_left_alone(
+    def test_without_a_current_directory_an_ignored_path_under_a_user_mount_is_still_masked(
         self, harness: _Run, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
     ) -> None:
-        (harness.root / "tmp").mkdir(parents=True)
-        (harness.root / "a").mkdir()
+        """``ignore_paths`` is a list of absolute host paths: it no longer depends on current_dir."""
+        data = tmp_path / "data"
+        base = harness.root / str(data).lstrip("/")
+        base.mkdir(parents=True)
+        (base / "a").mkdir()
+        (harness.root / "tmp").mkdir(parents=True, exist_ok=True)
 
-        _main(harness, monkeypatch, tmp_path, _config(harness.root, ignore_paths=["a"]), "prog")
+        config = _config(
+            harness.root,
+            mounts_ro=[(str(data), str(data))],
+            ignore_paths=[str(data / "a")],
+        )
+        _main(harness, monkeypatch, tmp_path, config, "prog")
 
-        assert not [m for m in harness.mounts if m[:2] == ["mount", "--bind"] and m[3] == f"{harness.root}/a"]
+        assert [m for m in harness.mounts if m[:2] == ["mount", "--bind"] and m[3] == f"{harness.root}{data}/a"]
 
     def test_an_absent_path_does_not_stop_the_ones_after_it(
         self, harness: _Run, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
@@ -686,7 +735,11 @@ class TestIgnoredPathDetails:
             harness,
             monkeypatch,
             tmp_path,
-            _config(harness.root, current_dir=str(cwd), ignore_paths=["absent", "present"]),
+            _config(
+                harness.root,
+                current_dir=str(cwd),
+                ignore_paths=[str(cwd / "absent"), str(cwd / "present")],
+            ),
             "prog",
         )
 

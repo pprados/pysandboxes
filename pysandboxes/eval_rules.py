@@ -242,14 +242,14 @@ ATTRIBUTE_GROUPS: dict[str, frozenset[str]] = {
 _BLIND_ATTRIBUTES = ("format", "format_map")
 
 # Builtins that hand back, by name, a door the bounded namespace had shut.
-# `getattr`, `vars`, `setattr`, `delattr`, `type`, `dir`, `globals` and
+# `getattr`, `vars`, `setattr`, `delattr`, `type`, `dir`, `globals`, `locals` and
 # `breakpoint` are neutralised by a guarded shim; `open`, `eval`, `exec`,
 # `compile` and `__import__` reach their own guard. Either way, granting one is
 # a real widening a reader should see reported, and a caller handing one in an
 # eval context hands over a strong capability (`guard_eval.classify_context_value`).
 CAPABILITY_BUILTINS = frozenset(
     {
-        "getattr", "setattr", "delattr", "vars", "hasattr", "dir", "globals",
+        "getattr", "setattr", "delattr", "vars", "hasattr", "dir", "globals", "locals",
         "type", "breakpoint", "open", "eval", "exec", "compile", "__import__",
     }
 )  # fmt: skip

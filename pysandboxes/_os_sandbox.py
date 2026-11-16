@@ -31,7 +31,7 @@ from .remote.parameters import (
     TIMEOUT_FOR_STOP_DAEMON,
     qemu_start_timeout,
 )
-from .tools import Environ, SyncOrAsyncFunc, check_mixte_async_async, is_in_sandbox
+from .tools import Environ, SyncOrAsyncFunc, check_mixte_async_async, is_in_sandbox, set_is_in_sandbox
 
 logger = logging.getLogger(__name__)
 
@@ -326,12 +326,22 @@ async def async_shutdown_daemon(graceful_shutdown: bool = True) -> None:
             _startup_counter -= 1
             logger.info("Daemon not shutting down because the startup counter > 1")
             return
-        # Try a graceful shutdown
-        await _current_daemon._shutdown(graceful_shutdown)
-        assert not _current_daemon.is_started
-        _current_daemon = None
-        _startup_counter -= 1
-        assert not _startup_counter
+        # Try a graceful shutdown. A failure here must not leave a dead daemon looking started: the
+        # `finally` wipes the global state clean either way, and the exception still propagates so the
+        # caller learns the shutdown did not complete.
+        try:
+            await _current_daemon._shutdown(graceful_shutdown)
+            assert not _current_daemon.is_started
+        finally:
+            _current_daemon = None
+            _startup_counter = 0
+            # Give back the private event-loop thread a sync start_daemon() may have created, and any
+            # `none`-provider flag a failed `_shutdown` never got to clear: without this, a thread leaks
+            # forever, or is_in_sandbox() stays stuck true and every later `with sandboxes():` in this
+            # process believes it is a nested call and never starts a real daemon.
+            _reset_sandbox_loop()
+            while is_in_sandbox():
+                set_is_in_sandbox(False)
 
 
 def start_daemon(

@@ -35,6 +35,7 @@ def test_immutable_dict() -> None:
         (("a", "b"), (1,)),
         (["a"], (1,)),
         (("a",), [1]),
+        ((["a"],), (1,)),
     ],
 )
 def test_a_forged_state_is_refused(keys: object, values: object) -> None:

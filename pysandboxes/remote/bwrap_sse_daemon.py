@@ -10,7 +10,6 @@ uses --unshare-net with slirp4netns and iptables for user-land network filtering
 """
 
 import asyncio
-import fnmatch
 import gc
 
 # Python 3.10+ only
@@ -76,7 +75,15 @@ from .slirp4netns_common import (
 from .slirp4netns_common import (
     setup_port_forwarding as slirp_setup_port_forwarding,
 )
-from .tools import SSE_READ_BUFSIZE, is_transient_connection_error, suggest_package_installation, which_command
+from .tools import (
+    SSE_READ_BUFSIZE,
+    is_transient_connection_error,
+    suggest_package_installation,
+    which_command,
+)
+from .tools import (
+    resolve_ignore_paths as _resolve_ignore_paths,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -144,32 +151,6 @@ def _kill_quietly(pid: int) -> None:
         pass
 
 
-def _resolve_ignore_paths(
-    current_dir: str,
-    ignore_rules: list[IgnoreRule],
-) -> list[str]:
-    """Resolve ignore rules to paths relative to current_dir (same semantics as unshare)."""
-    if not ignore_rules:
-        return []
-    patterns = [r.source for r in ignore_rules]
-    result: list[str] = []
-    try:
-        cur = Path(current_dir).resolve()
-        for root, _dirs, files in os.walk(cur):
-            root_path = Path(root)
-            for name in list(_dirs) + files:
-                if any(fnmatch.fnmatch(name, p) for p in patterns):
-                    rel = root_path / name
-                    try:
-                        rel = rel.relative_to(cur)
-                    except ValueError:
-                        continue
-                    result.append(str(rel))
-    except OSError:
-        pass
-    return result
-
-
 def _dns_run_paths(
     resolv_conf: Path = Path("/etc/resolv.conf"),
     run_root: Path = Path("/run"),
@@ -227,17 +208,18 @@ def _is_reachable_in_sandbox(path: str, exposed: list[str], max_hops: int = 32) 
     return False
 
 
-def _ignore_mask_targets(current_dir: str, ignore_paths: list[str], exposed: list[str]) -> list[str]:
+def _ignore_mask_targets(ignore_paths: list[str], exposed: list[str]) -> list[str]:
     """Real paths to mask for the ignore rules, symlinks resolved and duplicates removed.
 
-    ``bwrap`` refuses a symlink as a mount destination ("Can't mount on symlink
+    ``ignore_paths`` are already absolute (resolved under the current directory and every
+    exposed path). ``bwrap`` refuses a symlink as a mount destination ("Can't mount on symlink
     destination") and aborts the whole launch, so a link is masked through the file it
     points to. A chain leaving the exposed tree is already invisible in the sandbox and
     needs no mask.
     """
     targets: list[str] = []
-    for rel_path in ignore_paths:
-        full_host = os.path.normpath(os.path.join(current_dir, rel_path))
+    for full_host in ignore_paths:
+        full_host = os.path.normpath(full_host)
         if not os.path.exists(full_host):
             continue
         if not _is_reachable_in_sandbox(full_host, exposed):
@@ -589,29 +571,31 @@ class BWrapSSEDaemon(BaseSubProcessDaemon):
                 if sp and os.path.isdir(sp):
                     args.extend(["--ro-bind", sp, sp])
 
-        # File rules: apply expose-ro first, then expose-rw so writable mounts override
+        # File rules: apply expose-rw first, then expose-ro so a path exposed both ways ends up
+        # read-only: the narrower right wins, same as gvisor and smolvm.
         # A device bound with --bind or --ro-bind is nodev: opening it fails with EACCES, so it needs --dev-bind.
-        for rule in all_rules.file_rules:
-            if isinstance(rule, FSExposeRule) and not rule.write:
-                args.extend([("--dev-bind" if is_special_file(Path(rule.path)) else "--ro-bind"), rule.path, rule.path])
         for rule in all_rules.file_rules:
             if isinstance(rule, FSExposeRule) and rule.write:
                 args.extend([("--dev-bind" if is_special_file(Path(rule.path)) else "--bind"), rule.path, rule.path])
+        for rule in all_rules.file_rules:
+            if isinstance(rule, FSExposeRule) and not rule.write:
+                args.extend([("--dev-bind" if is_special_file(Path(rule.path)) else "--ro-bind"), rule.path, rule.path])
 
         # Temp dir so child can read the config pipe
         temp_str = str(temp)
         if temp_str:
             args.extend(["--bind", temp_str, temp_str])
 
-        # Overlay ignore paths (e.g. .env) so they are not visible in the sandbox
+        # Overlay ignore paths (e.g. .env) so they are not visible in the sandbox, wherever the
+        # sandbox can reach them: under the current directory or under an exposed path.
         ignore_rules = [r for r in all_rules.file_rules if isinstance(r, IgnoreRule)]
         current_dir = os.getcwd()
         # Without --chdir, bwrap retries the caller's $PWD: through a symlink that name is missing in the
         # sandbox, and the child silently starts in $HOME. getcwd() is the resolved path the rules bind.
         args.extend(["--chdir", current_dir])
-        ignore_paths = _resolve_ignore_paths(current_dir, ignore_rules)
         exposed = [r.path for r in all_rules.file_rules if isinstance(r, FSExposeRule)]
-        for i, full_host in enumerate(_ignore_mask_targets(current_dir, ignore_paths, exposed)):
+        ignore_paths = _resolve_ignore_paths([current_dir, *exposed], ignore_rules)
+        for i, full_host in enumerate(_ignore_mask_targets(ignore_paths, exposed)):
             try:
                 if os.path.isfile(full_host):
                     placeholder = temp / f"pysb_ignore_{i}"

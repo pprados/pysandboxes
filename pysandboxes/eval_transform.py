@@ -21,6 +21,7 @@ from typing import NamedTuple
 
 from .e import EvalSyntaxRejected
 from .eval_rules import SYNTAX_GROUPS, EvalRules
+from .eval_runtime import FRAME_CAPTURE
 
 logger = logging.getLogger(__name__)
 
@@ -36,6 +37,10 @@ _ALWAYS_AVAILABLE = frozenset({"Attribute", "Call", "keyword"})
 _MARKERS: tuple[type, ...] = (ast.operator, ast.cmpop, ast.boolop, ast.unaryop, ast.expr_context)
 
 _GROUP_OF_NODE: dict[str, str] = {node: group for group, nodes in SYNTAX_GROUPS.items() for node in nodes}
+
+# Matches eval_runtime._FRAME_CAPTURE_HINT: naming a rule key here would send the reader after a
+# line that changes nothing, since this denial is the one no configuration lifts.
+_FRAME_CAPTURE_REMEDY = "Frame capture is always refused; no eval- rule grants it."
 
 _WARNED_REMEDY: dict[str, str] = {
     "eval-magic": "opens the whole type hierarchy",
@@ -185,6 +190,28 @@ class _Validator(ast.NodeVisitor):
                 "a sub-language computing over supplied data does not mutate attributes",
             )
         self._check_identifier(node, node.attr, "attribute")
+        self.generic_visit(node)
+
+    def visit_MatchClass(self, node: ast.MatchClass) -> None:
+        """Refuse a `case Cls(name=...)` keyword attribute `MATCH_CLASS` would read unguarded.
+
+        The opcode resolves `kwd_attrs` with its own `getattr`, which no rewrite reaches: unlike
+        an ordinary `Attribute` node (rewritten to `__sb_getattr__` in phase 2), there is nothing
+        to inject here, so the rule is enforced statically instead of at runtime -- safe only
+        because `kwd_attrs` is always a literal identifier list, never a name built at run time.
+        Without this, `case object(gi_frame=f):` read the non-overridable `FRAME_CAPTURE` deny,
+        and any other keyword attribute pattern read past `eval-attribute`/`eval-magic`.
+        """
+        for attr in node.kwd_attrs:
+            if attr in FRAME_CAPTURE:
+                self._add(node, f"attribute {attr!r} is not allowed", _FRAME_CAPTURE_REMEDY)
+            elif attr.startswith("__") and attr.endswith("__"):
+                if not self.rules.magic.allows(attr):
+                    self._add(
+                        node, f"attribute {attr!r} is not allowed", f"eval-magic={attr}", _WARNED_REMEDY["eval-magic"]
+                    )
+            elif not self.rules.attribute.allows(attr):
+                self._add(node, f"attribute {attr!r} is not allowed", f"eval-attribute={attr}")
         self.generic_visit(node)
 
     def visit_Call(self, node: ast.Call) -> None:

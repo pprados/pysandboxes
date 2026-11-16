@@ -107,6 +107,25 @@ def test_globals_builtin_is_refused() -> None:
         guarded_eval("globals()")
 
 
+def test_locals_builtin_is_refused() -> None:
+    """`locals()` handed out raw carries the `__sb_` helpers by reference: rebinding
+    `__sb_tick__` through it used to silence every later tick, defeating `eval-max-iterations`."""
+    _activate(call=_names("locals"))
+    with pytest.raises(RuleEvalPermissionError):
+        guarded_eval("locals()")
+
+
+def test_locals_cannot_be_used_to_disable_the_iteration_budget() -> None:
+    _activate(
+        syntax=_syntax("loop", "assign", "subscript"),
+        call=_names("locals", "int"),
+        max_iterations=10,
+        timeout=2.0,
+    )
+    with pytest.raises(RuleEvalPermissionError):
+        guarded_eval("locals()['__sb_tick__'] = int\nwhile True:\n    pass\n", mode="exec")
+
+
 def test_breakpoint_builtin_is_refused() -> None:
     _activate(call=_names("breakpoint"))
     with pytest.raises(RuleEvalPermissionError):

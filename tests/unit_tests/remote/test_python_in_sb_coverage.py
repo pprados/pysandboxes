@@ -35,7 +35,7 @@ def test_a_package_is_judged_executed_and_registered(package: tuple[importlib.ma
     with patch.object(python_in_sb, "_judge_user_import") as judge:
         python_in_sb._load_module_packages([spec])
 
-    judge.assert_called_once_with(name)
+    judge.assert_called_once_with(name, spec.loader)
     assert sys.modules[name].VALUE == 7  # type: ignore[attr-defined]
 
 

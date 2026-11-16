@@ -500,6 +500,17 @@ def __sb_b_globals__() -> Any:
     raise RuleEvalPermissionError("globals", "eval-call", "the evaluation namespace is not exposed")
 
 
+def __sb_b_locals__() -> Any:
+    """Guarded `locals`: at module level this is the same namespace `globals()` refuses.
+
+    Handed out raw, it carries the `__sb_` helpers by direct reference: evaluated code
+    rebinding `locals()["__sb_tick__"]` silenced every later tick, so `eval-max-iterations`
+    stopped firing and only the cooperative timeout -- which the same rebinding can defeat for
+    `__sb_enter__`/`__sb_leave__` too -- was left standing.
+    """
+    raise RuleEvalPermissionError("locals", "eval-call", "the evaluation namespace is not exposed")
+
+
 def __sb_b_dir__(obj: Any = _MISSING) -> list[str]:
     """Guarded `dir`: the no-argument form is refused, the rest is filtered.
 
@@ -532,6 +543,7 @@ GUARDED_BUILTINS: dict[str, Callable[..., Any]] = {
     "delattr": __sb_b_delattr__,
     "breakpoint": __sb_b_breakpoint__,
     "globals": __sb_b_globals__,
+    "locals": __sb_b_locals__,
     "dir": __sb_b_dir__,
     "type": __sb_b_type__,
     "format": __sb_b_format__,
@@ -621,15 +633,31 @@ def __sb_binop__(op: str, left: Any, right: Any) -> Any:
         if isinstance(left, int) and isinstance(right, int) and right > 0 and abs(left) > 1:
             # bit length of the result, without computing it
             if left.bit_length() * right > budget * 8:
-                _refuse_alloc(f"{left} ** {right} would allocate more than eval-max-alloc={budget}")
+                # `left` can already hold more digits than CPython's int-to-str conversion limit
+                # allows (sys.get_int_max_str_digits()): describe it by its bit length, never by
+                # formatting the value itself, or raising the refusal raises ValueError instead.
+                _refuse_alloc(f"a {left.bit_length()}-bit value ** {right} would allocate past eval-max-alloc={budget}")
     elif kind == "<<":
         if isinstance(left, int) and isinstance(right, int) and right > 0 and left:
             if left.bit_length() + right > budget * 8:
-                _refuse_alloc(f"{left} << {right} would allocate more than eval-max-alloc={budget}")
+                _refuse_alloc(f"a {left.bit_length()}-bit value << {right} would allocate past eval-max-alloc={budget}")
     elif kind == "%":
         if isinstance(left, (str, bytes, bytearray)):
             _check_printf(left, right)
     elif kind == "*":
+        if (
+            isinstance(left, int)
+            and isinstance(right, int)
+            and not isinstance(left, bool)
+            and not isinstance(right, bool)
+            and left
+            and right
+        ):
+            if left.bit_length() + right.bit_length() > budget * 8:
+                _refuse_alloc(
+                    f"a {left.bit_length()}-bit by {right.bit_length()}-bit product "
+                    f"would exceed eval-max-alloc={budget}"
+                )
         for sequence, count in ((left, right), (right, left)):
             if isinstance(sequence, _SEQUENCES) and isinstance(count, int) and not isinstance(count, bool):
                 if len(sequence) * count > budget:

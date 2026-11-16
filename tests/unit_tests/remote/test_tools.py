@@ -1,23 +1,23 @@
 """Unit tests for pysandboxes.remote.tools module."""
 
-import logging
 import os
 import pickle
 import tempfile
 from pathlib import Path
-from unittest.mock import Mock, mock_open, patch
+from unittest.mock import mock_open, patch
 
 import pytest  # type: ignore[import-untyped]
 
+from pysandboxes.guard_files import IgnoreRule
 from pysandboxes.remote.tools import (
-    configure_logging_level,
     from_b85,
     get_venv,
-    return_level_parameter,
+    resolve_ignore_paths,
     suggest_package_installation,
     to_b85,
     which_command,
 )
+from pysandboxes.sb_types import ConfigLine
 
 
 class TestWhichCommand:
@@ -80,65 +80,6 @@ class TestGetVenv:
                     assert result is None
 
 
-class TestConfigureLoggingLevel:
-    """Test cases for configure_logging_level function."""
-
-    @patch("logging.getLogger")
-    def test_configure_logging_level_error(self, mock_get_logger: Mock) -> None:
-        """Test verbose count 0 sets ERROR level."""
-        mock_logger = Mock()
-        mock_get_logger.return_value = mock_logger
-
-        result = configure_logging_level(0)
-
-        assert result == logging.ERROR
-        mock_logger.setLevel.assert_called_once_with(logging.ERROR)
-
-    @patch("logging.getLogger")
-    def test_configure_logging_level_warning(self, mock_get_logger: Mock) -> None:
-        """Test verbose count 1 sets WARNING level."""
-        mock_logger = Mock()
-        mock_get_logger.return_value = mock_logger
-
-        result = configure_logging_level(1)
-
-        assert result == logging.WARNING
-        mock_logger.setLevel.assert_called_once_with(logging.WARNING)
-
-    @patch("logging.getLogger")
-    def test_configure_logging_level_info(self, mock_get_logger: Mock) -> None:
-        """Test verbose count 2 sets INFO level."""
-        mock_logger = Mock()
-        mock_get_logger.return_value = mock_logger
-
-        result = configure_logging_level(2)
-
-        assert result == logging.INFO
-        mock_logger.setLevel.assert_called_once_with(logging.INFO)
-
-    @patch("logging.getLogger")
-    def test_configure_logging_level_debug(self, mock_get_logger: Mock) -> None:
-        """Test verbose count 3 sets DEBUG level."""
-        mock_logger = Mock()
-        mock_get_logger.return_value = mock_logger
-
-        result = configure_logging_level(3)
-
-        assert result == logging.DEBUG
-        mock_logger.setLevel.assert_called_once_with(logging.DEBUG)
-
-    @patch("logging.getLogger")
-    def test_configure_logging_level_notset(self, mock_get_logger: Mock) -> None:
-        """Test verbose count 4+ sets NOTSET level."""
-        mock_logger = Mock()
-        mock_get_logger.return_value = mock_logger
-
-        result = configure_logging_level(5)
-
-        assert result == logging.NOTSET
-        mock_logger.setLevel.assert_called_once_with(logging.NOTSET)
-
-
 class TestSuggestPackageInstallation:
     """Test cases for suggest_package_installation function."""
 
@@ -186,35 +127,6 @@ class TestSuggestPackageInstallation:
 
                 # Should fall back to generic Linux suggestion
                 assert "package manager" in result.lower()
-
-
-class TestReturnLevelParameter:
-    """Test cases for return_level_parameter function."""
-
-    def test_return_level_parameter_warn(self) -> None:
-        """Test WARNING level returns empty string."""
-        result = return_level_parameter(logging.WARN)
-        assert result == ""
-
-    def test_return_level_parameter_info(self) -> None:
-        """Test INFO level returns '-v'."""
-        result = return_level_parameter(logging.INFO)
-        assert result == "-v"
-
-    def test_return_level_parameter_debug(self) -> None:
-        """Test DEBUG level returns '-vv'."""
-        result = return_level_parameter(logging.DEBUG)
-        assert result == "-vv"
-
-    def test_return_level_parameter_notset(self) -> None:
-        """Test NOTSET level returns '-vvv'."""
-        result = return_level_parameter(logging.NOTSET)
-        assert result == "-vvv"
-
-    def test_return_level_parameter_unknown(self) -> None:
-        """Test unknown level returns '-vvv'."""
-        result = return_level_parameter(99999)
-        assert result == "-vvv"
 
 
 class TestSerializationFunctions:
@@ -314,3 +226,73 @@ def test_the_transport_survives_arming() -> None:
     finally:
         pickle.loads = original  # type: ignore[assignment]
         _reset_for_tests()
+
+
+def _ignore(pattern: str) -> IgnoreRule:
+    return IgnoreRule(pattern, ConfigLine(f"ignore={pattern}", Path(), 1))
+
+
+class TestResolveIgnorePaths:
+    """Shared by bwrap, unshare, firejail, qemu and qemu-microvm: a pattern matched under every
+
+    root a caller passes -- the current directory and every path the profile exposes."""
+
+    def test_no_ignore_rule_resolves_to_nothing(self, tmp_path: Path) -> None:
+        assert resolve_ignore_paths([str(tmp_path)], []) == []
+
+    def test_a_pattern_matches_at_the_top_of_a_root(self, tmp_path: Path) -> None:
+        (tmp_path / ".env").write_text("TOP=1", encoding="utf-8")
+
+        assert resolve_ignore_paths([str(tmp_path)], [_ignore(".env")]) == [str(tmp_path / ".env")]
+
+    def test_a_pattern_matches_in_a_directory_nested_under_a_root(self, tmp_path: Path) -> None:
+        (tmp_path / "sub").mkdir()
+        (tmp_path / "sub" / ".env").write_text("NESTED=1", encoding="utf-8")
+
+        assert resolve_ignore_paths([str(tmp_path)], [_ignore(".env")]) == [str(tmp_path / "sub" / ".env")]
+
+    def test_an_absent_pattern_resolves_to_nothing(self, tmp_path: Path) -> None:
+        assert resolve_ignore_paths([str(tmp_path)], [_ignore(".env")]) == []
+
+    def test_a_pattern_naming_a_sub_path_does_not_match_a_basename(self, tmp_path: Path) -> None:
+        """``fnmatch`` is applied to the basename alone: a pattern with a path separator matches nothing."""
+        (tmp_path / "sub").mkdir()
+        (tmp_path / "sub" / ".env").write_text("NESTED=1", encoding="utf-8")
+
+        assert resolve_ignore_paths([str(tmp_path)], [_ignore("sub/.env")]) == []
+
+    def test_a_missing_root_resolves_to_nothing(self, tmp_path: Path) -> None:
+        assert resolve_ignore_paths([str(tmp_path / "missing")], [_ignore(".env")]) == []
+
+    def test_a_match_in_a_second_root_outside_the_first_is_found(self, tmp_path: Path) -> None:
+        """An exposed path need not sit under the current directory: an unrelated root is walked too."""
+        cwd, exposed = tmp_path / "cwd", tmp_path / "exposed"
+        cwd.mkdir()
+        exposed.mkdir()
+        (exposed / ".env").write_text("SECRET=1", encoding="utf-8")
+
+        assert resolve_ignore_paths([str(cwd), str(exposed)], [_ignore(".env")]) == [str(exposed / ".env")]
+
+    def test_a_root_nested_under_another_is_not_walked_twice(self, tmp_path: Path) -> None:
+        (tmp_path / "sub").mkdir()
+        (tmp_path / "sub" / ".env").write_text("NESTED=1", encoding="utf-8")
+
+        assert resolve_ignore_paths([str(tmp_path), str(tmp_path / "sub")], [_ignore(".env")]) == [
+            str(tmp_path / "sub" / ".env")
+        ]
+
+    def test_a_root_that_is_a_file_is_matched_directly_instead_of_walked(self, tmp_path: Path) -> None:
+        exposed_file = tmp_path / ".env"
+        exposed_file.write_text("SECRET=1", encoding="utf-8")
+
+        assert resolve_ignore_paths([str(exposed_file)], [_ignore(".env")]) == [str(exposed_file)]
+
+    def test_a_symlinked_subdirectory_of_a_root_is_not_followed(self, tmp_path: Path) -> None:
+        outside = tmp_path / "outside"
+        outside.mkdir()
+        (outside / ".env").write_text("SECRET=1", encoding="utf-8")
+        root = tmp_path / "root"
+        root.mkdir()
+        (root / "link").symlink_to(outside, target_is_directory=True)
+
+        assert resolve_ignore_paths([str(root)], [_ignore(".env")]) == []

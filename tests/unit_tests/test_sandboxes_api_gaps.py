@@ -156,11 +156,15 @@ def test_a_signal_caught_off_the_main_thread_interrupts_the_main_one() -> None:
     previous.assert_not_called()
 
 
-@pytest.mark.parametrize("in_sandbox", [False, True])
-def test_a_default_disposition_stops_the_daemon_outside_the_sandbox_then_raises_the_signal(in_sandbox: bool) -> None:
+@pytest.mark.parametrize("nested", [False, True])
+def test_a_default_disposition_stops_the_daemon_outside_the_sandbox_then_raises_the_signal(nested: bool) -> None:
+    """A nested entry (`manager._daemon` is the `FakeDaemon` `__enter__` sets for it) owns no real daemon to
+    stop. `is_in_sandbox()` cannot tell the two cases apart here: the `none` provider's `_start` leaves it
+    true for a non-nested entry too, so the daemon's own type is what the handler checks instead.
+    """
     with _installed_handler(signal.SIG_DFL) as (manager, handler, _):
+        manager._daemon = FakeDaemon(token="fake") if nested else Mock()
         with (
-            patch("pysandboxes.sandboxes_api.is_in_sandbox", return_value=in_sandbox),
             patch("pysandboxes.sandboxes_api.get_sandbox_loop") as get_loop,
             patch("pysandboxes.sandboxes_api.asyncio.run_coroutine_threadsafe") as run_threadsafe,
             patch.object(sandboxes, "_stop_daemon", Mock()),
@@ -168,8 +172,8 @@ def test_a_default_disposition_stops_the_daemon_outside_the_sandbox_then_raises_
         ):
             assert handler(signal.SIGTERM, None) is None
 
-    assert run_threadsafe.called is (not in_sandbox)
-    assert get_loop.called is (not in_sandbox)
+    assert run_threadsafe.called is (not nested)
+    assert get_loop.called is (not nested)
     raise_signal.assert_called_once_with(signal.SIGTERM)
 
 

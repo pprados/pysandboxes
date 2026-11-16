@@ -3,6 +3,7 @@
 """`daemon_shutdown`: what the daemon does, and in which order, when it is told to stop."""
 
 import asyncio
+import time
 from typing import Any
 
 import pytest  # type: ignore[import-untyped]
@@ -10,6 +11,17 @@ import pytest  # type: ignore[import-untyped]
 from pysandboxes import _os_sandbox, private_loop
 from pysandboxes.remote import main_shutdown
 from pysandboxes.remote.parameters import POLLING_DELAY
+
+
+class _FakeAsyncio:
+    """Stands in for the `asyncio` name inside `main_shutdown`: only `sleep` is used there, and
+    patching the real module would also swallow this test's own `asyncio.sleep(0)` in `_settle`."""
+
+    def __init__(self, events: list[tuple[str, Any]]) -> None:
+        self._events = events
+
+    async def sleep(self, delay: float) -> None:
+        self._events.append(("sleep", delay))
 
 
 @pytest.fixture
@@ -29,7 +41,7 @@ def journal(monkeypatch: pytest.MonkeyPatch) -> list[tuple[str, Any]]:
     monkeypatch.setattr(_os_sandbox, "async_shutdown_daemon", shutdown_daemon)
     monkeypatch.setattr(main_shutdown, "purge_loop", purge)
     monkeypatch.setattr(main_shutdown, "generate_config_from_learning", lambda: events.append(("generate", None)))
-    monkeypatch.setattr(main_shutdown.time, "sleep", lambda delay: events.append(("sleep", delay)))
+    monkeypatch.setattr(main_shutdown, "asyncio", _FakeAsyncio(events))
     monkeypatch.setattr(private_loop, "get_sandbox_loop", asyncio.get_running_loop)
     monkeypatch.setattr(main_shutdown, "is_learning_mode", lambda: False)
     return events
@@ -85,3 +97,34 @@ async def test_the_rules_are_not_saved_outside_learning_mode(journal: list[tuple
     await _settle()
 
     assert "generate" not in [name for name, _ in journal]
+
+
+async def test_the_shutdown_delay_does_not_block_the_event_loop(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A blocking sleep here freezes the whole thread for the delay, not just this coroutine --
+    including the in-flight SSE response the delay exists to let go out first. ``time.monotonic()``
+    keeps advancing through a blocking call, so it tells the two apart where an `asyncio` timeout
+    could not: the loop that would detect it is exactly what the bug stalls."""
+
+    async def stop_daemon(**kwargs: Any) -> None:
+        pass
+
+    async def shutdown_daemon(**kwargs: Any) -> None:
+        pass
+
+    async def purge() -> None:
+        pass
+
+    monkeypatch.setattr(_os_sandbox, "async_stop_daemon", stop_daemon)
+    monkeypatch.setattr(_os_sandbox, "async_shutdown_daemon", shutdown_daemon)
+    monkeypatch.setattr(main_shutdown, "purge_loop", purge)
+    monkeypatch.setattr(main_shutdown, "is_learning_mode", lambda: False)
+    monkeypatch.setattr(private_loop, "get_sandbox_loop", asyncio.get_running_loop)
+    monkeypatch.setattr(main_shutdown, "POLLING_DELAY", 0.3)
+
+    start = time.monotonic()
+    await main_shutdown.daemon_shutdown(True)
+    for _ in range(5):
+        await asyncio.sleep(0)
+    elapsed = time.monotonic() - start
+
+    assert elapsed < 0.1, f"the shutdown delay blocked the event loop for {elapsed:.3f}s instead of yielding"

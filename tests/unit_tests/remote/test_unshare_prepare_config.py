@@ -297,10 +297,40 @@ class TestIgnoreAndEnvs:
         config, _ = _prepare(_rules(files=("ignore=*.key",)), tmp_path)
 
         assert config.current_dir == os.getcwd()
-        assert config.ignore_paths == [str(Path("sub") / "secret.key")]
+        assert config.ignore_paths == [str(tmp_path / "sub" / "secret.key")]
 
     def test_without_ignore_rules_nothing_is_ignored(self, tmp_path: Path) -> None:
         config, _ = _prepare(_rules(), tmp_path)
+
+        assert config.ignore_paths == []
+
+    def test_an_ignore_rule_also_resolves_under_an_exposed_path_outside_cwd(
+        self, tmp_path: Path, monkeypatch: Any
+    ) -> None:
+        """A match must be masked wherever the sandbox can reach it, not only under cwd."""
+        cwd = tmp_path / "cwd"
+        cwd.mkdir()
+        data = tmp_path / "data"
+        data.mkdir()
+        (data / "secret.key").write_text("x")
+        monkeypatch.chdir(cwd)
+
+        config, _ = _prepare(_rules(files=(f"expose-ro={data}", "ignore=*.key")), tmp_path)
+
+        assert config.ignore_paths == [str(data / "secret.key")]
+
+    def test_without_the_ignore_rule_the_exposed_file_is_not_in_ignore_paths(
+        self, tmp_path: Path, monkeypatch: Any
+    ) -> None:
+        """Negative control for the test above: the rule, not the exposure, causes the match."""
+        cwd = tmp_path / "cwd"
+        cwd.mkdir()
+        data = tmp_path / "data"
+        data.mkdir()
+        (data / "secret.key").write_text("x")
+        monkeypatch.chdir(cwd)
+
+        config, _ = _prepare(_rules(files=(f"expose-ro={data}",)), tmp_path)
 
         assert config.ignore_paths == []
 

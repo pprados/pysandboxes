@@ -10,7 +10,7 @@ from typing import cast
 import pytest  # type: ignore[import-untyped]
 
 from pysandboxes.e import EvalInterrupted, EvalSyntaxRejected
-from pysandboxes.eval_rules import DEFAULT_RULES, SYNTAX_GROUPS, NameSet
+from pysandboxes.eval_rules import CORE_NODES, DEFAULT_RULES, SYNTAX_GROUPS, NameSet
 from pysandboxes.eval_runtime import HELPERS, EvalState, pop_state, push_state
 from pysandboxes.eval_transform import (
     _WARNED_MODULES,
@@ -31,8 +31,6 @@ def _names(*allowed: str) -> NameSet:
 
 
 def _syntax(*groups: str) -> NameSet:
-    from pysandboxes.eval_rules import CORE_NODES
-
     nodes = set(CORE_NODES)
     for group in groups:
         nodes.update(SYNTAX_GROUPS[group])
@@ -233,6 +231,41 @@ def test_the_reserved_prefix_is_refused_as_an_attribute() -> None:
 
 def test_an_attribute_delete_is_refused() -> None:
     assert _check("del x.attr", syntax=_syntax("assign"), attribute=_names("attr"))
+
+
+def _match_syntax(*extra: str) -> NameSet:
+    nodes = {*CORE_NODES, "Match", "match_case", "MatchClass", "MatchAs", *extra}
+    return NameSet(allow=frozenset(nodes), allow_patterns=(), deny=frozenset(), deny_patterns=())
+
+
+_MATCH_SOURCE = "match x:\n    case object({attr}=f):\n        pass\n    case _:\n        pass\n"
+
+
+def test_match_class_cannot_reach_a_frame_capture_attribute() -> None:
+    """`MATCH_CLASS` resolves `kwd_attrs` with its own `getattr`, which no rewrite reaches:
+    `case object(gi_frame=f):` used to read the non-overridable `FRAME_CAPTURE` deny untouched."""
+    violations = _check(_MATCH_SOURCE.format(attr="gi_frame"), syntax=_match_syntax(), call=_names("object"))
+    assert any("gi_frame" in v.message for v in violations)
+    assert any("Frame capture is always refused" in v.remedy for v in violations)
+
+
+def test_match_class_keyword_attribute_is_refused_outside_eval_magic() -> None:
+    violations = _check(_MATCH_SOURCE.format(attr="__class__"), syntax=_match_syntax(), call=_names("object"))
+    assert any("eval-magic=__class__" in v.remedy for v in violations)
+
+
+def test_match_class_keyword_attribute_is_refused_outside_eval_attribute() -> None:
+    violations = _check(_MATCH_SOURCE.format(attr="secret"), syntax=_match_syntax(), call=_names("object"))
+    assert any("eval-attribute=secret" in v.remedy for v in violations)
+
+
+def test_match_class_keyword_attribute_passes_once_granted() -> None:
+    assert not _check(
+        _MATCH_SOURCE.format(attr="secret"),
+        syntax=_match_syntax(),
+        call=_names("object"),
+        attribute=_names("secret"),
+    )
 
 
 def test_the_node_count_is_bounded() -> None:

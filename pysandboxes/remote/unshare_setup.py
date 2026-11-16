@@ -58,7 +58,7 @@ class UnshareSetupConfig:
     named_pipe: str
     netfilter_rules: list[str]
     current_dir: str
-    ignore_paths: list[str]  # paths relative to current_dir to mask (overlay with no-access)
+    ignore_paths: list[str]  # absolute host paths to mask (overlay with no-access)
     sandbox_envs: dict[str, str]  # the profile's env= whitelist, all the sandbox may see
     # Chroot root, created by the daemon rather than here: this process execs into the
     # sandbox and never returns, so it cannot remove it. Only the daemon outlives the
@@ -336,20 +336,21 @@ def main() -> None:
         _mount_bind(config.current_dir, config.current_dir, new_root, readonly=False)
 
     # --- G. User-defined mounts ---
+    # Read-write first, then read-only last: a path exposed both ways ends up read-only, the
+    # narrower right winning, same as bwrap, gvisor and smolvm.
     logger.debug("User-defined mounts:")
-    for src, dst in config.mounts_ro:
-        _mount_bind(src, dst, new_root, readonly=True)
     for src, dst in config.mounts_rw:
         _mount_bind(src, dst, new_root, readonly=False)
+    for src, dst in config.mounts_ro:
+        _mount_bind(src, dst, new_root, readonly=True)
 
     # --- G.2. Apply ignore overlays (mask paths with no-access placeholder) ---
-    if config.ignore_paths and config.current_dir:
+    if config.ignore_paths:
         logger.debug("Apply ignore overlays:")
-        prefix = config.current_dir.rstrip("/") + "/"
-        for rel_path in config.ignore_paths:
-            rel_path = rel_path.lstrip("/")
-            # Path in chroot = new_root + current_dir + rel_path (current_dir can be absolute)
-            full_in_chroot = os.path.normpath(new_root + prefix + rel_path)
+        for abs_path in config.ignore_paths:
+            # Mounts mirror the host's absolute path in the chroot (see F and G above), so the
+            # chroot path is new_root plus the host's absolute ignore path, nothing else.
+            full_in_chroot = os.path.normpath(new_root + abs_path)
             if not _is_reachable_in_chroot(full_in_chroot, new_root):
                 logger.debug("ignore path %s does not resolve inside the chroot, skip", full_in_chroot)
                 continue
@@ -420,15 +421,20 @@ def main() -> None:
         source_resolv = os.path.realpath("/etc/resolv.conf")
         source_hosts = os.path.realpath("/etc/hosts")
 
+    # Read-only: without the real host's config, a write here lands on the shared inode of
+    # its actual /etc/resolv.conf or /etc/hosts (realpath follows a systemd-resolved symlink
+    # into /run), letting sandboxed code rewrite the host's DNS configuration.
     resolv_target = os.path.join(new_root, "etc", "resolv.conf")
     _ensure_mount_target(resolv_target, new_root)
     if os.path.exists(source_resolv):
         _run(["mount", "--bind", source_resolv, resolv_target])
+        _run(["mount", "-o", "remount,ro,bind,nosuid,nodev", resolv_target])
 
     hosts_target = os.path.join(new_root, "etc", "hosts")
     _ensure_mount_target(hosts_target, new_root)
     if os.path.exists(source_hosts):
         _run(["mount", "--bind", source_hosts, hosts_target])
+        _run(["mount", "-o", "remount,ro,bind,nosuid,nodev", hosts_target])
 
     # --- J. Enter sandbox (PID namespace + chroot) ---
     chroot_cmd = shutil.which("chroot") or "/usr/sbin/chroot"

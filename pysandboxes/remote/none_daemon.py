@@ -7,11 +7,13 @@ a separate process, allowing code to run directly in the current process.
 Useful for debugging and testing sandbox functionality.
 """
 
+import inspect
 import logging
 from typing import Any, Callable
 
 from ..all_rules import AllRules
 from ..base_daemon import BaseDaemon
+from ..guard_import import user_code
 from ..sb_types import Envs
 from ..tools import Environ, SyncOrAsyncFunc, set_is_in_sandbox
 
@@ -48,6 +50,12 @@ class NoneDaemon(BaseDaemon):
         """
         self._is_started = True
         set_is_in_sandbox(True)  # Simulate the presence of sandbox
+        if init_fn:
+            with user_code():
+                if inspect.iscoroutinefunction(init_fn):
+                    await init_fn()
+                else:
+                    init_fn()
 
     async def _stop(self, max_pending: int) -> None:
         """Stop the daemon.

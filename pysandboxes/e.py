@@ -356,7 +356,11 @@ def set_sandbox_denials(exception: BaseException, denials: list[str]) -> None:
 
 
 def sandbox_denials(exception: BaseException) -> list[str]:
-    """Return the sandbox denials that caused ``exception``, innermost first.
+    """Return the sandbox denials that caused ``exception``, outermost first.
+
+    ``exception`` itself comes first, then its ``__cause__``/``__context__`` chain inward: the
+    most recently raised denial precedes the one that triggered it, following ``_walk_chain``'s
+    own visiting order.
 
     Args:
         exception: An exception raised by sandboxed code.

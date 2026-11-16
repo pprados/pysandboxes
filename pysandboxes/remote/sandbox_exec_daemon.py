@@ -218,14 +218,21 @@ def _build_profile(
     for path in symlink_directories:
         metadata_paths.update(_parent_paths(path))
     metadata_paths.difference_update(read_paths)
+    ro_paths: set[str] = set()
     for rule in all_rules.file_rules:
         if isinstance(rule, FSExposeRule):
             path = _path(rule.path)
             read_paths.add(path)
             if rule.write:
                 write_paths.add(path)
+            else:
+                ro_paths.add(path)
         elif isinstance(rule, IgnoreRule):
             continue
+    # A path exposed both ways ends up read-only: the narrower right wins, same as bwrap,
+    # unshare, firejail, gvisor and smolvm. Seatbelt's `allow` statements are additive, so the
+    # write grant must be withheld explicitly rather than relying on command-line order.
+    write_paths -= ro_paths
 
     lines = [
         "(version 1)",

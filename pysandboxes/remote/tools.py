@@ -18,6 +18,7 @@ import collections
 import datetime
 import decimal
 import errno as errno_mod
+import fnmatch
 import fractions
 import io
 import ipaddress
@@ -36,7 +37,7 @@ import textwrap
 import time
 import uuid
 import zoneinfo
-from collections.abc import Callable
+from collections.abc import Callable, Iterable
 from ctypes import cdll
 from ipaddress import IPv4Address, IPv6Address
 from pathlib import Path
@@ -44,6 +45,7 @@ from types import ModuleType
 from typing import Any, cast
 
 from ..e import RestrictedUnpicklingError, SandBoxProtocolError, set_sandbox_denials
+from ..guard_files import IgnoreRule
 
 logger = logging.getLogger(__name__)
 
@@ -97,6 +99,59 @@ def which_command(command: str) -> Path | None:
     return Path(full_path)
 
 
+def resolve_ignore_paths(
+    roots: Iterable[str],
+    ignore_rules: list[IgnoreRule],
+) -> list[str]:
+    """Resolve ignore rules to the absolute paths they match under any of ``roots``.
+
+    A profile's ignore rule must mask a matching name wherever the sandbox can reach it, so a
+    caller passes the current directory together with every path the profile exposes
+    (``expose-ro`` and ``expose-rw``), not the current directory alone. Each root is walked and
+    its basenames matched against the ignore patterns (same semantics as ``guard_files``); a
+    root's symlinked subdirectories are left alone (``followlinks=False``), consistent with how
+    the rest of the sandbox treats a target reached only through a link. Roots are resolved,
+    deduplicated and a root already covered by another (its own ancestor) is walked once; a root
+    that is a file is matched directly instead of walked. Shared by the providers that overlay a
+    placeholder over an ignored path: bwrap, unshare, firejail, qemu and qemu-microvm.
+    """
+    if not ignore_rules:
+        return []
+    patterns = [r.source for r in ignore_rules]
+
+    resolved_roots: list[Path] = []
+    for root in roots:
+        try:
+            resolved = Path(root).resolve()
+        except OSError:
+            continue
+        if any(resolved == kept or resolved.is_relative_to(kept) for kept in resolved_roots):
+            continue
+        resolved_roots = [kept for kept in resolved_roots if not kept.is_relative_to(resolved)]
+        resolved_roots.append(resolved)
+
+    result: list[str] = []
+    seen: set[str] = set()
+    for cur in resolved_roots:
+        try:
+            if cur.is_file():
+                if any(fnmatch.fnmatch(cur.name, p) for p in patterns) and str(cur) not in seen:
+                    seen.add(str(cur))
+                    result.append(str(cur))
+                continue
+            for dirpath, dirs, files in os.walk(cur, followlinks=False):
+                dirpath_path = Path(dirpath)
+                for name in list(dirs) + files:
+                    if any(fnmatch.fnmatch(name, p) for p in patterns):
+                        found = str(dirpath_path / name)
+                        if found not in seen:
+                            seen.add(found)
+                            result.append(found)
+        except OSError:
+            continue
+    return result
+
+
 def unshare_user_namespace_available() -> bool:
     """Return True if unshare and slirp4netns exist and user namespaces are allowed.
 
@@ -129,35 +184,6 @@ def get_venv() -> str | None:
         return venv_path
     else:
         return os.environ.get("VIRTUAL_ENV")
-
-
-def configure_logging_level(verbose_count: int) -> int:
-    """Configure logging level based on verbose flag count.
-
-    Args:
-        verbose_count: Number of verbose flags:
-                      - 0: ERROR
-                      - 1: WARNING
-                      - 2: INFO
-                      - 3: DEBUG
-                      - 4+: NOTSET
-
-    Returns:
-        Configured logging level constant.
-    """
-    if verbose_count == 0:  # pragma: no mutate
-        log_level = logging.ERROR
-    elif verbose_count == 1:  # pragma: no mutate
-        log_level = logging.WARNING
-    elif verbose_count == 2:  # pragma: no mutate
-        log_level = logging.INFO
-    elif verbose_count == 3:  # pragma: no mutate
-        log_level = logging.DEBUG
-    else:  # verbose_count >= 4
-        log_level = logging.NOTSET
-
-    logging.getLogger().setLevel(log_level)  # Root logger
-    return log_level
 
 
 def suggest_package_installation(package_name: str) -> str:
@@ -235,24 +261,6 @@ def suggest_package_installation(package_name: str) -> str:
             Your operating system ({system}) is not explicitly supported.
             Please refer to the documentation for {package_name!r} to find installation instructions for your system.
             """).strip()  # noqa: E501
-
-
-def return_level_parameter(log_level: int) -> str:
-    """Convert logging level to verbose parameter string.
-
-    Args:
-        log_level: Logging level constant.
-
-    Returns:
-        Corresponding verbose parameter string (e.g., '-v', '-vv').
-    """
-    _map = {
-        logging.WARN: "",
-        logging.INFO: "-v",
-        logging.DEBUG: "-vv",
-        logging.NOTSET: "-vvv",
-    }
-    return _map.get(log_level, "-vvv")
 
 
 # Constant from linux/prctl.h
@@ -923,9 +931,12 @@ def _validate_data_only(value: Any, seen: set[int] | None = None, depth: int = 0
     """Refuse reconstructed values outside the primitive result grammar."""
     if depth > _MAX_MARK_DEPTH:  # pragma: no mutate
         raise RestrictedUnpicklingError(f"result exceeds the {_MAX_MARK_DEPTH}-level data-only nesting budget.")
-    if type(value) in (type(None), bool, int, float, complex, str, bytes) or type(value) in _VALUE_CLASSES:
-        return
+    # Checked before _VALUE_CLASSES: OrderedDict, Counter and deque are containers that also
+    # appear there (so find_class still resolves them), but as containers they must still go
+    # through the cycle check and the depth budget below, not return as an opaque leaf value.
     if type(value) not in _VALUE_DICTS + _VALUE_SEQUENCES:
+        if type(value) in (type(None), bool, int, float, complex, str, bytes) or type(value) in _VALUE_CLASSES:
+            return
         raise RestrictedUnpicklingError(f"result type {type(value).__name__!r} is not allowed in data-only mode.")
     if seen is None:
         seen = set()

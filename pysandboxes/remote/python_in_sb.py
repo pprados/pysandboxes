@@ -76,7 +76,7 @@ def _load_module_packages(packages: Sequence[importlib.machinery.ModuleSpec]) ->
     for spec in packages:
         if spec.name in sys.modules:
             continue
-        _judge_user_import(spec.name)
+        _judge_user_import(spec.name, spec.loader)
         module = importlib.util.module_from_spec(spec)
         sys.modules[spec.name] = module
         try:

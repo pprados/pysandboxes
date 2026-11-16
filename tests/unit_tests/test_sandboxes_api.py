@@ -83,6 +83,14 @@ class TestSandboxDecorator:
             def gen() -> Any:  # type: ignore[misc]
                 yield 1
 
+    def test_sandbox_refuses_an_async_generator_function(self) -> None:
+        """An asynchronous generator function cannot be sent across the sandbox boundary either."""
+        with pytest.raises(TypeError, match="generator"):
+
+            @sandbox
+            async def agen() -> Any:  # type: ignore[misc]
+                yield 1
+
 
 class TestRunFunction:
     """Test cases for run function."""
@@ -185,6 +193,22 @@ class TestSandboxesContextManager:
             pass
 
         assert mock_async_start.call_args.kwargs["python_args"] == ["-X", "dev"]
+
+    def test_a_full_shutdown_of_the_none_provider_gives_back_is_in_sandbox(self, tmp_path: Path) -> None:
+        """`NoneDaemon._start` flips `is_in_sandbox()` to simulate being the sandboxed child; `_shutdown` gives
+        it back, but only if `__exit__` still calls it once that flag reads true. Checking `is_in_sandbox()`
+        again at exit time, as the previous code did, never reaches it: every later `with sandboxes():` in
+        the same process would then believe it is already inside one and never start a real daemon.
+        """
+        from pysandboxes.tools import is_in_sandbox
+
+        config = tmp_path / ".py-sandboxes"
+        config.write_text("py-sandbox=false\nos-sandbox=none\nlearn=false\n")
+
+        with sandboxes(sandboxes_config=config):
+            assert is_in_sandbox()
+
+        assert not is_in_sandbox()
 
 
 class TestExtraRulesNormalization:

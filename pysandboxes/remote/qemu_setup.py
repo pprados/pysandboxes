@@ -7,9 +7,7 @@ per "tag guest_path"). The guest mounts each tag at its path, then runs
 main_sandbox --_named-pipe (same flow as bwrap/unshare).
 """
 
-import fnmatch
 import logging
-import os
 import shlex
 import subprocess
 from pathlib import Path
@@ -17,6 +15,7 @@ from typing import Any
 
 from ..all_rules import AllRules
 from .qemu_guest_console_io import GUEST_STDERR_FILE
+from .tools import resolve_ignore_paths
 from .vm_sse_daemon import VMSSEDaemon
 
 logger = logging.getLogger(__name__)
@@ -96,38 +95,17 @@ def augment_all_rules_for_qemu_run_mount(all_rules: AllRules) -> AllRules:
     return all_rules._replace(file_rules=(run_mount,) + all_rules.file_rules)
 
 
-def _resolve_ignore_paths(current_dir: str, ignore_rules: list[Any]) -> list[str]:
-    """Resolve ignore rules to paths relative to current_dir (same semantics as bwrap/unshare)."""
-    if not ignore_rules:
-        return []
-    patterns = [r.source for r in ignore_rules]
-    result: list[str] = []
-    try:
-        cur = Path(current_dir).resolve()
-        for root, _dirs, files in os.walk(cur):
-            root_path = Path(root)
-            for name in list(_dirs) + files:
-                if any(fnmatch.fnmatch(name, p) for p in patterns):
-                    rel = root_path / name
-                    try:
-                        rel = rel.relative_to(cur)
-                    except ValueError:
-                        continue
-                    result.append(str(rel))
-    except OSError:
-        pass
-    return result
-
-
 def qemu_ignore_overlay_abs_paths(all_rules: Any, cwd: str) -> list[str]:
-    """Absolute host paths to mask with chmod-0 + mount in the guest (parity with bwrap/unshare)."""
-    from pysandboxes.guard_files import IgnoreRule
+    """Absolute host paths to mask with chmod-0 + mount in the guest (parity with bwrap/unshare).
+
+    Masks wherever the sandbox can reach a match: under cwd or under an exposed path, not only
+    under cwd.
+    """
+    from pysandboxes.guard_files import FSExposeRule, IgnoreRule
 
     ignore_rules = [r for r in all_rules.file_rules if isinstance(r, IgnoreRule)]
-    rel = _resolve_ignore_paths(cwd, ignore_rules)
-    base = Path(cwd).resolve()
-    abs_paths = [str((base / p).resolve()) for p in rel]
-    return list(dict.fromkeys(abs_paths))
+    exposed = [r.path for r in all_rules.file_rules if isinstance(r, FSExposeRule)]
+    return resolve_ignore_paths([cwd, *exposed], ignore_rules)
 
 
 def _bootstrap_script_content(
@@ -304,11 +282,9 @@ def _bootstrap_script_content(
     # block-buffers it. Both sentinels and the program's own output travel on that
     # stdout, so buffering holds the whole window back until the interpreter exits and
     # the caller sees nothing of a long run until it is over. Unbuffered streams it.
-    cwd_command = f'cd "{guest_cwd}" || true'
-    if config_guest_path == f"{GUEST_CIDATA_MOUNT}/config.pkl":
-        quoted_cwd = shlex.quote(guest_cwd)
-        lines.append(f"mkdir -p -- {quoted_cwd} || _pysb_fatal 'cannot prepare guest working directory'")
-        cwd_command = f"cd -- {quoted_cwd} || _pysb_fatal 'cannot enter guest working directory'"
+    quoted_cwd = shlex.quote(guest_cwd)
+    lines.append(f"mkdir -p -- {quoted_cwd} || _pysb_fatal 'cannot prepare guest working directory'")
+    cwd_command = f"cd -- {quoted_cwd} || _pysb_fatal 'cannot enter guest working directory'"
     if serial_stdin:
         lines.append("stty raw -echo </dev/ttyS0")
         lines.append("exec </dev/ttyS0")

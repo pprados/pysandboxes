@@ -288,6 +288,19 @@ SENSITIVE_API: dict[str, tuple[str, ...]] = {
     # reachable; pinned as an xfail in tests/unit_tests/guard/test_guard_api.py.
     # pickle keeps its pure-Python implementation next to the C one, under
     # ``_loads``, ``_load`` and ``_Unpickler``: the same opcodes, so the same entries.
+    #
+    # ``marshal.loads``/``marshal.load`` are NOT registered here, unlike the equivalent pickle
+    # entries: ``importlib._bootstrap_external._compile_bytecode`` calls ``marshal.loads`` to read
+    # every cached ``.pyc``, so a blanket deny breaks any import once a bytecode cache exists.
+    # remote/tools.py denies importing ``marshal`` on the parent side, where no such internal
+    # caller exists; guarding the call site here needs an ambient-caller exemption like
+    # guard_eval.is_ambient gives compile/exec/eval, which this module cannot reuse or duplicate
+    # by itself: guard_eval keys it on a frozen filename, forgeable the same way guard_eval's own
+    # docstring says `<eval:` is (`code.replace(co_filename=...)`), and guard_api importing
+    # guard_eval would violate the layering test_architecture.py enforces. Reaching this call site
+    # at all needs `python-import=marshal` (and `types`, to turn the code object back into a
+    # callable) granted to the application. Design change, not a forgotten registry entry;
+    # tracked in wiki/weaknesses.md.
     "deserialization": (
         "pickle.loads",
         "pickle.load",

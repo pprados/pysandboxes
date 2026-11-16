@@ -20,6 +20,7 @@ import itertools
 import logging
 import os
 import sys
+import weakref
 from contextlib import contextmanager
 from contextvars import ContextVar
 from copy import copy
@@ -216,19 +217,30 @@ _KEPT_MODULES = frozenset(
 )
 
 
-def _judge_user_import(name: str) -> None:
+def _judge_user_import(name: str, loader: Any = None) -> None:
     """Refuse, or record in learning mode, an import by the user's code that the rules do not grant.
 
     Only the kept modules themselves go unjudged: a submodule (``asyncio.subprocess``) is judged on its
     top-level name, as the finder judges it when it is not loaded yet.
+
+    Args:
+        name: the module name being imported.
+        loader: when a caller judges a spec itself instead of going through ``GuardFinder.find_spec``
+            (e.g. a framework loading a package's submodules), pass its loader so that an allowed
+            import also vets it, the same way ``find_spec`` does, and a later direct ``exec_module``
+            on it is not refused as unverified.
     """
     if not _activated:
         return
     module_name = name.split(".", 1)[0]
     if name in _KEPT_MODULES or _is_import_allowed(module_name):
+        if loader is not None:
+            _vetted_loaders.add(loader)
         return
     if is_learning_mode():
         add_learning_rule(LearnImportRule(module_name))
+        if loader is not None:
+            _vetted_loaders.add(loader)
         return
     raise RuleModuleNotFoundError(f"Module named {module_name!r} is not allowed by a rule")
 
@@ -390,6 +402,59 @@ def _apply_patch(module: ModuleType, name: str) -> None:
 
 # What a loader is asked about the source of a module it did not just load.
 _SOURCE_QUERIES = frozenset({"get_code", "get_source", "get_filename", "is_package", "get_data"})
+
+# Loaders GuardFinder itself handed out: every import that reaches `find_spec` and is not refused
+# adds its original loader here, before any GuardLoader wraps it. A WeakSet, not a dict keyed by
+# name: the name the caller claims is worth nothing (``spec_from_file_location("pysandboxes", "
+# /path/to/os.py")`` passes the top-level name check and runs a different file's content
+# entirely), so the only thing that can be judged is whether *this exact loader object* is one
+# GuardFinder already vetted. A loader never vetted -- built by the caller with
+# ``importlib.util.spec_from_file_location`` + ``module_from_spec``, or reached through
+# ``SourceFileLoader(name, path).exec_module(module)`` directly -- never went through
+# `find_spec`'s own allow/deny decision at all.
+_vetted_loaders: "weakref.WeakSet[Any]" = weakref.WeakSet()
+
+
+def _refuse_unverified_loader(name: str) -> None:
+    """Refuse, or record in learning mode, a module run through a loader `find_spec` never vetted.
+
+    Learning never blocks, but it also has nothing useful to propose here: no `python-import=`
+    line grants a route the guard cannot name by rule, only by provenance. A generated profile
+    that implied otherwise would be worse than silence.
+    """
+    if is_learning_mode():
+        logger.warning(
+            "%r was executed through a loader bypassing the import guard entirely "
+            "(constructed directly instead of resolved through find_spec); "
+            "no python-import= rule can grant this route, review the code path instead",
+            name,
+        )
+        return
+    raise RuleModuleNotFoundError(f"Module named {name!r} was loaded through a loader the import guard never vetted")
+
+
+def _wrap_loader_exec_module(func: Callable[..., Any]) -> Callable[..., Any]:
+    """Wrap the `exec_module` every file-based and zip-based loader shares.
+
+    `importlib._bootstrap_external._LoaderBasics.exec_module` is inherited by
+    `SourceFileLoader`, `SourcelessFileLoader`, and `zipimport.zipimporter` alike, so patching
+    this one method on the class covers all three: a caller who builds any of them directly,
+    instead of letting `find_spec` resolve and vet it, never reaches a judged import at all
+    otherwise -- see `_vetted_loaders`.
+
+    Only the user's own code is judged here, the same scope `_wrap_import` judges: outside
+    `user_code()`, the framework's own direct loader usage (e.g. `python_in_sb.py`'s package
+    loading, which vets its loader itself through `_judge_user_import`) is unaffected, as is
+    ordinary library and test-harness code that builds a loader for its own purposes.
+    """
+
+    @guard_wraps(func)
+    def wrapper(self: Any, module: ModuleType) -> Any:
+        if _activated and _user_scope.get() and not _in_framework_window() and self not in _vetted_loaders:
+            _refuse_unverified_loader(getattr(module, "__name__", "?"))
+        return func(self, module)
+
+    return wrapper
 
 
 class GuardLoader(Loader):
@@ -584,6 +649,9 @@ class GuardFinder(importlib.abc.MetaPathFinder):
         global _pending_modules
         new_spec: ModuleSpec | None = None
         finder: MetaPathFinderProtocol = self
+        # The loader this call vets, if any: added to `_vetted_loaders` only once the decision
+        # below is to let the import proceed, never on a path that raises or returns early.
+        loader_to_vet: Any = None
         if fullname in _pending_modules:
             # Find a module that was already present
             # Move it into sys.modules.
@@ -598,6 +666,7 @@ class GuardFinder(importlib.abc.MetaPathFinder):
                     module_name = pending_module.__name__
                 else:
                     module_name = fullname
+            loader_to_vet = original_spec.loader if original_spec else None
             # Change the loader to move in the right place. `is_package` restores
             # `submodule_search_locations`: Python 3.11 decides what is a package by
             # reading it, so dropping it turned `pysandboxes` into a plain module and
@@ -627,6 +696,7 @@ class GuardFinder(importlib.abc.MetaPathFinder):
             # )
             # Create a new spec using our custom GuardLoader,
             # but with the _original spec's data
+            loader_to_vet = original_spec.loader
 
             if original_spec.name in _patch_rules:
                 # logger.debug(f"Inject loader for {original_spec.name!r}")
@@ -686,6 +756,8 @@ class GuardFinder(importlib.abc.MetaPathFinder):
                         file=sys.stderr,
                     )
                 raise ex
+            if loader_to_vet is not None:
+                _vetted_loaders.add(loader_to_vet)
             return new_spec
 
         # For all other imports, return None to let the standard import
@@ -807,6 +879,7 @@ def patch_rules(learn: bool) -> dict[str, PatchFactory]:
         "builtins.__import__": _wrap_import,
         "importlib.__import__": _wrap_import,
         "importlib.import_module": _wrap_import_module,
+        "importlib._bootstrap_external._LoaderBasics.exec_module": _wrap_loader_exec_module,
     }
 
 
@@ -838,6 +911,15 @@ def activate_guard_import(
     # Save the current modules BEFORE patching
     global _pending_modules
     _pending_modules = copy(sys.modules)
+    # Pre-activation modules never go through find_spec again, so their loader is vetted here
+    # once and for all: otherwise importlib.reload() of one of them, even with
+    # python-api=ALLOW:importlib.reload granted, would be refused by _wrap_loader_exec_module
+    # for a loader that was always trustworthy, just never seen by find_spec.
+    for pending_module in _pending_modules.values():
+        pending_spec = getattr(pending_module, "__spec__", None)
+        pending_loader = getattr(pending_spec, "loader", None)
+        if pending_loader is not None:
+            _vetted_loaders.add(pending_loader)
 
     if _activate_patch_import(patch_rules):  # Add in sys.meta_path
         # For all loaded modules, apply patch

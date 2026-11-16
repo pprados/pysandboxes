@@ -257,6 +257,18 @@ class TestResultChannel:
         with pytest.raises(RestrictedUnpicklingError, match="cyclic values"):
             from_b85_restricted(to_b85(value), result_predicate, data_only=True)
 
+    @pytest.mark.parametrize("make", [collections.OrderedDict, collections.deque])
+    def test_data_only_refuses_cycles_through_a_value_class_container(self, make: Callable[[], object]) -> None:
+        """OrderedDict and deque are containers that are also listed as opaque value classes (so ``find_class``
+        can still resolve them); a cycle through one of those two names must not skip the cycle check."""
+        value = make()
+        if isinstance(value, collections.deque):
+            value.append(value)
+        else:
+            value["self"] = value  # type: ignore[index]
+        with pytest.raises(RestrictedUnpicklingError, match="cyclic values"):
+            from_b85_restricted(to_b85(value), result_predicate, data_only=True)
+
     def test_learning_recommends_objects_and_comments_the_previous_mode(self) -> None:
         lines = ["remote-result-mode=data-only"]
         generated = _update_remote_result_mode(

@@ -62,7 +62,7 @@ def qemu_start_timeout(os_sandbox_params: Mapping[str, Any]) -> float:
         timeout = float(str(raw).strip())
     except ValueError:
         timeout = 0.0
-    if timeout <= 0:
+    if not 0 < timeout < float("inf"):
         logger.warning(
             "Ignoring qemu.start_timeout=%r: expected a positive number of seconds; using %ss",
             raw,

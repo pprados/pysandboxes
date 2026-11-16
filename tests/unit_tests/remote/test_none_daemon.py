@@ -35,6 +35,31 @@ async def test_starting_claims_a_sandbox_without_arming_one(daemon: NoneDaemon) 
 
 
 @pytest.mark.asyncio
+async def test_starting_runs_the_init_function_like_every_other_provider(daemon: NoneDaemon) -> None:
+    """Every other provider runs `init_fn`; this one silently never did."""
+    calls = []
+    try:
+        await daemon._start(None, envs={}, log_level=0, init_fn=lambda: calls.append("sync"))  # type: ignore[arg-type]
+    finally:
+        set_is_in_sandbox(False)
+    assert calls == ["sync"]
+
+
+@pytest.mark.asyncio
+async def test_starting_runs_an_async_init_function(daemon: NoneDaemon) -> None:
+    calls = []
+
+    async def init() -> None:
+        calls.append("async")
+
+    try:
+        await daemon._start(None, envs={}, log_level=0, init_fn=init)  # type: ignore[arg-type]
+    finally:
+        set_is_in_sandbox(False)
+    assert calls == ["async"]
+
+
+@pytest.mark.asyncio
 async def test_shutdown_gives_the_flag_back(daemon: NoneDaemon) -> None:
     await daemon._start(None, envs={}, log_level=0, init_fn=None)  # type: ignore[arg-type]
     await daemon._stop(max_pending=0)

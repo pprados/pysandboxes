@@ -21,6 +21,37 @@
 `unshare` provider, with `--privileged` for Docker.
 
 
+## [0.0.0] - 202X-XX-XX
+
+### Added
+
+- `with sandboxes():` no longer leaks a background thread running an idle event loop forever after the block exits, when it started with no event loop already running.
+- `with sandboxes(os_sandbox="none"):` (and the signal handler it installs) now actually stop the daemon on exit instead of believing, from that point on, that every later `with sandboxes():` in the same process is a nested call and never starting a real one.
+- A daemon whose shutdown fails is no longer mistaken for one still running: the next `with sandboxes():` now starts a real new daemon instead of reusing the dead one, and the original failure still reaches the caller.
+- Reject `port=` values above 65535 at config parsing instead of letting the sandbox daemon crash later with an opaque `OverflowError` from `socket.bind()`.
+- A corrupted or hostile `ImmutableDict` pickle stream with a non-hashable key now raises `ValueError` like every other malformed stream, instead of `TypeError`.
+- `net-resolve=runtime`: a host name whose first resolution attempt needed the socket's own type to succeed is now learned and opened like any other allowed name, instead of being refused by the default policy.
+- `eval-max-alloc` now also refuses an integer multiplication (`a * b`) in evaluated source whose result would exceed it, and reports every such refusal, including the pre-existing `**` and `<<` ones, without converting the oversized operand to decimal, which used to raise `ValueError` instead of the refusal itself once past CPython's own int-to-str digit limit.
+- A `case Cls(name=binding):` keyword attribute pattern in evaluated source is now checked against `eval-attribute`/`eval-magic` and the non-overridable frame-capture deny, closing the route `gi_frame`, `__class__` and any other attribute took around `__sb_getattr__` through the `MATCH_CLASS` opcode's own, unguarded `getattr`.
+- `locals()` in evaluated source is now refused like `globals()`, instead of handing back the live namespace: evaluated code rebinding `locals()["__sb_tick__"]` used to silence every later tick, defeating `eval-max-iterations` and leaving only the cooperative timeout standing.
+- `unshare`: the host's real `/etc/resolv.conf` and `/etc/hosts` are now bind-mounted read-only into the sandbox instead of writable, closing a route for sandboxed code to rewrite the host's DNS configuration through the shared inode of a bind mount.
+- `firejail`: an `ignore=` pattern now hides every matching file under the current directory instead of only a literal path at the jail's root, so `sub/.env` is blacklisted like `.env` is.
+- `firejail`: a `firejail.net=`, `firejail.seccomp=`, `firejail.seccomp.keep=` or `firejail.seccomp.block=` value containing `=` is no longer truncated at the first one.
+- `firejail`: a non-loopback upstream DNS resolver no longer pulls every loopback resolver back into `--dns` once found, since the host's own loopback is unreachable from inside the jail's network namespace.
+- `bwrap`, `unshare`, `firejail` and `sandbox-exec`: a path exposed both `expose-ro` and `expose-rw` now ends up read-only, the narrower right winning, instead of read-write, matching `gvisor` and `smolvm`.
+- `qemu` and `qemu-microvm`: the guest working directory is now shell-quoted in the bootstrap script instead of interpolated raw into `cd "..."`, closing a shell-injection route for a mount path containing a quote or a newline.
+- `qemu`: a redirect from `https://` to `http://` while downloading the guest image is now refused instead of silently followed.
+- `bwrap`, `unshare`, `firejail`, `qemu` and `qemu-microvm`: an `ignore=` pattern now also hides a match under every `expose-ro=`/`expose-rw=` path, not only under the current directory, matching `gvisor` and `smolvm`.
+- `qemu` and `qemu-microvm`: a host path or image path containing a comma is now escaped before being placed in a `-virtfs`/`-fsdev`/`-drive` argument, instead of letting the comma start an unintended QEMU sub-option (e.g. turning a read-only mount writable); an unknown `qemu.virtfs_security_model` value now falls back to the default instead of being forwarded as-is.
+- The subprocess-based daemon (`subprocess`, `landlock`, `bwrap`, `firejail`, `unshare`) now kills its sandbox process on every failure of the remote shutdown call, instead of an unnamed one always raising an `AssertionError` and leaving the process running; a restart that fails after already launching a new process now kills it too, instead of leaking it; a failed start now removes the private Unix-socket directory it had created, instead of leaving it behind; the sandbox process is now asked to die with its launcher, through `PR_SET_PDEATHSIG` on Linux.
+- The sandbox daemon no longer refuses a large reply with an opaque transport error when the sandboxed function printed a lot in small pieces: each streamed `stdout`/`stderr` chunk is now checked against the SSE line budget as it is sent, instead of only the final message, which no longer repeats the already-streamed output.
+- `qemu.start_timeout` now rejects `nan` and `inf` like `PYSANDBOXES_RPC_TIMEOUT` already does, instead of waiting on a value that can never be reached.
+- `os-sandbox=none` now runs the sandbox's `init_fn`, like every other provider.
+- The result channel's `data-only` mode now refuses a cyclic `OrderedDict`, `Counter` or `deque`, instead of letting it through unchecked because the three are also listed as opaque value types.
+- The sandbox daemon's own graceful-shutdown delay no longer blocks the event loop for its duration.
+- `python-sb`: a leading `--` before the script name on the sandboxed command line is no longer passed through as if it were the script itself.
+- A loader built directly with `importlib.util.spec_from_file_location`/`module_from_spec` and run with `exec_module`, including under a forged spec name such as `"pysandboxes"`, no longer runs as a module in the user's own code without ever being judged by a `python-import=` rule.
+
 ## [0.12.0] - 2026-11-13
 
 ### Added

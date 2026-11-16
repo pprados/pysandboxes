@@ -61,18 +61,18 @@ class TestIgnorePaths:
         return [IgnoreRule(source=p, config=_line()) for p in patterns]
 
     def test_no_rule_means_no_path(self, tree: Path) -> None:
-        assert qemu_setup._resolve_ignore_paths(str(tree), []) == []
+        assert qemu_setup.resolve_ignore_paths([str(tree)], []) == []
 
     def test_a_pattern_matches_files_and_directories_at_any_depth(self, tree: Path) -> None:
-        found = qemu_setup._resolve_ignore_paths(str(tree), self._rules(".env", "*.log", "logs.d"))
+        found = qemu_setup.resolve_ignore_paths([str(tree)], self._rules(".env", "*.log", "logs.d"))
 
-        assert sorted(found) == [".env", "logs.d", "sub/.env", "sub/a.log"]
+        assert sorted(found) == sorted(str(tree / p) for p in (".env", "logs.d", "sub/.env", "sub/a.log"))
 
-    def test_the_paths_are_relative_to_the_current_directory(self, tree: Path) -> None:
-        assert all(not p.startswith("/") for p in qemu_setup._resolve_ignore_paths(str(tree), self._rules("*")))
+    def test_the_paths_are_absolute(self, tree: Path) -> None:
+        assert all(p.startswith("/") for p in qemu_setup.resolve_ignore_paths([str(tree)], self._rules("*")))
 
     def test_a_missing_directory_gives_nothing(self, tmp_path: Path) -> None:
-        assert qemu_setup._resolve_ignore_paths(str(tmp_path / "absent"), self._rules("*")) == []
+        assert qemu_setup.resolve_ignore_paths([str(tmp_path / "absent")], self._rules("*")) == []
 
     def test_a_directory_that_cannot_be_resolved_gives_nothing(self, monkeypatch: pytest.MonkeyPatch) -> None:
         def broken(self: Path, strict: bool = False) -> Path:
@@ -80,7 +80,18 @@ class TestIgnorePaths:
 
         monkeypatch.setattr(Path, "resolve", broken)
 
-        assert qemu_setup._resolve_ignore_paths("/anywhere", self._rules("*")) == []
+        assert qemu_setup.resolve_ignore_paths(["/anywhere"], self._rules("*")) == []
+
+    def test_a_match_under_an_exposed_path_outside_the_current_directory_is_found(self, tmp_path: Path) -> None:
+        """An exposed path need not sit under cwd: an unrelated root passed alongside it is walked too."""
+        cwd, data = tmp_path / "cwd", tmp_path / "data"
+        cwd.mkdir()
+        data.mkdir()
+        (data / ".env").write_text("secret")
+
+        found = qemu_setup.resolve_ignore_paths([str(cwd), str(data)], self._rules(".env"))
+
+        assert found == [str(data / ".env")]
 
     def test_the_overlay_paths_are_absolute_unique_and_only_from_ignore_rules(self, tree: Path) -> None:
         rules = EmptyRules._replace(
@@ -98,6 +109,34 @@ class TestIgnorePaths:
 
     def test_without_ignore_rules_nothing_is_masked(self, tree: Path) -> None:
         assert qemu_setup.qemu_ignore_overlay_abs_paths(EmptyRules, str(tree)) == []
+
+    def test_an_ignored_file_under_an_exposed_path_outside_cwd_is_masked(self, tmp_path: Path) -> None:
+        """``ignore=`` must mask a match anywhere the sandbox can reach, not only under cwd."""
+        cwd = tmp_path / "cwd"
+        cwd.mkdir()
+        data = tmp_path / "data"
+        data.mkdir()
+        (data / ".env").write_text("secret")
+        rules = EmptyRules._replace(
+            file_rules=(FSExposeRule(path=str(data), write=False, config=_line()), *self._rules(".env"))
+        )
+
+        paths = qemu_setup.qemu_ignore_overlay_abs_paths(rules, str(cwd))
+
+        assert paths == [str(data / ".env")]
+
+    def test_without_the_ignore_rule_the_exposed_file_is_not_masked(self, tmp_path: Path) -> None:
+        """Negative control for the test above: the rule, not the exposure, causes the mask."""
+        cwd = tmp_path / "cwd"
+        cwd.mkdir()
+        data = tmp_path / "data"
+        data.mkdir()
+        (data / ".env").write_text("secret")
+        rules = EmptyRules._replace(file_rules=(FSExposeRule(path=str(data), write=False, config=_line()),))
+
+        paths = qemu_setup.qemu_ignore_overlay_abs_paths(rules, str(cwd))
+
+        assert paths == []
 
 
 def _process_config(**values: Any) -> Any:

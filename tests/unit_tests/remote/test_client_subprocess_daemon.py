@@ -22,6 +22,7 @@ from pysandboxes.immutable_dict import ImmutableDict
 from pysandboxes.remote import client_subprocess_sse_daemon as csd
 from pysandboxes.remote import endpoint_connector, main_sandbox, main_shutdown, parameters
 from pysandboxes.remote.client_subprocess_sse_daemon import SubProcessDaemon
+from pysandboxes.remote.endpoint import UNIX, Endpoint
 from pysandboxes.sb_types import Envs
 
 
@@ -124,6 +125,30 @@ class TestStart:
         self._start(daemon, EmptyRules._replace(port=port))
 
         assert daemon.port == port
+
+    def test_a_failing_start_releases_the_endpoint_directory(self, tmp_path: Path) -> None:
+        """`_choose_endpoint` can create a private Unix-socket directory before `_re_start`
+        fails; the caller only kills `_process` on a failed start, so nothing else removes it."""
+        daemon = SubProcessDaemon("tok")
+        endpoint_dir = tmp_path / "pysb_x"
+        endpoint_dir.mkdir()
+
+        def choose_endpoint(self: SubProcessDaemon, all_rules: Any) -> None:
+            self._endpoint_dir = str(endpoint_dir)
+            self.endpoint = Endpoint(UNIX, path=str(endpoint_dir / "s"))
+
+        async def run() -> None:
+            with (
+                patch.object(SubProcessDaemon, "_choose_endpoint", choose_endpoint),
+                patch.object(SubProcessDaemon, "_re_start", AsyncMock(side_effect=SandBoxError("boom"))),
+            ):
+                await daemon._start(EmptyRules, envs={}, log_level=0, init_fn=None)
+
+        with pytest.raises(SandBoxError):
+            asyncio.run(run())
+
+        assert not endpoint_dir.exists()
+        assert daemon.endpoint is None
 
 
 class TestRestart:
@@ -691,12 +716,20 @@ class TestShutdown:
 
         assert daemon._process is None and daemon.is_started is False
 
-    def test_an_unknown_error_is_reported_and_the_state_is_reset(self) -> None:
-        daemon = self._daemon()
+    def test_an_unknown_error_is_reported_and_the_process_is_still_killed(self) -> None:
+        """An exception the remote call's own handlers do not name must not skip the kill below."""
 
-        with pytest.raises(AssertionError, match="Unknown error in _shutdown boom"):
+        async def never() -> int:
+            await asyncio.sleep(30)
+            return 0
+
+        process = _Proc(wait=never)
+        daemon = self._daemon(process)
+
+        with patch.object(csd, "TIMEOUT_FOR_STOP_DAEMON", 0.05):
             self._shutdown(daemon, call=AsyncMock(side_effect=ValueError("boom")))
 
+        assert process.killed == 1
         assert daemon._process is None and daemon.is_started is False
 
     def test_a_shutdown_without_a_process_is_harmless(self) -> None:

@@ -12,7 +12,6 @@ process. The daemon itself manages slirp4netns networking and port forwarding.
 """
 
 import asyncio
-import fnmatch
 import gc
 import logging
 import os
@@ -101,43 +100,15 @@ from .tools import (
     unshare_user_namespace_available,
     which_command,
 )
+from .tools import (
+    resolve_ignore_paths as _resolve_ignore_paths,
+)
 from .unshare_setup import UnshareSetupConfig
 
 logger = logging.getLogger(__name__)
 
 
 # TODO: handle slirp4netns crash
-
-
-def _resolve_ignore_paths(
-    current_dir: str,
-    ignore_rules: list[IgnoreRule],
-) -> list[str]:
-    """Resolve ignore rules to concrete paths under current_dir.
-
-    Walks the directory tree and collects paths whose basename matches any
-    ignore pattern (same semantics as guard_files). Returns paths relative
-    to current_dir.
-    """
-    if not ignore_rules:
-        return []
-    patterns = [r.source for r in ignore_rules]
-    result: list[str] = []
-    try:
-        cur = Path(current_dir).resolve()
-        for root, _dirs, files in os.walk(cur):
-            root_path = Path(root)
-            for name in list(_dirs) + files:
-                if any(fnmatch.fnmatch(name, p) for p in patterns):
-                    rel = root_path / name
-                    try:
-                        rel = rel.relative_to(cur)
-                    except ValueError:
-                        continue
-                    result.append(str(rel))
-    except OSError:
-        pass
-    return result
 
 
 class UnshareSSEDaemon(BaseSubProcessDaemon):
@@ -368,8 +339,11 @@ class UnshareSSEDaemon(BaseSubProcessDaemon):
                 pass  # Handled via ignore_paths overlay in unshare_setup
 
         current_dir = os.getcwd()
+        exposed = [r.path for r in all_rules.file_rules if isinstance(r, FSExposeRule)]
+        # Masks wherever the sandbox can reach a match: under the current directory or under
+        # an exposed path, not only under cwd.
         ignore_paths = _resolve_ignore_paths(
-            current_dir,
+            [current_dir, *exposed],
             [r for r in all_rules.file_rules if isinstance(r, IgnoreRule)],
         )
 

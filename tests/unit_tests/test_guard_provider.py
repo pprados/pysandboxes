@@ -239,7 +239,28 @@ def test_port_negative(mocker: MagicMock) -> None:
     port, _, _, _, _, _, _, _ = parse_rules(config_path_mock, rules, errors)
     assert port == -1
     assert len(errors) == 1
-    assert "Port must be a positive value" in errors[0][0]
+    assert "Port must be between 0 and 65535" in errors[0][0]
+
+
+def test_port_above_range(mocker: MagicMock) -> None:
+    """A port above 65535 cannot be bound: reject it here instead of letting socket.bind()
+    raise an OverflowError later with no reference to the offending config line."""
+    mock_path_class = mocker.patch("pysandboxes.guard_provider.Path", autospec=True)
+
+    config_path_mock = create_mock_path("/fake/pysandbox.conf", exists_val=True)
+    cli_path_mock = create_mock_path(".", exists_val=True)
+
+    mock_path_class.side_effect = lambda p: {
+        "/fake/pysandbox.conf": config_path_mock,
+        ".": cli_path_mock,
+    }.get(str(p), create_mock_path(str(p)))
+
+    rules = [ConfigLine("port=99999", cli_path_mock, 1)]
+    errors: list[ErrorMsg] = []
+    port, _, _, _, _, _, _, _ = parse_rules(config_path_mock, rules, errors)
+    assert port == -1
+    assert len(errors) == 1
+    assert "Port must be between 0 and 65535" in errors[0][0]
 
 
 @pytest.mark.skipif(sys.platform == "win32", reason="the mocked paths are POSIX spellings")

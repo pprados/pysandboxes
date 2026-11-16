@@ -12,13 +12,19 @@ from pysandboxes.remote import qemu_image
 
 
 class _Response:
-    def __init__(self, chunks: list[bytes], status: int = 200, length: str | None = None) -> None:
+    def __init__(
+        self, chunks: list[bytes], status: int = 200, length: str | None = None, final_url: str | None = None
+    ) -> None:
         self._chunks = list(chunks)
         self.status = status
         self.headers = {"Content-Length": length} if length is not None else {}
+        self.final_url = final_url
 
     def read(self, size: int) -> bytes:
         return self._chunks.pop(0) if self._chunks else b""
+
+    def geturl(self) -> str:
+        return self.final_url or ""
 
     def __enter__(self) -> "_Response":
         return self
@@ -37,6 +43,8 @@ def web(monkeypatch: pytest.MonkeyPatch) -> list[dict[str, Any]]:
         response = responses[0]
         if isinstance(response, BaseException):
             raise response
+        if response.final_url is None:
+            response.final_url = request.full_url
         return response
 
     monkeypatch.setattr(qemu_image.urllib.request, "urlopen", urlopen)
@@ -262,6 +270,26 @@ class TestDownload:
             qemu_image.download_image(tmp_path / "vm.img", "https://h/v", stop)
 
         assert list(tmp_path.iterdir()) == []
+
+    def test_a_redirect_from_https_to_http_is_refused_and_leaves_nothing(
+        self, web: list[dict[str, Any]], tmp_path: Path
+    ) -> None:
+        """urlopen follows redirects silently; a https request must not be served over http."""
+        _serve(web, _Response([b"x"], final_url="http://evil/vm.img"))
+
+        with pytest.raises(OSError, match="Refusing https to http redirect"):
+            qemu_image.download_image(tmp_path / "vm.img", "https://host/vm.img", lambda *_: None)
+
+        assert list(tmp_path.iterdir()) == []
+
+    def test_a_redirect_to_another_https_host_is_still_accepted(
+        self, web: list[dict[str, Any]], tmp_path: Path
+    ) -> None:
+        _serve(web, _Response([b"x"], final_url="https://mirror/vm.img"))
+
+        qemu_image.download_image(tmp_path / "vm.img", "https://host/vm.img", lambda *_: None)
+
+        assert (tmp_path / "vm.img").read_bytes() == b"x"
 
     def test_an_existing_image_is_replaced_atomically(self, web: list[dict[str, Any]], tmp_path: Path) -> None:
         (tmp_path / "vm.img").write_bytes(b"old")

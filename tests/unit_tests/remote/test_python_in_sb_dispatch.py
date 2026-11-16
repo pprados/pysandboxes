@@ -256,7 +256,7 @@ def test_module_spec_discovery_does_not_import_parent_package(tmp_path: Path, mo
     assert [spec.name for spec in module_specs.packages] == ["demo"]
     assert not marker.exists()
 
-    def deny_import(name: str) -> None:
+    def deny_import(name: str, loader: object = None) -> None:
         assert name == "demo"
         raise PermissionError(name)
 

@@ -248,6 +248,26 @@ class TestParsePythonCmdLine:
 
         assert sandboxes_args == ["--learn=other.py-sandboxes"]
 
+    def test_double_dash_end_of_options_is_consumed(self) -> None:
+        """``--`` is CPython's end-of-options marker: the script follows it, never ``--`` itself.
+
+        Before the fix, ``python_cmd[0]`` stayed ``"--"``, which ``python_in_sb()`` then tried
+        to open as a file named ``--``.
+        """
+        args = ["-v", "--", "-weird-name.py", "arg1"]
+
+        python_parsed, sandboxes_args, python_cmd, config = parse_python_cmd_line(args)
+
+        assert python_parsed == ["-v"]
+        assert python_cmd == ["-weird-name.py", "arg1"]
+        assert config == Path(CONFIG_NAME)
+
+    def test_double_dash_alone_leaves_an_empty_command(self) -> None:
+        """``python --`` with nothing after it reads from stdin, like a bare ``python``."""
+        _, _, python_cmd, _ = parse_python_cmd_line(["--"])
+
+        assert python_cmd == []
+
     def test_parse_python_cmd_line_preserves_order(self) -> None:
         """Test that argument order is preserved."""
         args = ["-O", "-v", "-B", "script.py", "arg2", "arg1"]
