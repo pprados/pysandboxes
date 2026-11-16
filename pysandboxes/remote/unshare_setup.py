@@ -336,13 +336,14 @@ def main() -> None:
         _mount_bind(config.current_dir, config.current_dir, new_root, readonly=False)
 
     # --- G. User-defined mounts ---
-    # Read-write first, then read-only last: a path exposed both ways ends up read-only, the
-    # narrower right winning, same as bwrap, gvisor and smolvm.
+    # Read-only first, then read-write last: a path exposed both ways ends up read-write,
+    # since expose-rw implies visibility and read, so it is the broader right and wins, same
+    # as bwrap, firejail, gvisor, smolvm and sandbox-exec.
     logger.debug("User-defined mounts:")
-    for src, dst in config.mounts_rw:
-        _mount_bind(src, dst, new_root, readonly=False)
     for src, dst in config.mounts_ro:
         _mount_bind(src, dst, new_root, readonly=True)
+    for src, dst in config.mounts_rw:
+        _mount_bind(src, dst, new_root, readonly=False)
 
     # --- G.2. Apply ignore overlays (mask paths with no-access placeholder) ---
     if config.ignore_paths:

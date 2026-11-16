@@ -313,12 +313,20 @@ class TestEnsureImage:
     def test_a_missing_image_is_downloaded_from_the_configured_url(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        calls: list[tuple[Path, str]] = []
+        calls: list[tuple[Path, str, tuple[str, str] | None]] = []
+        sidecars: list[Path] = []
         monkeypatch.setattr(qemu_image, "get_download_url", lambda path: "https://h/v")
-        monkeypatch.setattr(qemu_image, "download_image", lambda path, url: calls.append((path, url)))
+        monkeypatch.setattr(qemu_image, "_resolve_expected_checksum", lambda url: ("sha256", "abc"))
+        monkeypatch.setattr(
+            qemu_image,
+            "download_image",
+            lambda path, url, *, expected_checksum=None: calls.append((path, url, expected_checksum)),
+        )
+        monkeypatch.setattr(qemu_image, "_write_sidecar", lambda path, algorithm, digest: sidecars.append(path))
 
         assert qemu_image.ensure_image(tmp_path / "vm.img") == tmp_path / "vm.img"
-        assert calls == [(tmp_path / "vm.img", "https://h/v")]
+        assert calls == [(tmp_path / "vm.img", "https://h/v", ("sha256", "abc"))]
+        assert sidecars == [tmp_path / "vm.img"]
 
     def test_without_a_url_the_error_says_how_to_provide_the_image(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch

@@ -40,8 +40,8 @@ class TestExposures:
 
         assert exposures(_rules((f"{ro}/", False), (f"{rw}/", True))) == ([str(ro)], [str(rw)])
 
-    def test_the_narrower_right_wins_for_a_path_exposed_both_ways(self, tmp_path: Path) -> None:
-        assert exposures(_rules((f"{tmp_path}/", True), (f"{tmp_path}/", False))) == ([str(tmp_path)], [])
+    def test_the_broader_right_wins_for_a_path_exposed_both_ways(self, tmp_path: Path) -> None:
+        assert exposures(_rules((f"{tmp_path}/", True), (f"{tmp_path}/", False))) == ([], [str(tmp_path)])
 
     def test_a_file_can_be_exposed_read_only(self, tmp_path: Path) -> None:
         file = tmp_path / "one.txt"

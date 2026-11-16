@@ -322,9 +322,9 @@ class TestExposedPaths:
         assert "--whitelist=/a/" in args
         assert "--read-only=/a/" in args
 
-    def test_a_path_exposed_both_ways_ends_up_read_only(self, tmp_path: Path) -> None:
-        """firejail applies --read-write/--read-only in order, last one wins: the narrower
-        right must come last, same as bwrap, unshare, gvisor and smolvm."""
+    def test_a_path_exposed_both_ways_ends_up_read_write(self, tmp_path: Path) -> None:
+        """firejail applies --read-only/--read-write in order, last one wins: the broader
+        right (expose-rw) must come last, same as bwrap, unshare, gvisor and smolvm."""
         args = _args(
             tmp_path,
             self._rules(
@@ -334,7 +334,7 @@ class TestExposedPaths:
         )
 
         flags = [a for a in args if a in ("--read-write=/srv/data/", "--read-only=/srv/data/")]
-        assert flags[-1] == "--read-only=/srv/data/"
+        assert flags[-1] == "--read-write=/srv/data/"
 
     @pytest.mark.parametrize("path", ["/etc/", "/etc/ssl/", "/proc/", "/tmp/"])
     def test_the_paths_firejail_refuses_are_not_whitelisted(self, tmp_path: Path, path: str) -> None:

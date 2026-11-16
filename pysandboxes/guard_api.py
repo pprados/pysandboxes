@@ -259,15 +259,22 @@ SENSITIVE_API: dict[str, tuple[str, ...]] = {
         "faulthandler.enable",
     ),
     # Registered so python-api=ALLOW:dynamic-code stays an expressible escape
-    # hatch, but patched by guard_eval rather than here: the guarded path
+    # hatch, but patched by guard_eval rather than here: eval/exec/compile's guarded path
     # parses, validates and rewrites the source instead of answering a binary
-    # allow/deny. Three names, not the six of the design spec: __import__ is
-    # guard_import's, and code.compile_command / InteractiveInterpreter
-    # .runsource reach these three anyway.
+    # allow/deny. marshal.loads/load have no source to parse -- they hand back a code
+    # object directly -- so guard_eval answers them with the same binary allow/deny this
+    # module gives its own registry, reusing its is_ambient/_GATEWAYS to tell a `.pyc`-cache
+    # read (ambient, through `_compile_bytecode`, `zipimport._unmarshal_code` and
+    # `pkgutil.read_code`) from the application's own call. Five names, not the six of the
+    # design spec: __import__ is guard_import's, and code.compile_command /
+    # InteractiveInterpreter.runsource reach the three builtins anyway, through the same
+    # _GATEWAYS walk that lets a debugger's or a REPL's own compile/exec stay ambient.
     "dynamic-code": (
         "builtins.eval",
         "builtins.exec",
         "builtins.compile",
+        "marshal.loads",
+        "marshal.load",
     ),
     # A pickle stream is a program: its opcodes name a callable and call it, so
     # ``pickle.loads(b"cos\nsystem\n...")`` reaches ``os.system`` without
@@ -288,19 +295,6 @@ SENSITIVE_API: dict[str, tuple[str, ...]] = {
     # reachable; pinned as an xfail in tests/unit_tests/guard/test_guard_api.py.
     # pickle keeps its pure-Python implementation next to the C one, under
     # ``_loads``, ``_load`` and ``_Unpickler``: the same opcodes, so the same entries.
-    #
-    # ``marshal.loads``/``marshal.load`` are NOT registered here, unlike the equivalent pickle
-    # entries: ``importlib._bootstrap_external._compile_bytecode`` calls ``marshal.loads`` to read
-    # every cached ``.pyc``, so a blanket deny breaks any import once a bytecode cache exists.
-    # remote/tools.py denies importing ``marshal`` on the parent side, where no such internal
-    # caller exists; guarding the call site here needs an ambient-caller exemption like
-    # guard_eval.is_ambient gives compile/exec/eval, which this module cannot reuse or duplicate
-    # by itself: guard_eval keys it on a frozen filename, forgeable the same way guard_eval's own
-    # docstring says `<eval:` is (`code.replace(co_filename=...)`), and guard_api importing
-    # guard_eval would violate the layering test_architecture.py enforces. Reaching this call site
-    # at all needs `python-import=marshal` (and `types`, to turn the code object back into a
-    # callable) granted to the application. Design change, not a forgotten registry entry;
-    # tracked in wiki/weaknesses.md.
     "deserialization": (
         "pickle.loads",
         "pickle.load",

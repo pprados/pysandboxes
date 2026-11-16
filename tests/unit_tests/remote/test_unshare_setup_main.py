@@ -394,13 +394,14 @@ class TestMounts:
         assert readonly(cwd) not in harness.mounts
         assert mounted(ro, "/mnt/ro") in harness.mounts and readonly("/mnt/ro") in harness.mounts
         assert mounted(rw, "/mnt/rw") in harness.mounts and readonly("/mnt/rw") not in harness.mounts
-        # Read-write mounts go first, read-only last: a path exposed both ways ends up read-only.
-        assert harness.mounts.index(mounted(rw, "/mnt/rw")) < harness.mounts.index(mounted(ro, "/mnt/ro"))
+        # Read-only mounts go first, read-write last: a path exposed both ways ends up read-write.
+        assert harness.mounts.index(mounted(ro, "/mnt/ro")) < harness.mounts.index(mounted(rw, "/mnt/rw"))
 
-    def test_a_path_exposed_both_ways_ends_up_read_only(
+    def test_a_path_exposed_both_ways_ends_up_read_write(
         self, harness: _Run, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
     ) -> None:
-        """The narrower right wins, same as bwrap, gvisor and smolvm."""
+        """The broader right wins: expose-rw implies visibility and read, same as bwrap, firejail,
+        gvisor, smolvm and sandbox-exec."""
         shared = tmp_path / "shared"
         shared.mkdir()
         config = _config(
@@ -413,6 +414,20 @@ class TestMounts:
 
         readonly = ["mount", "-o", "remount,ro,bind,nosuid,nodev", f"{harness.root}/mnt/shared"]
         related = [cmd for cmd in harness.mounts if cmd[-1] == f"{harness.root}/mnt/shared"]
+        assert readonly in related
+        assert related[-1] != readonly
+
+    def test_a_path_exposed_read_only_alone_cannot_be_written(
+        self, harness: _Run, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
+        ro_only = tmp_path / "ro_only"
+        ro_only.mkdir()
+        config = _config(harness.root, mounts_ro=[(str(ro_only), "/mnt/ro_only")])
+
+        _main(harness, monkeypatch, tmp_path, config, "prog")
+
+        readonly = ["mount", "-o", "remount,ro,bind,nosuid,nodev", f"{harness.root}/mnt/ro_only"]
+        related = [cmd for cmd in harness.mounts if cmd[-1] == f"{harness.root}/mnt/ro_only"]
         assert related[-1] == readonly
 
     def test_no_current_directory_means_no_mount_of_it(

@@ -70,10 +70,10 @@ def test_a_read_write_exposure_is_a_read_write_bind() -> None:
     assert "ro" not in mount["options"]
 
 
-def test_a_path_in_both_lists_is_read_only() -> None:
+def test_a_path_in_both_lists_is_read_write() -> None:
     mount = _mount(_spec(mounts_ro=["/both"], mounts_rw=["/both"]), "/both")
 
-    assert "ro" in mount["options"], "the narrower right wins when a path is exposed twice"
+    assert "rw" in mount["options"], "the broader right (expose-rw) wins when a path is exposed twice"
 
 
 def test_a_masked_file_is_replaced_by_an_empty_read_only_file() -> None:

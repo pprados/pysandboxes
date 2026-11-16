@@ -39,10 +39,15 @@ def _huge() -> str:
     return "x" * (10 * 1024 * 1024)
 
 
+_HUGE_WRITE = "".join(str(i % 10) for i in range(2_000_000))
+
+
 def _print_huge() -> str:
-    # A single write of an oversized chunk, not the result: the call that goes over the
-    # SSE line budget happens while streaming, not while building the final reply.
-    print("y" * (10 * 1024 * 1024))
+    # A single write far larger than the SSE line budget, not the result: the write that must
+    # be split into several chunk events happens while streaming, not while building the final
+    # reply. A repeating digit sequence, not a uniform character, lets the test check the
+    # chunks come back complete and in order, not just with the right total length.
+    print(_HUGE_WRITE)
     return "ok"
 
 
@@ -147,13 +152,28 @@ async def test_an_oversized_reply_is_refused_with_an_error_event() -> None:
     assert "error" in events[0]
 
 
-async def test_an_oversized_stdout_chunk_is_refused_with_an_error_event() -> None:
-    """A single print() over the SSE line budget must be refused as it streams, not let through
-    to the parent's HTTP reader, which would otherwise refuse it opaquely."""
+async def test_an_oversized_stdout_write_is_split_into_ordered_chunks() -> None:
+    """A single print() far above the SSE line budget must arrive as several `stdout` events,
+    complete and in order, instead of being refused as one oversized line or let through to the
+    parent's HTTP reader, which would refuse it opaquely."""
     events = await _events(f"{_MODULE}:_print_huge")
 
-    assert len(events) == 1
-    assert "error" in events[0]
+    assert not any("error" in e for e in events)
+    stdout_chunks = [e["stdout"] for e in events[:-1] if "stdout" in e]
+    assert len(stdout_chunks) > 1
+    assert "".join(stdout_chunks) == _HUGE_WRITE + "\n"
+    assert from_b85(events[-1]["result"]) == "ok"
+
+
+async def test_a_small_write_stays_in_a_single_event() -> None:
+    """The negative control for the split above: an ordinary write must not be chopped up.
+
+    ``print("hi!")`` makes two real ``write()`` calls (the text, then its own ``"\\n"``), each
+    already its own event before this fix; neither is small enough to be split further."""
+    events = await _events(f"{_MODULE}:_speak", "hi")
+
+    stdout_events = [e for e in events[:-1] if "stdout" in e]
+    assert stdout_events == [{"stdout": "hi!"}, {"stdout": "\n"}]
 
 
 async def test_the_final_event_does_not_repeat_the_streamed_output() -> None:

@@ -197,6 +197,7 @@ Image resolution uses environment variables (see `pysandboxes.remote.qemu_image`
 
 - **`PYSANDBOXES_QEMU_IMAGE_URL`** — full URL to a single image file (highest priority when set).
 - **`PYSANDBOXES_QEMU_IMAGE_BASE_URL`** — base URL; the client completes the filename from Python version and architecture when no full URL is set.
+- **`PYSANDBOXES_QEMU_IMAGE_SHA256`** — pins the expected SHA-256 of an image downloaded from `PYSANDBOXES_QEMU_IMAGE_URL`/`_BASE_URL`. Takes priority over any checksums file found next to the image.
 - **`PYSANDBOXES_VM_IMAGES_DIR`** — directory where downloaded images are stored (default: `$XDG_DATA_HOME/vm-images` or `~/.local/share/vm-images`).
 
 Example:
@@ -204,6 +205,19 @@ Example:
 ```bash
 export PYSANDBOXES_QEMU_IMAGE_URL="<full image URL>"
 ```
+
+### Checksum verification
+
+A download is hashed while it streams to disk and compared before the file is put in place (never partially written, never unverified). The expected digest comes from, in order:
+
+1. `PYSANDBOXES_QEMU_IMAGE_SHA256`, when set (SHA-256, hex).
+2. A `SHA256SUMS` or `SHA512SUMS` file fetched (over HTTPS, no downgrade) next to the image — `SHA512SUMS` for the standard Debian URL, `SHA256SUMS` for the standard Ubuntu URLs, both tried for a custom URL.
+
+For the standard Debian/Ubuntu image, a download is refused outright if neither source yields a digest — the checksums file comes from the same host as the image, so it is not a substitute for a pinned digest against a compromised upstream (see [`wiki/weaknesses.md`](weaknesses.md)). For a custom `PYSANDBOXES_QEMU_IMAGE_URL`/`_BASE_URL`, a missing digest only logs one warning and the download proceeds.
+
+A digest mismatch is retried once (the file may have been mid-publish upstream) before failing closed and deleting the partial download. The byte count is also checked against `Content-Length` regardless of any checksum, since a connection cut short does not reliably raise inside `urllib.request`.
+
+Once verified, a `<image>.sha256` sidecar records the digest, size and mtime next to the cached image; reuse on a later run checks only size and mtime against it (no re-hash). A cached image without a sidecar (e.g. placed there manually, or downloaded before this feature existed) is used as-is with one warning, never re-verified retroactively. A sidecar that no longer matches its image triggers a fresh, verified download.
 
 ### Mapping: Python version → image (Ubuntu, 3.11 to 3.14)
 

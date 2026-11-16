@@ -571,15 +571,15 @@ class BWrapSSEDaemon(BaseSubProcessDaemon):
                 if sp and os.path.isdir(sp):
                     args.extend(["--ro-bind", sp, sp])
 
-        # File rules: apply expose-rw first, then expose-ro so a path exposed both ways ends up
-        # read-only: the narrower right wins, same as gvisor and smolvm.
+        # File rules: apply expose-ro first, then expose-rw so a path exposed both ways ends up
+        # read-write: expose-rw implies visibility and read, so it is the broader right and wins.
         # A device bound with --bind or --ro-bind is nodev: opening it fails with EACCES, so it needs --dev-bind.
-        for rule in all_rules.file_rules:
-            if isinstance(rule, FSExposeRule) and rule.write:
-                args.extend([("--dev-bind" if is_special_file(Path(rule.path)) else "--bind"), rule.path, rule.path])
         for rule in all_rules.file_rules:
             if isinstance(rule, FSExposeRule) and not rule.write:
                 args.extend([("--dev-bind" if is_special_file(Path(rule.path)) else "--ro-bind"), rule.path, rule.path])
+        for rule in all_rules.file_rules:
+            if isinstance(rule, FSExposeRule) and rule.write:
+                args.extend([("--dev-bind" if is_special_file(Path(rule.path)) else "--bind"), rule.path, rule.path])
 
         # Temp dir so child can read the config pipe
         temp_str = str(temp)

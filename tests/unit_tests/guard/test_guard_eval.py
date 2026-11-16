@@ -518,8 +518,14 @@ def _patched() -> dict[str, Callable[..., Any]]:
     }
 
 
-def test_dynamic_code_holds_exactly_three_names() -> None:
-    assert SENSITIVE_API["dynamic-code"] == ("builtins.eval", "builtins.exec", "builtins.compile")
+def test_dynamic_code_holds_exactly_five_names() -> None:
+    assert SENSITIVE_API["dynamic-code"] == (
+        "builtins.eval",
+        "builtins.exec",
+        "builtins.compile",
+        "marshal.loads",
+        "marshal.load",
+    )
 
 
 def test_dynamic_code_is_an_accepted_python_api_target() -> None:
@@ -539,12 +545,14 @@ def test_guard_api_does_not_patch_the_three_builtins() -> None:
     assert not [key for key in table if key.startswith("builtins.")]
 
 
-def test_guard_eval_patches_exactly_the_three_builtins() -> None:
+def test_guard_eval_patches_exactly_the_three_builtins_and_marshal() -> None:
     assert set(patch_rules(False)) == {
         "builtins.eval",
         "builtins.exec",
         "builtins.compile",
         "string.Formatter.get_field",
+        "marshal.loads",
+        "marshal.load",
     }
 
 

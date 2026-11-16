@@ -3,19 +3,25 @@
 """Guard for code that arrives as a string at runtime.
 
 `builtins.eval`, `builtins.exec` and `builtins.compile` are patched here, and
-`string.Formatter.get_field`, whose attribute reads no rewrite can reach. A
-guarded call parses the source, validates it against the sub-language the
-`eval-*` rules describe, rewrites it so the remaining risks are enforced by
-`eval_runtime`, and runs it in a dedicated thread under a budget and a
-timeout the caller can recover from.
+`string.Formatter.get_field`, whose attribute reads no rewrite can reach, and
+`marshal.loads`/`marshal.load`, which hand back a runnable code object with no
+source for this guard to parse. A guarded call parses the source, validates it
+against the sub-language the `eval-*` rules describe, rewrites it so the
+remaining risks are enforced by `eval_runtime`, and runs it in a dedicated
+thread under a budget and a timeout the caller can recover from; `marshal`
+has no source to run this way, so it is only ever allowed or refused whole,
+the same binary choice `guard_api` gives its own registry.
 
 Two choices a later reader should not "restore":
 
-- `SENSITIVE_API["dynamic-code"]` holds three names: `eval`, `exec` and `compile`.
-  `builtins.__import__` is left out because `guard_import` owns it with its own
-  rules; `code.compile_command` and `code.InteractiveInterpreter.runsource` are left
-  out because they reach the three builtins anyway, so patching them would count
-  one call twice.
+- `SENSITIVE_API["dynamic-code"]` holds five names: `eval`, `exec`, `compile`,
+  `marshal.loads` and `marshal.load`. `builtins.__import__` is left out because
+  `guard_import` owns it with its own rules; `code.compile_command` and
+  `code.InteractiveInterpreter.runsource` are left out because they reach the three
+  builtins anyway -- genuinely, not just nominally: `is_ambient`'s `_GATEWAYS` walk
+  past their own stdlib frame to the real caller, instead of stopping at the first
+  stdlib frame and calling it ambient -- so patching them too would count one call
+  twice.
 - CPython's automatic injection of the 159 builtins into a namespace that lacks
   `__builtins__` is never honoured under `eval-namespace=adaptive` or `closed`.
   `eval-namespace=caller` is the debugging escape hatch: it does honour the
@@ -620,6 +626,128 @@ _STDLIB_ROOTS = tuple(
 )
 _VENDOR_SEGMENTS = ("site-packages", "dist-packages")
 
+# Whole stdlib files entirely dedicated to running a line, a statement, or a script the caller
+# supplies -- a debugger, a profiler, a tracer, the two REPL classes, timeit, runpy, codeop.
+# `is_ambient` does not conclude on a frame in one of these: the *caller's* code, not this
+# forwarding frame's, produced the source being run, so the walk continues to `frame.f_back`
+# instead. A whole file, not a `(file, qualname)` pair as `_GATEWAYS` below uses for a
+# mixed-purpose file: these modules' public entry points (`code.InteractiveInterpreter.runsource`,
+# `timeit.timeit`, `runpy.run_module`) reach the actual exec/eval/compile call through several
+# private helpers apiece (`codeop.CommandCompiler.__call__` -> `_maybe_compile` ->
+# `codeop.Compile.__call__` -> `compile()`, measured on 3.11-3.14), and naming every one of
+# them, here and again after the next refactor, is the wrong level of detail for what is, in
+# every one of these files, a single-purpose module. Keyed the same way `_GATEWAYS` is, by
+# `_module_key()`.
+_GATEWAY_FILES: frozenset[str] = frozenset(
+    {
+        "code.py",
+        "codeop.py",
+        "bdb.py",
+        "pdb.py",
+        "doctest.py",
+        "profile.py",
+        "cProfile.py",
+        "trace.py",
+        "timeit.py",
+        "runpy.py",
+        "rlcompleter.py",
+    }
+)
+
+# Individual functions of an otherwise ordinary stdlib file whose one job is to compile,
+# evaluate, or run a string, file, or byte stream the caller hands it. Keyed by
+# `(module_key, qualified name)`, `module_key` from `_module_key()`: the dotted module name with
+# its separators turned into `/` and `.py` appended, e.g. `importlib/_bootstrap.py`,
+# `importlib/abc.py`, `runpy.py` -- the same key whether CPython freezes that module at build
+# time (`co_filename` then reports `<frozen pkg.mod>`, never a real path) or reads it from its
+# `.py` file, which varies by module *and by CPython version*: `runpy` is frozen by default from
+# 3.11, `_bootstrap`/`_bootstrap_external` always were. A table keyed on `<frozen ...>` only for
+# the ones observed frozen on one interpreter would silently stop matching on a build, or a
+# future version, that freezes a different set.
+#
+# Found by an AST scan of the stdlib of every supported Python (3.11 through 3.14) for an
+# exec/eval/compile call whose argument is not a literal constant
+# (`tests/unit_tests/guard/test_guard_eval_ambient_gateways.py` re-runs the scan on the current
+# interpreter and fails when it finds one covered by neither this table, `_GATEWAY_FILES` above,
+# nor `_GATEWAY_EXCLUSIONS` below), plus three the scan cannot see because they pass the builtin
+# by reference through `importlib._bootstrap._call_with_frames_removed` instead of naming it:
+# that function itself, and the two `_bootstrap_external.SourceLoader` methods it protects.
+# Without those three, a direct `SourceFileLoader(name, path).get_code(name)` -- unlike a real
+# import -- would stop at the first of them and stay ambient, because every frame up to the real
+# caller is itself frozen.
+_GATEWAYS: frozenset[tuple[str, str]] = frozenset(
+    {
+        # The import machinery's own compile/exec/marshal.loads, reached directly when a loader
+        # or a bytecode blob is driven by hand instead of through `find_spec`.
+        # `guard_import._vetted_loaders` closes the same route for `exec_module` itself; these
+        # close it for `source_to_code`/`get_code`/`_compile_bytecode` called on their own. A
+        # legitimate import walks back up through the same frozen frames to `_find_and_load`,
+        # where the walk stops (frozen, not a gateway) and the import stays ambient.
+        ("importlib/_bootstrap.py", "_call_with_frames_removed"),
+        ("importlib/_bootstrap_external.py", "SourceLoader.source_to_code"),
+        ("importlib/_bootstrap_external.py", "SourceLoader.get_code"),
+        ("importlib/_bootstrap_external.py", "_compile_bytecode"),
+        ("importlib/abc.py", "InspectLoader.source_to_code"),
+        ("zipimport.py", "_compile_source"),
+        ("zipimport.py", "_unmarshal_code"),
+        ("zipimport.py", "zipimporter.load_module"),
+        ("pkgutil.py", "read_code"),
+        ("dis.py", "_try_compile"),
+        ("dis.py", "main"),
+        ("py_compile.py", "main"),
+        ("optparse.py", "Values.read_file"),
+        ("logging/config.py", "_create_formatters"),
+        ("logging/config.py", "_install_handlers"),
+        ("site.py", "addpackage"),
+    }
+)
+
+# Candidates the scan also finds, deliberately left out of `_GATEWAYS`: the argument is not
+# meaningfully caller-supplied, so `is_ambient` keeps judging the *library's* frame, as before.
+_GATEWAY_EXCLUSIONS: dict[tuple[str, str], str] = {
+    ("dataclasses.py", "_create_fn"): "compiles a template the library built from field "
+    "names it already validated as identifiers, not the caller's source",
+    ("dataclasses.py", "_FuncBuilder.add_fns_to_class"): "same as _create_fn, batched",
+    ("collections/__init__.py", "namedtuple"): "field_names are validated as identifiers "
+    "before the generated lambda is eval'd",
+    ("typing.py", "ForwardRef.__init__"): "compiles a type-annotation string the application "
+    "wrote in its own source; required for pydantic and dataclasses",
+    ("typing.py", "ForwardRef._evaluate"): "evaluates the same forward-ref string",
+    ("annotationlib.py", "ForwardRef.evaluate"): "3.14 equivalent of typing.ForwardRef._evaluate",
+    ("annotationlib.py", "ForwardRef.__forward_code__"): "compiles the same forward-ref string",
+    ("annotationlib.py", "get_annotations"): "evaluates a type-annotation string, like inspect.get_annotations",
+    ("inspect.py", "get_annotations"): "evaluates a type-annotation string the application wrote",
+    ("inspect.py", "_signature_fromstr.wrap_value"): "evaluates a repr() the library itself "
+    "produced while parsing a C function's text signature",
+    ("unittest/mock.py", "_set_signature"): "execs a wrapper template built from the mocked callable's own signature",
+    ("unittest/mock.py", "_set_async_signature"): "same as _set_signature, for an async callable",
+    ("multiprocessing/managers.py", "MakeProxyType"): "execs a class template built from method "
+    "names given at class-definition time, not at call time",
+    ("multiprocessing/sharedctypes.py", "make_property"): "execs a property template built from a validated field name",
+    ("ast.py", "parse"): "compiles with PyCF_ONLY_AST: produces a tree, never runs anything",
+    ("importlib/_bootstrap.py", "FrozenImporter.exec_module"): "the name only selects a module "
+    "already frozen into the interpreter at build time; nothing the caller supplies is run",
+    ("pydoc.py", "Helper.help"): "the eval() is only ever reached for 'True', 'False' or "
+    "'None', gated by an equality check two lines above it",
+    ("modulefinder.py", "ModuleFinder.load_module"): "static dependency-analysis tooling, not "
+    "reachable from sandboxed code at runtime",
+    ("pkgutil.py", "ImpLoader.get_code"): "the deprecated imp-era compatibility loader, removed "
+    "from the stdlib in 3.12",
+    ("gettext.py", "c2py"): "the plural-form expression is parsed by a small grammar first, "
+    "restricted to C-style arithmetic/comparison/ternary on one name, before the validated "
+    "result is embedded in the exec'd template -- the same shape of validation as namedtuple's",
+}
+
+# Whole files excluded the same way, one reason covering every candidate the scan finds there.
+_GATEWAY_EXCLUDED_FILE_PREFIXES: dict[str, str] = {
+    "idlelib/": "IDLE is a GUI developer tool, never reachable from a sandboxed process",
+    "turtle.py": "turtle graphics; GUI-only, never reachable from a sandboxed process",
+    "tkinter/": "Tk; GUI-only, never reachable from a sandboxed process",
+    "distutils/": "removed from the stdlib in 3.12, deprecated before that",
+    "_pyrepl/": "the interactive interpreter's own REPL, a developer tool",
+    "asyncio/__main__.py": "python -m asyncio's interactive REPL, a developer tool",
+}
+
 
 def is_ambient(frame: types.FrameType) -> bool:
     """Return whether this call is the runtime generating its own code.
@@ -646,24 +774,65 @@ def is_ambient(frame: types.FrameType) -> bool:
     below instead -- `dataclasses` builds its `__init__` with `<string>` too,
     but the frame calling `exec` is `dataclasses.py`.
 
+    A stdlib or frozen frame is not the end of it, though: some stdlib functions exist
+    specifically to compile or run a string, a file, or a code object *the caller* supplies --
+    `importlib.abc.InspectLoader.source_to_code`, `code.InteractiveInterpreter.runsource`,
+    `timeit.timeit`, a debugger's `exec` of a breakpoint command, and so on. Calling one of these
+    directly is indistinguishable, one frame at a time, from the library legitimately calling
+    itself: both have a stdlib frame as the immediate caller. The walk resolves it by not
+    stopping there: for a frame in `_GATEWAY_FILES` or `_GATEWAYS`, it keeps climbing past every
+    such frame until it reaches either the frozen import machinery (a real import, stay ambient)
+    or a frame that is not stdlib/frozen/vendor at all (the application's own code, not ambient)
+    or another stdlib frame that is not itself a gateway (the library calling itself for an
+    unrelated reason, stay ambient, the original rule).
+
     Args:
         frame: The frame of the caller reaching a patched builtin.
 
     Returns:
         Whether the call comes from library or runtime code.
     """
-    filename = frame.f_code.co_filename
-    if filename.startswith(TAG_PREFIX):
-        return False
-    if filename.startswith("<frozen "):
-        return True
+    current: types.FrameType | None = frame
+    while current is not None:
+        code = current.f_code
+        filename = code.co_filename
+        if filename.startswith(TAG_PREFIX):
+            return False
+        module_key, resolved = _module_key(filename)
+        if module_key is not None:
+            if module_key in _GATEWAY_FILES or (module_key, code.co_qualname) in _GATEWAYS:
+                current = current.f_back
+                continue
+            return True
+        return any(segment in Path(resolved).parts for segment in _VENDOR_SEGMENTS)
+    # Ran out of frames without finding a non-gateway one: nothing but forwarding functions all
+    # the way to the bottom of the stack, which only happens from a C-level call with no Python
+    # frame beneath it (interpreter startup, an embedder). Not sandboxed code either way.
+    return True
+
+
+def _module_key(filename: str) -> tuple[str | None, str]:
+    """Return `(module_key, resolved)`: `_GATEWAYS`/`_GATEWAY_FILES`' lookup key for `filename`,
+    or `None` as the first element when it is neither frozen nor under a stdlib root.
+
+    A frozen module's `co_filename` (`<frozen pkg.mod>`) is turned into the same
+    `pkg/mod.py`-style key a `.py`-file frame resolves to, relative to the stdlib root: which
+    modules CPython freezes at build time varies by module and by version (`runpy` only from
+    3.11; `importlib._bootstrap`/`_bootstrap_external` always), and the table must match either
+    way. `resolved` is the real, canonicalized path for a non-frozen frame (for the vendor check
+    the caller falls back to when `module_key` is `None`), or `filename` unchanged when frozen.
+    """
+    if filename.startswith("<frozen ") and filename.endswith(">"):
+        dotted = filename[len("<frozen ") : -1]
+        return dotted.replace(".", "/") + ".py", filename
     # Path.resolve() calls os.path.realpath(), whose lstat/readlink calls are
     # patched by guard_files. Use its guarded canonicalizer to avoid re-entering
     # those wrappers while deciding whether this is framework-generated code.
     resolved = guard_files._safe_realpath(filename)
-    if _STDLIB_ROOTS and resolved.startswith(_STDLIB_ROOTS):
-        return True
-    return any(segment in Path(resolved).parts for segment in _VENDOR_SEGMENTS)
+    for root in _STDLIB_ROOTS:
+        if resolved.startswith(root):
+            return Path(resolved[len(root) :].lstrip("/\\")).as_posix(), resolved
+    return None, resolved
 
 
 def _source_ref(frame: types.FrameType, profile: str) -> str:
@@ -849,6 +1018,41 @@ def _wrap_compile(func: Callable[..., Any]) -> Callable[..., Any]:
     return wrapper
 
 
+def _wrap_marshal(func: Callable[..., Any], *, qualname: str) -> Callable[..., Any]:
+    """Wrap `marshal.loads`/`marshal.load`.
+
+    Unlike `eval`/`exec`/`compile`, there is no source text to parse, validate, or rewrite: the
+    call either hands back a code object the caller can run without ever touching a guarded
+    builtin again (`types.FunctionType(code, globals)()`, `f.__code__ = code`), or it does not
+    run at all. The decision is therefore the plain allow/deny `guard_api` gives its own
+    registry, not an `eval-*` profile; `is_ambient` is reused as-is, since a `.pyc`-cache read
+    walks the same `_GATEWAYS` frames a real import does, through `_compile_bytecode`,
+    `zipimport._unmarshal_code` and `pkgutil.read_code`.
+
+    Args:
+        func: The original `marshal.loads` or `marshal.load`.
+        qualname: Its dotted name, for the registry, refusals, and learning.
+
+    Returns:
+        The replacement callable.
+    """
+    if getattr(func, "__pysandbox_eval__", False):
+        return func
+
+    @guard_wraps(func)
+    def wrapper(*args: Any, **kwargs: Any) -> Any:
+        frame = sys._getframe(1)
+        if not is_armed() or is_ambient(frame) or guard_api.is_allowed(qualname):
+            return func(*args, **kwargs)
+        if is_learning_mode():
+            add_learning_rule(LearnApiRule(qualname))
+            return func(*args, **kwargs)
+        raise RuleApiPermissionError(qualname, "dynamic-code")
+
+    wrapper.__pysandbox_eval__ = True  # type: ignore[attr-defined]
+    return wrapper
+
+
 def _wrap_formatter_get_field(func: Callable[..., Any]) -> Callable[..., Any]:
     """Wrap `string.Formatter.get_field`, the one attribute read of `string.Formatter`.
 
@@ -898,7 +1102,7 @@ def check_api_grants(api_rules: guard_api.ApiRules, eval_lines: ConfigLines, err
 
 
 def patch_rules(learn: bool) -> dict[str, Callable[..., Any]]:
-    """Return the patch table for the three dynamic-code builtins.
+    """Return the patch table for the dynamic-code builtins and `marshal`.
 
     Args:
         learn: Accepted for symmetry with the other guards; the decision is a
@@ -913,6 +1117,8 @@ def patch_rules(learn: bool) -> dict[str, Callable[..., Any]]:
         "builtins.exec": _f(_wrap_eval_like, qualname="builtins.exec", mode="exec"),
         "builtins.compile": _f(_wrap_compile),
         "string.Formatter.get_field": _f(_wrap_formatter_get_field),
+        "marshal.loads": _f(_wrap_marshal, qualname="marshal.loads"),
+        "marshal.load": _f(_wrap_marshal, qualname="marshal.load"),
     }
 
 

@@ -7,11 +7,13 @@ default image path by Python version and architecture, KVM availability check,
 and optional download of the image when missing.
 """
 
+import hashlib
 import logging
 import os
 import platform
 import re
 import sys
+import urllib.parse
 import urllib.request
 from collections.abc import Mapping
 from pathlib import Path
@@ -53,6 +55,19 @@ DEBIAN_CLOUD_BASE = "https://cloud.debian.org/images/cloud/bookworm/latest"
 # https://cloud.debian.org/images/cloud/trixie/latest/debian-13-generic-amd64.qcow2
 DEBIAN_TRIXIE_CLOUD_BASE = "https://cloud.debian.org/images/cloud/trixie/latest"
 DOWNLOAD_TIMEOUT = 300
+# Pins the digest of a custom download URL (PYSANDBOXES_QEMU_IMAGE_URL/_BASE_URL) without
+# relying on a neighbor checksums file.
+ENV_VM_IMAGE_SHA256 = "PYSANDBOXES_QEMU_IMAGE_SHA256"
+CHECKSUMS_TIMEOUT = 30
+# A SHA256SUMS/SHA512SUMS listing is a few hundred KiB at most; refuse anything far larger.
+CHECKSUMS_MAX_BYTES = 8 * 1024 * 1024
+# Host -> (algorithm, checksums filename) used for the standard image URLs. An unknown host
+# (a custom PYSANDBOXES_QEMU_IMAGE_URL/_BASE_URL) tries both conventions in turn.
+_CHECKSUMS_BY_HOST: dict[str, tuple[str, str]] = {
+    "cloud.debian.org": ("sha512", "SHA512SUMS"),
+    "cloud-images.ubuntu.com": ("sha256", "SHA256SUMS"),
+}
+_CHECKSUM_LINE = re.compile(r"^([0-9a-fA-F]{32,})\s+\*?(.+?)\s*$")
 
 # Complete mapping Python 3.10–3.14 → Ubuntu Cloud Image (one image per version).
 # See wiki/qemu.md. Format: (release_or_codename, filename_pattern).
@@ -234,6 +249,136 @@ def get_download_url(path: Path) -> str | None:
     return get_standard_download_url()
 
 
+_WARNED_ONCE: set[str] = set()
+
+
+def _warn_once(key: str, message: str) -> None:
+    """Log ``message`` the first time ``key`` is seen in this process, silently after that."""
+    if key in _WARNED_ONCE:
+        return
+    _WARNED_ONCE.add(key)
+    logger.warning(message)
+
+
+def _checksums_candidates_for_host(host: str) -> list[tuple[str, str]]:
+    """Return the (algorithm, filename) pairs to try for a checksums file next to the image."""
+    known = _CHECKSUMS_BY_HOST.get(host)
+    if known:
+        return [known]
+    return [("sha256", "SHA256SUMS"), ("sha512", "SHA512SUMS")]
+
+
+def _fetch_checksums_text(sums_url: str) -> str | None:
+    """Download a small checksums file with the same guards as the image, or return None.
+
+    None means "unavailable" (unreachable, wrong scheme, downgraded redirect, non-200, or
+    too large), which the caller treats as "nothing to verify against", not a hard failure.
+    """
+    try:
+        _validate_download_url(sums_url)
+    except ValueError:
+        return None
+    try:
+        req = urllib.request.Request(sums_url, headers={"User-Agent": "pysandboxes-qemu-provider/1.0"})
+        with urllib.request.urlopen(req, timeout=CHECKSUMS_TIMEOUT) as resp:
+            if sums_url.lower().startswith("https://") and not resp.geturl().lower().startswith("https://"):
+                return None
+            if resp.status != 200:
+                return None
+            chunks: list[bytes] = []
+            size = 0
+            while True:
+                chunk = resp.read(65536)
+                if not chunk:
+                    break
+                size += len(chunk)
+                if size > CHECKSUMS_MAX_BYTES:
+                    logger.warning("Checksums file %s exceeds %d bytes; ignoring it", sums_url, CHECKSUMS_MAX_BYTES)
+                    return None
+                chunks.append(chunk)
+        return b"".join(chunks).decode("utf-8", errors="replace")
+    except Exception as e:
+        logger.debug("Checksums file %s unreachable: %s", sums_url, e)
+        return None
+
+
+def _parse_checksum_line(text: str, filename: str) -> str | None:
+    """Return the lowercase hex digest for filename from a ``sha256sum``/``sha512sum`` listing.
+
+    Matches both the text-mode ``hash  name`` and the binary-mode ``hash *name`` forms.
+    """
+    for line in text.splitlines():
+        match = _CHECKSUM_LINE.match(line.strip())
+        if match and match.group(2) == filename:
+            return match.group(1).lower()
+    return None
+
+
+def _neighbor_checksum(url: str) -> tuple[str, str] | None:
+    """Return (algorithm, hex_digest) for url's file name from a checksums file beside it.
+
+    Returns None if no checksums file could be fetched and parsed for that file name.
+    """
+    base, sep, filename = url.rpartition("/")
+    if not sep or not filename:
+        return None
+    host = urllib.parse.urlsplit(url).hostname or ""
+    for algorithm, sums_name in _checksums_candidates_for_host(host):
+        text = _fetch_checksums_text(f"{base}/{sums_name}")
+        if text is None:
+            continue
+        digest = _parse_checksum_line(text, filename)
+        if digest is not None:
+            return algorithm, digest
+    return None
+
+
+def _resolve_expected_checksum(url: str) -> tuple[str, str] | None:
+    """Return the (algorithm, hex_digest) to verify url against, or None if none is available.
+
+    PYSANDBOXES_QEMU_IMAGE_SHA256 wins when set (no network round trip needed); otherwise a
+    checksums file next to the image is tried.
+    """
+    pinned = os.environ.get(ENV_VM_IMAGE_SHA256, "").strip()
+    if pinned:
+        return "sha256", pinned.lower()
+    return _neighbor_checksum(url)
+
+
+def _sidecar_path(path: Path) -> Path:
+    """Return the checksum sidecar path for a cached image."""
+    return path.with_name(path.name + ".sha256")
+
+
+def _write_sidecar(path: Path, algorithm: str, digest: str) -> None:
+    """Record the verified digest, size and mtime of path so a later reuse skips re-hashing."""
+    try:
+        stat = path.stat()
+        _sidecar_path(path).write_text(f"{algorithm}:{digest}:{stat.st_size}:{stat.st_mtime_ns}\n", encoding="utf-8")
+    except OSError as e:
+        logger.warning("Could not write checksum sidecar for %s: %s", path, e)
+
+
+def _sidecar_matches(path: Path) -> bool:
+    """Return True if path's size and mtime still match its checksum sidecar.
+
+    A cache hit only needs this cheap comparison; the digest itself was verified when the
+    sidecar was written and is not recomputed here.
+    """
+    try:
+        parts = _sidecar_path(path).read_text(encoding="utf-8").strip().split(":")
+        if len(parts) != 4:
+            return False
+        stat = path.stat()
+        return int(parts[2]) == stat.st_size and int(parts[3]) == stat.st_mtime_ns
+    except (OSError, ValueError):
+        return False
+
+
+class _ChecksumMismatch(OSError):
+    """Raised internally when a download's digest does not match the expected one."""
+
+
 def _default_progress_callback(downloaded: int, total: int | None) -> None:
     """Print download progress to stderr (used when no callback provided)."""
     if total is not None and total > 0:
@@ -250,10 +395,60 @@ def _default_progress_callback(downloaded: int, total: int | None) -> None:
         pass
 
 
+def _download_once(
+    url: str,
+    partial: Path,
+    callback: Callable[[int, int | None], None],
+    expected_checksum: tuple[str, str] | None,
+) -> tuple[int, int | None]:
+    """Stream url to partial, hashing it as it writes when expected_checksum is given.
+
+    Returns (bytes_written, content_length_or_None). Raises OSError on a transport failure,
+    a scheme-downgraded redirect, or a truncated body, and _ChecksumMismatch when the digest
+    does not match expected_checksum.
+    """
+    logger.info("Downloading QEMU image from %s to %s", url, partial)
+    digest = hashlib.new(expected_checksum[0]) if expected_checksum else None
+    req = urllib.request.Request(url, headers={"User-Agent": "pysandboxes-qemu-provider/1.0"})
+    # Url validated by _validate_download_url in get_download_url
+    with urllib.request.urlopen(req, timeout=DOWNLOAD_TIMEOUT) as resp:
+        if url.lower().startswith("https://") and not resp.geturl().lower().startswith("https://"):
+            raise OSError(f"Refusing https to http redirect for {url} -> {resp.geturl()}")
+        if resp.status != 200:
+            raise OSError(f"Download failed: HTTP {resp.status} for {url}")
+        total = resp.headers.get("Content-Length")
+        total_int: int | None = int(total) if total else None
+        size = 0
+        with open(partial, "wb") as f:
+            while True:
+                chunk = resp.read(65536)
+                if not chunk:
+                    break
+                f.write(chunk)
+                if digest is not None:
+                    digest.update(chunk)
+                size += len(chunk)
+                callback(size, total_int)
+    # A connection closed early is not guaranteed to raise (observed: it does not with
+    # urllib/http.client, which returns the short read as a normal empty-chunk EOF).
+    if total_int is not None and size != total_int:
+        raise OSError(f"Download truncated: expected {total_int} bytes, got {size} for {url}")
+    if digest is not None and expected_checksum is not None:
+        algorithm, expected_hex = expected_checksum
+        actual_hex = digest.hexdigest()
+        if actual_hex.lower() != expected_hex.strip().lower():
+            raise _ChecksumMismatch(
+                f"Checksum mismatch downloading {url}: expected {algorithm}:{expected_hex}, got {actual_hex}"
+            )
+    return size, total_int
+
+
 def download_image(
     path: Path,
     url: str,
     progress_callback: Callable[[int, int | None], None] | None = None,
+    *,
+    expected_checksum: tuple[str, str] | None = None,
 ) -> Path:
     """Download the image from url to path. Create parent directory if needed.
 
@@ -261,36 +456,29 @@ def download_image(
         path: Destination file path.
         url: URL to download from.
         progress_callback: Optional (downloaded_bytes, total_bytes_or_None) called periodically.
+        expected_checksum: Optional (algorithm, hex_digest), e.g. ("sha256", "ab12..."), hashed
+            while streaming and compared before the rename. A mismatch is retried once (the
+            upstream file may have been mid-publish), then fails closed and removes the partial.
 
     Returns:
         path on success.
 
     Raises:
-        OSError: On download or write failure.
+        OSError: On download, write or checksum-verification failure.
     """
     path.parent.mkdir(parents=True, exist_ok=True)
     partial = path.with_suffix(path.suffix + ".partial")
     callback = progress_callback or _default_progress_callback
-    try:
-        logger.info("Downloading QEMU image from %s to %s", url, path)
-        req = urllib.request.Request(url, headers={"User-Agent": "pysandboxes-qemu-provider/1.0"})
-        # Url validated by _validate_download_url in get_download_url
-        with urllib.request.urlopen(req, timeout=DOWNLOAD_TIMEOUT) as resp:
-            if url.lower().startswith("https://") and not resp.geturl().lower().startswith("https://"):
-                raise OSError(f"Refusing https to http redirect for {url} -> {resp.geturl()}")
-            if resp.status != 200:
-                raise OSError(f"Download failed: HTTP {resp.status} for {url}")
-            total = resp.headers.get("Content-Length")
-            total_int: int | None = int(total) if total else None
-            size = 0
-            with open(partial, "wb") as f:
-                while True:
-                    chunk = resp.read(65536)
-                    if not chunk:
-                        break
-                    f.write(chunk)
-                    size += len(chunk)
-                    callback(size, total_int)
+    attempts = 2 if expected_checksum is not None else 1
+    for attempt in range(attempts):
+        try:
+            size, total_int = _download_once(url, partial, callback, expected_checksum)
+        except Exception as e:
+            partial.unlink(missing_ok=True)
+            if isinstance(e, _ChecksumMismatch) and attempt + 1 < attempts:
+                logger.warning("Retrying download of %s once after a checksum mismatch", url)
+                continue
+            raise OSError(f"Failed to download {url}: {e}") from e
         partial.rename(path)
         callback(size, total_int)
         if total_int is not None:
@@ -301,17 +489,22 @@ def download_image(
                 pass
         logger.info("Downloaded %s (%d bytes)", path, size)
         return path
-    except Exception as e:
-        if partial.exists():
-            partial.unlink(missing_ok=True)
-        raise OSError(f"Failed to download {url}: {e}") from e
+    raise AssertionError("unreachable: the retry loop always returns or raises")
 
 
 def ensure_image(path: Path) -> Path:
-    """Return path if the image file exists; otherwise try to download it.
+    """Return path if the image file exists and is trusted; otherwise try to download it.
 
-    If the file is missing, get_download_url(path) is used; when a URL is
-    available the image is downloaded to path. Otherwise, raises FileNotFoundError.
+    A cached image with a matching checksum sidecar (see _write_sidecar) is accepted on a
+    cheap size/mtime check, no re-hash. One without a sidecar is accepted as-is (no
+    retroactive verification) with a one-time warning. One whose sidecar no longer matches
+    is re-downloaded and re-verified, overwriting it.
+
+    If the file is missing (or was rejected above), get_download_url(path) is used; when a
+    URL is available the image is downloaded to path. A standard (Debian/Ubuntu) URL must
+    verify against a checksums file found beside it or the download is refused; a custom
+    PYSANDBOXES_QEMU_IMAGE_URL/_BASE_URL verifies against PYSANDBOXES_QEMU_IMAGE_SHA256 or a
+    neighbor checksums file when either is available, and otherwise downloads with a warning.
 
     Args:
         path: Path to the image file (typically from get_default_image_path()).
@@ -321,13 +514,32 @@ def ensure_image(path: Path) -> Path:
 
     Raises:
         FileNotFoundError: If the image does not exist and no download URL is set.
-        OSError: If download fails.
+        OSError: If download or checksum verification fails.
     """
     if path.is_file():
-        return path
+        if _sidecar_path(path).is_file():
+            if _sidecar_matches(path):
+                return path
+            logger.warning("Cached image %s no longer matches its checksum sidecar; re-downloading it", path)
+        else:
+            _warn_once(f"no-sidecar:{path}", f"Using cached image {path} without a checksum sidecar: not verified")
+            return path
     url = get_download_url(path)
     if url:
-        download_image(path, url)
+        custom_url = bool(
+            os.environ.get(ENV_VM_IMAGE_URL, "").strip() or os.environ.get(ENV_VM_IMAGE_BASE_URL, "").strip()
+        )
+        expected = _resolve_expected_checksum(url)
+        if expected is None:
+            if not custom_url:
+                raise OSError(
+                    f"No checksum could be verified for the standard image at {url}; refusing to download it "
+                    f"unverified. Set {ENV_VM_IMAGE_SHA256} or place the image manually."
+                )
+            _warn_once(f"unverified:{url}", f"{url}: image not verified (no checksum found)")
+        download_image(path, url, expected_checksum=expected)
+        if expected is not None:
+            _write_sidecar(path, *expected)
         return path
     dir_path = path.parent
     msg = (

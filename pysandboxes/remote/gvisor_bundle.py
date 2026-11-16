@@ -157,8 +157,8 @@ def build_oci_spec(
 
     The guest holds no capability and cannot gain one. It runs in the network namespace of the process
     that launches ``runsc``, which is private and filtered by then, so the spec adds no network namespace.
-    A path exposed both ways is read-only: the narrower right wins. A mask comes after the exposures, so it
-    covers what they bind.
+    A path exposed both ways is read-write: expose-rw implies visibility and read, so it is the broader
+    right and wins. A mask comes after the exposures, so it covers what they bind.
 
     pre: len(args) > 0
     pre: cwd.startswith('/')
@@ -174,8 +174,8 @@ def build_oci_spec(
     mounts: list[dict[str, Any]] = [{"destination": "/tmp", "type": "tmpfs", "source": "tmpfs", "options": ["rw"]}]
     if mount_proc:
         mounts.append({"destination": "/proc", "type": "proc", "source": "proc"})
-    read_only_by_path = {path: False for path in mounts_rw}
-    read_only_by_path.update({path: True for path in mounts_ro})
+    read_only_by_path = {path: True for path in mounts_ro}
+    read_only_by_path.update({path: False for path in mounts_rw})
     for path, read_only in sorted(read_only_by_path.items()):
         mounts.append(_bind(path, path, write=not read_only))
     for path, is_directory in masks:

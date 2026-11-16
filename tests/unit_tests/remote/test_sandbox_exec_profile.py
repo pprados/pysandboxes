@@ -78,8 +78,9 @@ def test_profile_denies_by_default_and_quotes_read_write_paths(tmp_path: Path) -
     assert f'(allow file-map-executable (subpath "{exposed}")' not in profile
 
 
-def test_a_path_exposed_both_ways_ends_up_read_only(tmp_path: Path) -> None:
-    """The narrower right wins, same as bwrap, unshare, firejail, gvisor and smolvm."""
+def test_a_path_exposed_both_ways_ends_up_read_write(tmp_path: Path) -> None:
+    """The broader right wins: expose-rw implies visibility and read, same as bwrap, unshare,
+    firejail, gvisor and smolvm."""
     shared = tmp_path / "shared"
     profile = _profile(
         tmp_path,
@@ -90,7 +91,7 @@ def test_a_path_exposed_both_ways_ends_up_read_only(tmp_path: Path) -> None:
     )
 
     assert f'(allow file-read* (subpath "{shared}")' in profile
-    assert f'(allow file-write* (subpath "{shared}")' not in profile
+    assert f'(allow file-write* (subpath "{shared}")' in profile
 
 
 def test_the_dev_directory_is_not_granted_only_the_devices_named_by_a_rule(tmp_path: Path) -> None:

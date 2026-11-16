@@ -473,13 +473,14 @@ class FireJailSSEDaemon(BaseSubProcessDaemon):
             if not skip_path:
                 (read_write_paths if rule.write else read_only_paths).append(rule.path)
 
-        # --read-write first, then --read-only last: firejail applies them in command-line
-        # order, last one wins, so a path exposed both ways ends up read-only, the narrower
-        # right winning, same as bwrap, unshare, gvisor and smolvm.
-        for path in read_write_paths:
-            args.append(f"--read-write={path}")
+        # --read-only first, then --read-write last: firejail applies them in command-line
+        # order, last one wins, so a path exposed both ways ends up read-write, since
+        # expose-rw implies visibility and read, so it is the broader right and wins, same
+        # as bwrap, unshare, gvisor and smolvm.
         for path in read_only_paths:
             args.append(f"--read-only={path}")
+        for path in read_write_paths:
+            args.append(f"--read-write={path}")
 
         # A --whitelist on a device rebuilds /dev from the listed files alone: multiprocessing loses its semaphores.
         if any(r.path.startswith("/dev/") for r in all_rules.file_rules if isinstance(r, FSExposeRule)):

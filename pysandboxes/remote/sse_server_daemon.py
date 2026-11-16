@@ -25,7 +25,7 @@ import traceback
 from asyncio import CancelledError, Task
 from dataclasses import dataclass
 from logging import getLogger
-from typing import Any, AsyncGenerator
+from typing import Any, AsyncGenerator, Iterator
 
 from uvicorn import Server
 
@@ -83,6 +83,43 @@ def _sse_msg(data: str) -> str:
         Properly formatted SSE message string.
     """
     return "data:" + data + "\n\n"
+
+
+# `json.dumps(..., ensure_ascii=True)` (the default, used below) makes every character of the
+# line ASCII, so its length in characters is also its size in bytes on the wire -- the same
+# count `check_sse_line` compares against `_SSE_LINE_LIMIT`. The worst case per source character
+# is a code point outside the Basic Multilingual Plane (e.g. an emoji): still one `str` character
+# in Python, which indexes by code point, so slicing never splits it, but escaped as a UTF-16
+# surrogate pair, two `\uXXXX` of 6 characters each, 12 in total. 32 KiB of raw characters, even
+# entirely such characters, escapes to at most 32768 * 12 = 393216 bytes, leaving the remaining
+# ~131 KiB of the budget for the JSON envelope -- comfortable, and `check_sse_line` below still
+# guards the result instead of trusting this margin alone.
+_STDIO_CHUNK_CHARS = 32 * 1024
+
+
+def _stdio_sse_messages(msg: dict[str, str]) -> Iterator[str]:
+    """Split one stdout/stderr write into SSE messages that each stay under the line budget.
+
+    A single ``print()`` can write megabytes in one call, and the parent's HTTP reader refuses a
+    line over the budget outright: one real write must become several SSE events in order
+    instead of one event the reader would never accept. The client has no "one event = one
+    write" assumption to preserve -- it prints each chunk with no added separator -- so splitting
+    changes nothing it can observe once reassembled.
+
+    Args:
+        msg: A single-key ``{"stdout": text}`` or ``{"stderr": text}`` message.
+
+    Yields:
+        One or more SSE-formatted messages, each already checked against the line budget.
+    """
+    ((kind, text),) = msg.items()
+    if not text:
+        yield _sse_msg(json.dumps(msg))
+        return
+    for start in range(0, len(text), _STDIO_CHUNK_CHARS):
+        reply = _sse_msg(json.dumps({kind: text[start : start + _STDIO_CHUNK_CHARS]}))
+        check_sse_line(reply)
+        yield reply
 
 
 async def sandbox_daemon(
@@ -149,14 +186,9 @@ async def sandbox_daemon(
                 break  # pragma: no mutate
             elif "exception" in msg or "done" in msg:
                 break
-            elif "stdout" in msg:
-                reply = _sse_msg(json.dumps(msg))
-                check_sse_line(reply)
-                yield reply
-            elif "stderr" in msg:
-                reply = _sse_msg(json.dumps(msg))
-                check_sse_line(reply)
-                yield reply
+            elif "stdout" in msg or "stderr" in msg:
+                for reply in _stdio_sse_messages(msg):
+                    yield reply
         result = await async_fut
         # Already streamed above as it was produced; the caller never reads it from this
         # final payload (it returns on "result"/"exception" first), so keeping it here would

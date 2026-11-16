@@ -139,11 +139,11 @@ class TestBwrapArgs:
         assert (str(tmp_path), str(tmp_path)) in _triples(args, "--bind")
         assert (str(writable), str(writable)) not in _triples(args, "--ro-bind")
 
-    def test_a_path_exposed_both_ways_ends_up_read_only(self, tmp_path: Path) -> None:
-        """The narrower right wins, same as gvisor and smolvm: the last bind on a path decides."""
+    def test_a_path_exposed_both_ways_ends_up_read_write(self, tmp_path: Path) -> None:
+        """expose-rw implies visibility and read, so it is the broader right: the last bind wins."""
         shared = tmp_path / "shared"
         rules = EmptyRules._replace(
-            file_rules=(FSExposeRule(str(shared), True, _CONFIG), FSExposeRule(str(shared), False, _CONFIG))
+            file_rules=(FSExposeRule(str(shared), False, _CONFIG), FSExposeRule(str(shared), True, _CONFIG))
         )
 
         args = _args(tmp_path, rules)
@@ -153,7 +153,17 @@ class TestBwrapArgs:
             for i, arg in enumerate(args)
             if arg in ("--bind", "--ro-bind") and i + 1 < len(args) and args[i + 1] == str(shared)
         ]
-        assert binds[-1] == "--ro-bind"
+        assert binds[-1] == "--bind"
+
+    def test_a_path_exposed_read_only_alone_cannot_be_written(self, tmp_path: Path) -> None:
+        """Negative control: without a matching expose-rw rule, the path stays read-only."""
+        shared = tmp_path / "shared"
+        rules = EmptyRules._replace(file_rules=(FSExposeRule(str(shared), False, _CONFIG),))
+
+        args = _args(tmp_path, rules)
+
+        assert (str(shared), str(shared)) not in _triples(args, "--bind")
+        assert (str(shared), str(shared)) in _triples(args, "--ro-bind")
 
     def test_an_ignored_file_is_masked_with_a_placeholder(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch

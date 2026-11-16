@@ -74,9 +74,10 @@ def guest_python_path(host_path: Iterable[str], exposed: Iterable[str], cwd: str
 def exposures(all_rules: AllRules, *, extra_ro: Iterable[str] = ()) -> tuple[list[str], list[str]]:
     """Return the host paths the guest receives, ``(read_only, read_write)``; ``extra_ro`` is what the provider adds.
 
-    A path exposed both ways stays read-only. A writable path must be a directory, as a share is one: a file is
-    reported and exposed read-only. What the image owns, the host's interpreter and a missing path are left out, and
-    so is a path smolvm refuses to share, which is reported.
+    A path exposed both ways ends up read-write: expose-rw implies visibility and read, so it is the broader
+    right and wins. A writable path must be a directory, as a share is one: a file is reported and exposed
+    read-only. What the image owns, the host's interpreter and a missing path are left out, and so is a path
+    smolvm refuses to share, which is reported.
     """
     write: dict[str, bool] = {}
     for rule in all_rules.file_rules:
@@ -94,7 +95,7 @@ def exposures(all_rules: AllRules, *, extra_ro: Iterable[str] = ()) -> tuple[lis
         if writable and not os.path.isdir(path):
             logger.warning("smolvm shares only directories read-write: %s is exposed read-only", path)
             writable = False
-        write[path] = write.get(path, True) and writable
+        write[path] = write.get(path, False) or writable
     ro = [path for path, writable in write.items() if not writable]
     rw = [path for path, writable in write.items() if writable]
     ro.extend(path for path in extra_ro if path not in ro and path not in rw)
