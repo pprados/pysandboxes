@@ -269,6 +269,32 @@ class TestApplyLandlock:
         assert grants[3] == ll.ACCESS_RO & recorder.attr("create").handled_access_fs
         assert grants[4] == grants[2]
 
+    def test_resolv_conf_is_covered_by_etc_already_granted_by_the_caller(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """`_collect_landlock_paths` always grants `/etc` when it exists, before `_apply_landlock`
+        adds its own DNS-resolver entries: a literal `/etc/resolv.conf` parent is already covered,
+        whatever the caller-supplied paths look like."""
+        recorder = _Recorder(monkeypatch, abi=4)
+
+        ll._apply_landlock([("/etc", False)])
+
+        opened = [path.decode() for path in recorder.opened]
+        assert opened.count("/etc") >= 1
+
+    def test_a_symlinked_resolv_conf_still_gets_its_real_directory_opened(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """systemd-resolved makes `/etc/resolv.conf` a symlink to `/run/systemd/resolve/...`: that
+        directory is not under `/etc` and no other rule grants it, so it needs its own entry."""
+        real_parent = Path("/etc/resolv.conf").resolve().parent
+        if real_parent == Path("/etc"):
+            pytest.skip("/etc/resolv.conf is not a symlink out of /etc on this host")
+        recorder = _Recorder(monkeypatch, abi=4)
+
+        ll._apply_landlock([("/etc", False)])
+
+        opened = [path.decode() for path in recorder.opened]
+        assert str(real_parent) in opened
+
     def test_the_ports_get_bind_and_connect_rights_and_a_port_without_rights_is_skipped(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
@@ -333,16 +359,17 @@ class TestProviderActivation:
 
         assert captured["paths"] == [("/a", True), ("/b", False)]
 
-    def test_the_resolver_directories_are_read_only(self, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_the_resolved_resolver_directory_is_read_only(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """`_apply_landlock` grants its own DNS-resolver addition read-only; a literal `/etc` is
+        the caller's job (`_collect_landlock_paths` always grants it when it exists)."""
         recorder = _Recorder(monkeypatch, abi=4)
 
         ll._apply_landlock([])
 
-        resolv_dirs = {str(Path("/etc/resolv.conf").resolve().parent), str(Path("/etc/resolv.conf").parent)}
+        directory = str(Path("/etc/resolv.conf").resolve().parent)
         opened = [path.decode() for path in recorder.opened]
-        for directory in resolv_dirs:
-            grant = recorder.adds()[opened.index(directory)][2]._obj.allowed_access
-            assert grant == ll.ACCESS_RO & recorder.attr("create").handled_access_fs
+        grant = recorder.adds()[opened.index(directory)][2]._obj.allowed_access
+        assert grant == ll.ACCESS_RO & recorder.attr("create").handled_access_fs
 
     def test_a_rule_on_a_device_gets_only_the_file_rights(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """The kernel refuses a directory right on a single file (EINVAL): a device rule is masked down."""

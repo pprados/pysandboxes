@@ -104,6 +104,56 @@ def _depth(node: ast.AST) -> int:
 # visitors.
 _IDENTIFIER_FIELDS = ("name", "asname", "arg", "names", "rest", "kwd_attrs")
 
+# The eleven builtin types CPython's MATCH_CLASS special-cases: a positional sub-pattern against
+# one of these binds the subject itself and never touches `__match_args__` or `getattr` at all --
+# `case int(a, b):` raises `TypeError` at runtime, not an attribute read. Every other class's
+# positional pattern resolves its attribute names from the matched class's own `__match_args__`,
+# a name the AST never spells out, so `visit_MatchClass` below has nothing to check it against.
+_MATCH_CLASS_SAFE_BUILTINS = frozenset(
+    {"bool", "bytearray", "bytes", "dict", "float", "frozenset", "int", "list", "set", "str", "tuple"}
+)
+
+_POSITIONAL_PATTERN_REMEDY = "No eval- rule grants this: use a keyword pattern instead (case C(attr=x), not case C(x))."
+
+# Fields that bind an identifier `_bound_names` below must count as a rebinding, beyond the
+# `ast.Name` Store/Del case: def and class names, parameters, import aliases, except names, and
+# the two match-capture node kinds that are not already `MatchClass` (`MatchAs`, `MatchStar`) or a
+# `**rest` capture in a mapping pattern.
+_BINDING_NODE_TYPES = (
+    ast.FunctionDef,
+    ast.AsyncFunctionDef,
+    ast.ClassDef,
+    ast.ExceptHandler,
+    ast.MatchAs,
+    ast.MatchStar,
+)
+
+
+def _bound_names(tree: ast.AST) -> frozenset[str]:
+    """Every identifier the evaluated source itself could bind, anywhere in it.
+
+    Conservative on purpose: a name assigned, imported, defined, taken as a parameter, or
+    captured by a pattern anywhere in the source is treated as shadowed everywhere in it,
+    regardless of control flow -- `visit_MatchClass` must never trust a bare class name as the
+    real builtin it is named after when the source could have rebound it, on any branch, before
+    or after the point in the source where it is read (`int = Spy` placed after the `match`, inside
+    a function the match statement's own branch calls, is no safer to trust than one placed before).
+    """
+    names: set[str] = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Name) and isinstance(node.ctx, (ast.Store, ast.Del)):
+            names.add(node.id)
+        elif isinstance(node, _BINDING_NODE_TYPES):
+            if node.name:
+                names.add(node.name)
+        elif isinstance(node, ast.arg):
+            names.add(node.arg)
+        elif isinstance(node, ast.alias):
+            names.add(node.asname or node.name.partition(".")[0])
+        elif isinstance(node, ast.MatchMapping) and node.rest:
+            names.add(node.rest)
+    return frozenset(names)
+
 
 class _Validator(ast.NodeVisitor):
     """Collect every violation instead of raising on the first.
@@ -112,13 +162,16 @@ class _Validator(ast.NodeVisitor):
     human or model.
     """
 
-    def __init__(self, rules: EvalRules) -> None:
+    def __init__(self, rules: EvalRules, bound_names: frozenset[str] = frozenset()) -> None:
         self.rules = rules
         self.violations: list[Violation] = []
         # The group of the nearest refused ancestor: its remedy already covers the nodes below it.
         self._refused_group: str | None = None
         # The nearest enclosing nodes that carry a position, for those that carry none (`comprehension`).
         self._positioned: list[ast.AST] = []
+        # Every name the whole source could rebind, computed once by `_bound_names`: a `MatchClass`
+        # pattern's class name is only trusted as a builtin when it is not one of these.
+        self._bound_names = bound_names
 
     def _add(self, node: ast.AST, message: str, remedy: str, warning: str = "") -> None:
         if not hasattr(node, "lineno") and self._positioned:
@@ -201,7 +254,27 @@ class _Validator(ast.NodeVisitor):
         because `kwd_attrs` is always a literal identifier list, never a name built at run time.
         Without this, `case object(gi_frame=f):` read the non-overridable `FRAME_CAPTURE` deny,
         and any other keyword attribute pattern read past `eval-attribute`/`eval-magic`.
+
+        A *positional* sub-pattern (`case C(x):`) has no such literal to check: the opcode
+        resolves its attribute name from `C.__match_args__` at runtime, which the AST never
+        spells out. Refused unless `C` is a literal `Name` for one of the eleven builtin types
+        CPython itself special-cases (`_MATCH_CLASS_SAFE_BUILTINS`) -- for those, and only with
+        at most one positional sub-pattern, the match binds the subject itself and never calls
+        `__match_args__`/`getattr` at all, so there is nothing to leak. A name the evaluated
+        source itself could rebind (`int = Spy`) is never trusted this way, whatever the control
+        flow: see `_bound_names`. An `Attribute` class name (`mod.int`) is refused outright, since
+        it is never one of these eleven literal names.
         """
+        if node.patterns:
+            cls = node.cls
+            safe = (
+                isinstance(cls, ast.Name)
+                and cls.id in _MATCH_CLASS_SAFE_BUILTINS
+                and cls.id not in self._bound_names
+                and len(node.patterns) <= 1
+            )
+            if not safe:
+                self._add(node, "a positional sub-pattern is not allowed", _POSITIONAL_PATTERN_REMEDY)
         for attr in node.kwd_attrs:
             if attr in FRAME_CAPTURE:
                 self._add(node, f"attribute {attr!r} is not allowed", _FRAME_CAPTURE_REMEDY)
@@ -254,7 +327,7 @@ def validate(tree: ast.AST, rules: EvalRules) -> list[Violation]:
     if depth > rules.max_depth:
         # The visit below recurses as deep as the tree: it is not run on a tree already refused for its depth.
         return [Violation(1, 0, f"the source nests {depth} levels deep", f"eval-max-depth={depth}")]
-    validator = _Validator(rules)
+    validator = _Validator(rules, _bound_names(tree))
     try:
         validator.visit(tree)
     except RecursionError:

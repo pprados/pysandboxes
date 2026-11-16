@@ -190,7 +190,6 @@ async def acatch_stdio(
     assert asyncio.get_event_loop() == get_sandbox_loop(), "Should be in sandbox loop"  # pragma: no mutate
     captured_stdout: io.StringIO = QueueStringIO(type="stdout", queue=sync_or_async_queue)
     captured_stderr: io.StringIO = QueueStringIO(type="stderr", queue=sync_or_async_queue)
-    fn_result: Any = None
 
     async def run_in_context() -> dict[str, Any]:
         """
@@ -198,8 +197,7 @@ async def acatch_stdio(
         Handles both sync and async functions and captures exceptions.
         """
         logger.debug("async run_in_context()...")
-        # Allows modification of eval_result from outer scope
-        nonlocal fn_result
+        fn_result: Any
         # Set the context variables for the current context
         sys.stdout.set_context(captured_stdout)  # type: ignore[union-attr]
         sys.stderr.set_context(captured_stderr)  # type: ignore[union-attr]

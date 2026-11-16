@@ -250,7 +250,7 @@ def suggest_package_installation(package_name: str) -> str:
     elif system == "win32":
         # For Windows, suggest Winget or Chocolatey
         return textwrap.dedent(f"""
-            You can try installing {package_name!r} using:")
+            You can try installing {package_name!r} using:
               winget install {package_name}            (Windows Package Manager)
               choco install {package_name}             (Chocolatey - if installed)
             You might need to install Winget or Chocolatey first if you don't have them.
@@ -279,9 +279,9 @@ def set_pdeathsig() -> None:
         libc = cdll.LoadLibrary("libc.so.6")
         result = libc.prctl(PR_SET_PDEATHSIG, signal.SIGTERM)
         if result != 0:
-            logging.warning("prctl(PR_SET_PDEATHSIG, SIGTERM) failed with code %s", result)
+            logger.warning("prctl(PR_SET_PDEATHSIG, SIGTERM) failed with code %s", result)
     except OSError:
-        logging.warning("prctl not available (not Linux or libc not found).")
+        logger.warning("prctl not available (not Linux or libc not found).")
 
 
 # Bound here, at import, because `pickle.loads` is a guard_api target: resolving
@@ -1183,6 +1183,7 @@ def get_systemd_resolved_static_dns() -> list[IPv4Address | IPv6Address]:
                     servers_found: list[str] = [re.split("[%#]", ip)[0] for ip in ip_list.split()]
                     dns_servers.extend([ipaddress.ip_address(ip) for ip in servers_found])
 
+        # Use a set to remove duplicates, then convert back to a list
         return list(set(dns_servers))
     except IOError as e:
         print(f"Error reading {config_path}: {e}")
@@ -1190,8 +1191,6 @@ def get_systemd_resolved_static_dns() -> list[IPv4Address | IPv6Address]:
     except Exception as e:
         print(f"An unexpected error occurred: {e}")
         return []
-
-    # Use a set to remove duplicates, then convert back to a sorted list
 
 
 def get_systemd_resolved_upstream_dns() -> list[IPv4Address | IPv6Address]:

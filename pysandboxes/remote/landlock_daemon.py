@@ -283,9 +283,11 @@ def _apply_landlock(
         raise OSError(errno, f"landlock_create_ruleset: errno {errno}")
 
     try:
-        # Add DNS resolver
+        # systemd-resolved makes /etc/resolv.conf a symlink to a path under /run/systemd/resolve/;
+        # that directory holds the real file and is not covered by the /etc grant
+        # _collect_landlock_paths always adds. A plain /etc/resolv.conf (no symlink) resolves to
+        # the same /etc already granted there, so only the resolved form is added here.
         paths.append((str(Path("/etc/resolv.conf").resolve().parent), False))
-        paths.append((str(Path("/etc/resolv.conf").parent), False))
 
         for path, write in paths:
             path = os.path.normpath(path)

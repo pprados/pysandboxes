@@ -270,6 +270,8 @@ class TestOnProcessLaunched:
                 "pid_file": str(tmp_path / "pid"),
                 "process_holder": daemon._slirp_process_holder,
                 "timeout": usd.SLIRP_WATCHER_TIMEOUT,
+                "provider": "unshare",
+                "on_crash": daemon._on_slirp_crash,
             }
             assert watcher["daemon"] is True
             assert watcher["started"] is True

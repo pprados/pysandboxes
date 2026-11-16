@@ -269,10 +269,10 @@ def find_free_port() -> int:
     # Use contextlib.closing to ensure the socket is properly closed
     try:
         with closing(socket.socket(socket.AF_INET, socket.SOCK_STREAM)) as s:
-            # The port number 0 tells the OS to find an ephemeral port
+            # The port number 0 tells the OS to find an ephemeral port, never one already bound
+            # elsewhere: SO_REUSEADDR (which only applies to this probe's own bind, closed right
+            # after) would change nothing here.
             s.bind(("", 0))
-            # Set SO_REUSEADDR option to allow reuse of the address
-            s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
             # Return the port number assigned by the OS
             return s.getsockname()[1]
     except socket.error as e:
@@ -662,10 +662,7 @@ class BaseSubProcessDaemon(BaseSSESandbox):
             "Subprocess launched (pid=%s), waiting for daemon (ping URL resolved each attempt)",
             self._process.pid,
         )
-        try:
-            await self._on_process_started()
-        except Exception:  # noqa: BLE001
-            raise
+        await self._on_process_started()
         # Wait the server
         gc.collect()
         ping_endpoint = self.endpoint or Endpoint(TCP, "127.0.0.1", port)

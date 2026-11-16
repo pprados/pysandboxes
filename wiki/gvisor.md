@@ -27,7 +27,9 @@
 3. The launcher loads the `iptables` filter built from the `net=` rules (default drop, only the resolver of `slirp4netns` allowed for DNS), then starts `runsc run` with `--network=host`: the guest uses the filtered namespace of its launcher.
 4. If the loopback, the filter or the config relay fails, the launcher exits and the guest never starts: the provider fails closed.
 
-The OCI spec is written under the run directory: read-only root, `/tmp` as a tmpfs, `/proc`, one bind per exposed path (read-only wins when a path is exposed both ways), and a mask over each path an `ignore=` rule hides. The environment of the guest is exactly the one the rules allow.
+If `slirp4netns` dies outside a deliberate shutdown (crash or an external kill, whatever the exit code), the watcher thread logs it and fails the daemon closed: every call made from that point on raises a clear error naming `slirp4netns`, instead of retrying or hanging against a network that is down for good; the network itself is not restarted, and a call already past that point when it happens still sees whatever the dead network gives it from inside the guest.
+
+The OCI spec is written under the run directory: read-only root, `/tmp` as a tmpfs, `/proc`, one bind per exposed path (read-write wins when a path is exposed both ways), and a mask over each path an `ignore=` rule hides. The environment of the guest is exactly the one the rules allow.
 
 ## Rules
 

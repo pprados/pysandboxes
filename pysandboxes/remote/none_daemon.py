@@ -27,11 +27,6 @@ class NoneDaemon(BaseDaemon):
     useful for debugging and testing without the complexity of IPC.
     """
 
-    # def __init__(self,
-    #              token:str,
-    #              **kwargs):
-    #     super().__init__(token,**kwargs)
-
     async def _start(
         self,
         all_rules: "AllRules",
@@ -102,11 +97,18 @@ class NoneDaemon(BaseDaemon):
         """
         raise NotImplementedError
 
-    async def async_call_in_sandbox(self, func: Callable[..., Any], *args: Any, **kwargs: Any) -> Any:
+    async def async_call_in_sandbox(
+        self,
+        func: Callable[..., Any],
+        _force_incomming: bool,
+        *args: Any,
+        **kwargs: Any,
+    ) -> Any:
         """Execute async function in sandbox.
 
         Args:
             func: Function to execute.
+            _force_incomming: Force incoming execution mode.
             args: Positional arguments.
             kwargs: Keyword arguments.
 

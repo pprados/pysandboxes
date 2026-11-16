@@ -164,6 +164,7 @@ def test_the_import_functions_are_patched() -> None:
         "importlib.__import__",
         "importlib.import_module",
         "importlib._bootstrap_external._LoaderBasics.exec_module",
+        "zipimport.zipimporter.load_module",
     }
 
 

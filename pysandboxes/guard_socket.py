@@ -877,7 +877,6 @@ def _check_address_with_rules(
     #     address, conn_direction.name, socket_kind.name)
     hostname, destination_port = address
 
-    # TODO: cache?
     if not isinstance(destination_port, int) or not (0 <= destination_port <= 65535):
         raise ValueError(f"Invalid port number: {destination_port}")
 

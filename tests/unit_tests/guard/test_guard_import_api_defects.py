@@ -15,6 +15,8 @@ import pickle
 import subprocess
 import sys
 import threading
+import zipfile
+import zipimport
 from contextlib import contextmanager
 from pathlib import Path
 from types import ModuleType
@@ -445,6 +447,53 @@ def test_a_real_import_through_find_spec_is_accepted_pyc_cache_included(
                 assert module.VALUE == 1  # type: ignore[attr-defined]
     finally:
         sys.modules.pop("ordinary_import", None)
+
+
+def _zip_with_module(tmp_path: Path, name: str, body: str = "MARKER = 1\n") -> str:
+    zip_path = tmp_path / f"{name}.zip"
+    with zipfile.ZipFile(zip_path, "w") as zf:
+        zf.writestr(f"{name}.py", body)
+    return str(zip_path)
+
+
+def test_zipimporter_load_module_called_directly_is_refused_in_the_users_code(tmp_path: Path) -> None:
+    """``zipimporter.load_module`` execs the module itself instead of delegating to
+    ``exec_module``, so it never reached ``find_spec``'s vetting at all -- unlike every other
+    loader's deprecated ``load_module``, which does through ``_load_module_shim``."""
+    zip_path = _zip_with_module(tmp_path, "zip_bypass")
+    importer = zipimport.zipimporter(zip_path)
+    with _import_rules():  # deny-all
+        with user_code():
+            with pytest.raises(RuleModuleNotFoundError, match="never vetted"):
+                importer.load_module("zip_bypass")
+
+
+def test_zipimporter_load_module_still_works_outside_the_users_code(tmp_path: Path) -> None:
+    """Only the user's own code is judged: framework and test-harness code that calls
+    ``load_module`` directly, as this suite's own fixtures sometimes do, keeps working."""
+    zip_path = _zip_with_module(tmp_path, "zip_framework")
+    importer = zipimport.zipimporter(zip_path)
+    try:
+        with _import_rules():  # deny-all; irrelevant outside user_code()
+            module = importer.load_module("zip_framework")
+        assert module.MARKER == 1  # type: ignore[attr-defined]
+    finally:
+        sys.modules.pop("zip_framework", None)
+
+
+def test_a_real_import_from_a_zip_on_sys_path_is_accepted(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Negative control: an ordinary, granted import of a module that lives in a zip on
+    ``sys.path`` must keep working -- ``find_spec`` resolves and vets ``zipimporter`` itself via
+    the shared ``exec_module``, which this fix does not touch."""
+    zip_path = _zip_with_module(tmp_path, "zip_ordinary_import")
+    monkeypatch.syspath_prepend(zip_path)
+    try:
+        with _import_rules("zip_ordinary_import"):
+            with user_code():
+                module = importlib.import_module("zip_ordinary_import")
+                assert module.MARKER == 1  # type: ignore[attr-defined]
+    finally:
+        sys.modules.pop("zip_ordinary_import", None)
 
 
 # 9. Small defects.

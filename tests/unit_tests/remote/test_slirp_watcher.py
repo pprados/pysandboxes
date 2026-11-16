@@ -460,7 +460,7 @@ class TestWatcher:
         assert "boom" not in caplog.text and "exited with code" not in caplog.text
         os.close(read_end)
 
-    def test_its_stderr_is_logged_as_an_error_and_a_bad_exit_as_a_warning(
+    def test_its_stderr_is_logged_as_an_error_and_the_exit_too(
         self, watcher: Any, caplog: pytest.LogCaptureFixture
     ) -> None:
         watcher.state["proc"] = _Proc(returncode=2, stderr=b"  cannot attach \n")
@@ -470,29 +470,50 @@ class TestWatcher:
 
         records = {(r.levelno, r.getMessage()) for r in caplog.records}
         assert (logging.ERROR, "slirp_watcher: slirp4netns stderr: cannot attach") in records
-        assert (logging.WARNING, "slirp_watcher: slirp4netns exited with code 2") in records
+        assert (
+            logging.ERROR,
+            "slirp_watcher: sandbox: slirp4netns (pid=555) exited unexpectedly with code 2: "
+            "network is down for this sandbox",
+        ) in records
         assert (logging.DEBUG, "slirp_watcher: slirp4netns exited with code 2") in records
         os.close(read_end)
 
-    @pytest.mark.parametrize("code", [0, -9])
-    def test_a_clean_or_killed_exit_is_not_a_warning(
+    @pytest.mark.parametrize("code", [0, -9, 2])
+    def test_an_exit_without_shutdown_requested_triggers_on_crash_whatever_the_code(
         self, watcher: Any, caplog: pytest.LogCaptureFixture, code: int
     ) -> None:
         watcher.state["proc"] = _Proc(returncode=code)
-
-        with caplog.at_level(logging.WARNING, logger=slirp.logger.name):
-            read_end, _ = watcher(child_pid=1)
-
-        assert caplog.records == []
-        os.close(read_end)
-
-    def test_an_exit_without_stderr_logs_no_error(self, watcher: Any, caplog: pytest.LogCaptureFixture) -> None:
-        watcher.state["proc"] = _Proc(returncode=0, stderr=b"")
+        crashes: list[int] = []
 
         with caplog.at_level(logging.ERROR, logger=slirp.logger.name):
-            read_end, _ = watcher(child_pid=1)
+            read_end, _ = watcher(child_pid=1, provider="unshare", on_crash=crashes.append)
 
-        assert caplog.records == []
+        assert crashes == [code]
+        assert any("network is down for this sandbox" in r.getMessage() for r in caplog.records)
+        assert any("unshare" in r.getMessage() for r in caplog.records)
+        os.close(read_end)
+
+    @pytest.mark.parametrize("code", [0, -9])
+    def test_an_exit_requested_by_shutdown_does_not_trigger_on_crash(
+        self, watcher: Any, caplog: pytest.LogCaptureFixture, code: int
+    ) -> None:
+        event = threading.Event()
+        event.set()
+        watcher.state["proc"] = _Proc(returncode=code)
+        crashes: list[int] = []
+
+        with caplog.at_level(logging.ERROR, logger=slirp.logger.name):
+            read_end, _ = watcher(child_pid=1, shutdown_event=event, on_crash=crashes.append)
+
+        assert crashes == []
+        assert not any("network is down for this sandbox" in r.getMessage() for r in caplog.records)
+        os.close(read_end)
+
+    def test_no_callback_is_still_safe_on_an_unexpected_exit(self, watcher: Any) -> None:
+        watcher.state["proc"] = _Proc(returncode=1)
+
+        read_end, _ = watcher(child_pid=1)
+
         os.close(read_end)
 
 
@@ -517,7 +538,14 @@ class TestWatcherEntryPoint:
 
         assert not pid_file.exists() and not sock.exists()
         assert seen["args"] == (event, 9, str(sock))
-        assert seen["kwargs"] == {"child_pid": 5, "pid_file": str(pid_file), "process_holder": None, "timeout": 7}
+        assert seen["kwargs"] == {
+            "child_pid": 5,
+            "pid_file": str(pid_file),
+            "process_holder": None,
+            "timeout": 7,
+            "provider": "sandbox",
+            "on_crash": None,
+        }
 
     def test_the_default_timeout_is_thirty_seconds(self, monkeypatch: pytest.MonkeyPatch) -> None:
         seen: dict[str, Any] = {}

@@ -16,6 +16,7 @@ import subprocess
 import tempfile
 import threading
 import time
+from collections.abc import Callable
 from pathlib import Path
 
 from ..all_rules import AllRules
@@ -163,6 +164,8 @@ def run_slirp_watcher(
     pid_file: str | None = None,
     process_holder: list[subprocess.Popen[bytes] | None] | None = None,
     timeout: int = SLIRP_WATCHER_TIMEOUT,
+    provider: str = "sandbox",
+    on_crash: Callable[[int], None] | None = None,
 ) -> None:
     """Background thread: run slirp4netns for the sandbox network namespace.
 
@@ -170,6 +173,10 @@ def run_slirp_watcher(
     after unshare starts) must be provided. Signals readiness by writing to
     pipe_w. Puts the Popen instance in process_holder[0] when started so the
     daemon can kill it on shutdown.
+
+    ``on_crash`` is called with the exit code when slirp4netns dies on its own, outside
+    ``shutdown_event``: the sandbox network is down for good from that point, and nothing
+    here restarts it.
     """
     try:
         _run_slirp_watcher(
@@ -180,6 +187,8 @@ def run_slirp_watcher(
             pid_file=pid_file,
             process_holder=process_holder,
             timeout=timeout,
+            provider=provider,
+            on_crash=on_crash,
         )
     finally:
         remove_slirp_temp_files(pid_file, api_socket)
@@ -194,6 +203,8 @@ def _run_slirp_watcher(
     pid_file: str | None = None,
     process_holder: list[subprocess.Popen[bytes] | None] | None = None,
     timeout: int = SLIRP_WATCHER_TIMEOUT,
+    provider: str = "sandbox",
+    on_crash: Callable[[int], None] | None = None,
 ) -> None:
     """Body of :func:`run_slirp_watcher`, which owns the temporary files it leaves."""
     if child_pid is not None:
@@ -267,8 +278,18 @@ def _run_slirp_watcher(
         logger.debug("slirp_watcher: slirp4netns exited with code %s", proc.returncode)
         if stderr_output:
             logger.error("slirp_watcher: slirp4netns stderr: %s", stderr_output.strip())
-        if proc.returncode not in (0, -9):
-            logger.warning("slirp_watcher: slirp4netns exited with code %s", proc.returncode)
+        # shutdown_event is not set, so this is not the daemon's own teardown (_kill_slirp sets it
+        # before killing slirp4netns): slirp4netns died on its own, crash or external kill (-9
+        # included, whatever the code), and nothing here brings the sandbox network back.
+        logger.error(
+            "slirp_watcher: %s: slirp4netns (pid=%d) exited unexpectedly with code %s: "
+            "network is down for this sandbox",
+            provider,
+            proc.pid,
+            proc.returncode,
+        )
+        if on_crash is not None:
+            on_crash(proc.returncode)
     except Exception:
         logger.exception("slirp_watcher: exception launching slirp4netns")
     finally:

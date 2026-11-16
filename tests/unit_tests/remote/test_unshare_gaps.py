@@ -6,8 +6,10 @@ import os
 from pathlib import Path
 from unittest.mock import Mock, patch
 
+import pytest
 
 from pysandboxes.all_rules import EmptyRules
+from pysandboxes.e import SandBoxProtocolError
 from pysandboxes.remote.unshare_setup import _ensure_mount_target
 from pysandboxes.remote.unshare_sse_daemon import UnshareSSEDaemon
 
@@ -95,3 +97,13 @@ class TestUnshareDaemon:
             daemon._kill_slirp()
 
         assert daemon._slirp_process_holder == [None]
+
+    def test_a_slirp_crash_makes_the_next_call_fail_with_a_clear_message(self) -> None:
+        daemon = UnshareSSEDaemon("tok")
+
+        daemon._on_slirp_crash(-9)
+
+        with pytest.raises(SandBoxProtocolError, match="slirp4netns exited unexpectedly"):
+            daemon.call_in_sandbox(lambda: None, False)
+        assert daemon._accept_incoming is False
+        assert daemon._is_started is False

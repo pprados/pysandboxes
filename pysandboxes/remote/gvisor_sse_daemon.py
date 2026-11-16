@@ -285,7 +285,9 @@ class GVisorSSEDaemon(BaseSubProcessDaemon):
         self._ready_file.unlink(missing_ok=True)
         self._ports_spec = slirp_extract_port_forwards(all_rules, self.port, log_wildcard=False)
         self._kill_slirp()
-        self._slirp_shutdown_event.clear()
+        # A fresh event for the watcher started next: the one above is set for good now, so a
+        # crash of the new slirp4netns must not be read against an already-set event.
+        self._slirp_shutdown_event = threading.Event()
         resolver_port = self._dns_session.start(all_rules)
         rules = (
             netfilter_rules(all_rules, self.port)
@@ -344,6 +346,8 @@ class GVisorSSEDaemon(BaseSubProcessDaemon):
                     "child_pid": pid,
                     "process_holder": self._slirp_process_holder,
                     "timeout": SLIRP_WATCHER_TIMEOUT,
+                    "provider": "gvisor",
+                    "on_crash": self._on_slirp_crash,
                 },
                 daemon=True,
             ).start()
@@ -387,6 +391,16 @@ class GVisorSSEDaemon(BaseSubProcessDaemon):
             bind_host="0.0.0.0",
         )
         return {"process_config": process_config, "on_launched": self._on_process_launched}
+
+    def _on_slirp_crash(self, returncode: int) -> None:
+        """slirp4netns died on its own: fail the daemon closed, like the watchdog does for a dead guest.
+
+        The next (or pending) call then raises this message instead of waiting for an answer
+        that can never come, or retrying against a sandbox that can no longer be reached.
+        """
+        self._failure = f"slirp4netns exited unexpectedly (code {returncode}): network is down for this sandbox."
+        self._accept_incoming = False
+        self._is_started = False
 
     def _kill_slirp(self) -> None:
         """Stop slirp4netns, which outlives its target and keeps the forwarded host ports, and remove its socket.

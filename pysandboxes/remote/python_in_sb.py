@@ -436,7 +436,7 @@ def python_in_sb(
     module_specs: _ModuleSpecs | None = None,
 ) -> int:
     try:
-        set_learning_path(all_rules.learning_path)  # TODO: may be duplicate of main_sandbox
+        set_learning_path(all_rules.learning_path)
         set_learning_mode(all_rules.learn)
         if not len(python_cmd):
             _python_interactive(all_rules, True)

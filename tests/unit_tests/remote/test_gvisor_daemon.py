@@ -13,7 +13,7 @@ from typing import Any, cast
 import pytest
 
 from pysandboxes.all_rules import EmptyRules
-from pysandboxes.e import SandBoxError
+from pysandboxes.e import SandBoxError, SandBoxProtocolError
 from pysandboxes.guard_files import FSExposeRule
 from pysandboxes.immutable_dict import ImmutableDict
 from pysandboxes.remote import gvisor_sse_daemon
@@ -199,6 +199,30 @@ class TestLaunchCommand:
         assert old.killed, "the slirp4netns of the previous start is still alive"
         assert daemon._slirp_process_holder[0] is None
         assert not daemon._slirp_shutdown_event.is_set(), "the watcher of the new start must not be told to stop"
+
+    def test_a_restart_gives_the_new_watcher_a_fresh_event(self, tmp_path: Path) -> None:
+        """The old watcher's event stays set for its own kill; the new watcher must not read it as a crash."""
+        (tmp_path / "run").mkdir()
+        daemon = GVisorSSEDaemon("token")
+        daemon.port = 4242
+        daemon._slirp_process_holder[0] = cast(Any, _FakeSlirp())
+        old_event = daemon._slirp_shutdown_event
+
+        daemon.subprocess_cmd(EmptyRules, {}, tmp_path / "run" / "pipe", tmp_path / "run")
+
+        assert old_event.is_set()
+        assert daemon._slirp_shutdown_event is not old_event
+        assert not daemon._slirp_shutdown_event.is_set()
+
+    def test_a_slirp_crash_makes_the_next_call_fail_with_a_clear_message(self) -> None:
+        daemon = GVisorSSEDaemon("token")
+
+        daemon._on_slirp_crash(-9)
+
+        with pytest.raises(SandBoxProtocolError, match="slirp4netns exited unexpectedly"):
+            daemon.call_in_sandbox(lambda: None, False)
+        assert daemon._accept_incoming is False
+        assert daemon._is_started is False
 
     def test_a_first_start_has_no_previous_slirp4netns_to_stop(self, tmp_path: Path) -> None:
         (tmp_path / "run").mkdir()

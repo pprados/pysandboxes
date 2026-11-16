@@ -2,6 +2,7 @@
 # License: Apache V2
 """The channel from the host to the firewall of a VM guest: what the guest runs, and what it refuses."""
 
+import inspect
 import json
 import socket
 from typing import Any
@@ -112,9 +113,61 @@ def test_the_helper_listens_when_it_is_started() -> None:
         free.bind(("127.0.0.1", 0))
         port = free.getsockname()[1]
 
-    helper = gl.start_helper(port, TOKEN, "/ipt")
+    helper = gl.start_helper(port, TOKEN, "/ipt", host="127.0.0.1")
     try:
         socket.create_connection(("127.0.0.1", port), timeout=1).close()
+    finally:
+        assert helper.stdin is not None
+        helper.stdin.close()
+        helper.wait(timeout=10)
+
+
+def test_the_default_host_is_not_every_interface() -> None:
+    """``serve()`` must not default to ``0.0.0.0`` (every guest interface).
+
+    Only the guest's user-mode-network address actually receives a connection QEMU's
+    hostfwd forwards (its loopback does not: an empty guest address in
+    ``hostfwd=tcp:127.0.0.1:P-:P`` targets the guest's NIC, not ``127.0.0.1`` inside it).
+    """
+    default = inspect.signature(gl.serve).parameters["host"].default
+
+    assert default not in ("0.0.0.0", "127.0.0.1")
+    assert default == gl.GUEST_USER_NET_ADDRESS
+
+
+def test_serve_binds_only_the_given_address_not_every_interface() -> None:
+    """A real bind to one loopback alias must refuse a connection aimed at a different one.
+
+    Proves the narrowing itself works (the old default, 0.0.0.0, would have accepted both).
+    The real QEMU hostfwd path (host 127.0.0.1 -> guest's user-net address) is not exercised
+    here -- no VM is started by this test.
+    """
+    server = gl.serve(0, TOKEN, "/ipt", host="127.0.0.2")
+    port = server.getsockname()[1]
+    try:
+        assert server.getsockname()[0] == "127.0.0.2"
+        socket.create_connection(("127.0.0.2", port), timeout=1).close()
+        with pytest.raises(OSError):
+            socket.create_connection(("127.0.0.1", port), timeout=1)
+    finally:
+        server.close()
+
+
+def test_the_helpers_host_override_reaches_the_real_subprocess() -> None:
+    """``start_helper``'s host override plumbs through the CLI to the real ``serve()`` call.
+
+    Same narrowing proof as above, through the actual subprocess entry point ``main()`` uses
+    in the guest, rather than calling ``serve()`` directly.
+    """
+    with socket.socket() as free:
+        free.bind(("127.0.0.2", 0))
+        port = free.getsockname()[1]
+
+    helper = gl.start_helper(port, TOKEN, "/ipt", host="127.0.0.2")
+    try:
+        socket.create_connection(("127.0.0.2", port), timeout=1).close()
+        with pytest.raises(OSError):
+            socket.create_connection(("127.0.0.1", port), timeout=1)
     finally:
         assert helper.stdin is not None
         helper.stdin.close()

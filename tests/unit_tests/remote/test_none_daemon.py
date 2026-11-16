@@ -89,6 +89,6 @@ async def test_it_refuses_to_run_anything_in_a_sandbox(daemon: NoneDaemon) -> No
     with pytest.raises(NotImplementedError):
         await daemon.join()
     with pytest.raises(NotImplementedError):
-        await daemon.async_call_in_sandbox(lambda: None)
+        await daemon.async_call_in_sandbox(lambda: None, False)
     with pytest.raises(NotImplementedError):
         daemon.call_in_sandbox(lambda: None, False)

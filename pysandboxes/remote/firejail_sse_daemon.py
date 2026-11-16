@@ -264,7 +264,6 @@ class FireJailSSEDaemon(BaseSubProcessDaemon):
                 firejail_param = rule.rule[len("firejail.") :]
                 if firejail_param.startswith("net="):
                     net = firejail_param.partition("=")[2]
-                    # TODO: check net?
                 elif firejail_param.startswith("seccomp="):
                     firejail_params["seccomp"] = firejail_param.partition("=")[2]
                 elif firejail_param.startswith("seccomp.keep="):
@@ -407,7 +406,7 @@ class FireJailSSEDaemon(BaseSubProcessDaemon):
 
         # Manage sys.executable
         bin_path: set[Path] = set()
-        bin_path = follow_links_executable(Path(sys.executable), bin_path)  # FIXME
+        bin_path = follow_links_executable(Path(sys.executable), bin_path)
         for p in bin_path:
             _follow_links(p, whitelist)
 
@@ -612,7 +611,6 @@ class FireJailSSEDaemon(BaseSubProcessDaemon):
             args.append("--x11=none")
 
         # Clean env variable
-        # TODO: remove dependencies ?
         args.extend(["/usr/bin/env", "-i"])
         for env, val in all_rules.envs.items():  # type: ignore[attr-defined]
             args.append(f"{env}={val}")

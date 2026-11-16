@@ -182,8 +182,7 @@ async def sandbox_daemon(
         while stdio_queue:
             msg = await stdio_queue.get()
             if "result" in msg:
-                result = msg
-                break  # pragma: no mutate
+                break
             elif "exception" in msg or "done" in msg:
                 break
             elif "stdout" in msg or "stderr" in msg:

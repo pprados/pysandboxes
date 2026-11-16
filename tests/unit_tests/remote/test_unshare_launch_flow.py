@@ -5,8 +5,8 @@
 import asyncio
 import errno
 import os
-import subprocess
 import pickle
+import subprocess
 import sys
 from pathlib import Path
 from typing import Any
@@ -294,6 +294,18 @@ class TestRestartFreesTheForwardedPorts:
         assert order == ["killed", "waited 5", "launched"]
         assert daemon._slirp_process_holder[0] is None
 
+    def test_a_restart_gives_the_new_watcher_a_fresh_event(self, flow: _Fixture) -> None:
+        """The old event, set for the kill above, must not make the new watcher read its own exit as a crash."""
+        daemon = _daemon()
+        daemon._slirp_process_holder[0] = Mock()
+        old_event = daemon._slirp_shutdown_event
+
+        flow.launch(daemon)
+
+        assert old_event.is_set()
+        assert daemon._slirp_shutdown_event is not old_event
+        assert not daemon._slirp_shutdown_event.is_set()
+
     def test_a_first_start_has_nothing_to_kill(self) -> None:
         daemon = _daemon()
 
@@ -337,6 +349,8 @@ class TestLaunchThreads:
             "pid_file": daemon._slirp_pid_file,
             "process_holder": daemon._slirp_process_holder,
             "timeout": usd.SLIRP_WATCHER_TIMEOUT,
+            "provider": "unshare",
+            "on_crash": daemon._on_slirp_crash,
         }
         assert watcher["daemon"] is True and watcher["started"] is True
 

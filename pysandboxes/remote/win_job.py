@@ -7,7 +7,9 @@ import sys
 from ctypes import wintypes
 from typing import Any
 
-_UI_LIMIT_FLAGS = 0x00000001 | 0x00000002 | 0x00000004 | 0x00000008 | 0x00000020 | 0x00000040 | 0x00000080
+# JOB_OBJECT_UILIMIT_HANDLES | _READCLIPBOARD | _WRITECLIPBOARD | _SYSTEMPARAMETERS | _DISPLAYSETTINGS |
+# _GLOBALATOMS | _DESKTOP | _EXITWINDOWS: every UI restriction the Job Object API defines.
+_UI_LIMIT_FLAGS = 0x00000001 | 0x00000002 | 0x00000004 | 0x00000008 | 0x00000010 | 0x00000020 | 0x00000040 | 0x00000080
 
 
 class _BasicLimitInformation(ctypes.Structure):
@@ -97,7 +99,10 @@ def assign(job: int, pid: int) -> None:
 
 
 def set_ui_restrictions(job: int) -> None:
-    """Restrict clipboard, desktop, global atoms, and system UI operations in a job."""
+    """Apply every UI restriction a Job Object offers: handles, clipboard, display settings,
+
+    global atoms, desktop, exit-windows, and system parameters.
+    """
     kernel32 = _kernel32()
     kernel32.SetInformationJobObject.argtypes = (wintypes.HANDLE, wintypes.INT, ctypes.c_void_p, wintypes.DWORD)
     restrictions = wintypes.DWORD(_UI_LIMIT_FLAGS)

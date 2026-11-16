@@ -433,6 +433,17 @@ def _refuse_unverified_loader(name: str) -> None:
     raise RuleModuleNotFoundError(f"Module named {name!r} was loaded through a loader the import guard never vetted")
 
 
+def _loader_is_unverified(loader: Any) -> bool:
+    """Whether `loader` must be refused as a route `find_spec` never vetted.
+
+    Only the user's own code is judged here, the same scope `_wrap_import` judges: outside
+    `user_code()`, the framework's own direct loader usage (e.g. `python_in_sb.py`'s package
+    loading, which vets its loader itself through `_judge_user_import`) is unaffected, as is
+    ordinary library and test-harness code that builds a loader for its own purposes.
+    """
+    return _activated and _user_scope.get() and not _in_framework_window() and loader not in _vetted_loaders
+
+
 def _wrap_loader_exec_module(func: Callable[..., Any]) -> Callable[..., Any]:
     """Wrap the `exec_module` every file-based and zip-based loader shares.
 
@@ -440,19 +451,37 @@ def _wrap_loader_exec_module(func: Callable[..., Any]) -> Callable[..., Any]:
     `SourceFileLoader`, `SourcelessFileLoader`, and `zipimport.zipimporter` alike, so patching
     this one method on the class covers all three: a caller who builds any of them directly,
     instead of letting `find_spec` resolve and vet it, never reaches a judged import at all
-    otherwise -- see `_vetted_loaders`.
-
-    Only the user's own code is judged here, the same scope `_wrap_import` judges: outside
-    `user_code()`, the framework's own direct loader usage (e.g. `python_in_sb.py`'s package
-    loading, which vets its loader itself through `_judge_user_import`) is unaffected, as is
-    ordinary library and test-harness code that builds a loader for its own purposes.
+    otherwise -- see `_vetted_loaders`. Every loader's deprecated `load_module` reaches this
+    same method through `importlib._bootstrap._load_module_shim`'s `_exec`/`_load`, except
+    `zipimporter`'s own -- see `_wrap_loader_load_module` below.
     """
 
     @guard_wraps(func)
     def wrapper(self: Any, module: ModuleType) -> Any:
-        if _activated and _user_scope.get() and not _in_framework_window() and self not in _vetted_loaders:
+        if _loader_is_unverified(self):
             _refuse_unverified_loader(getattr(module, "__name__", "?"))
         return func(self, module)
+
+    return wrapper
+
+
+def _wrap_loader_load_module(func: Callable[..., Any]) -> Callable[..., Any]:
+    """Wrap `zipimport.zipimporter.load_module`.
+
+    Every other loader's deprecated `load_module` is `importlib._bootstrap_external
+    ._LoaderBasics.load_module`, which calls `_bootstrap._load_module_shim`, itself calling
+    `_exec`/`_load`, which call `spec.loader.exec_module(module)` whenever the loader has one --
+    already guarded, above. `zipimporter` alone overrides `load_module` with its own `exec(code,
+    mod.__dict__)`, predating `exec_module`, so it never reaches that guarded method at all: a
+    direct `zipimporter(archive).load_module(name)` bypassed `python-import=` completely. Removed
+    from the stdlib in 3.15 (`DeprecationWarning` since 3.10); kept here while it still exists.
+    """
+
+    @guard_wraps(func)
+    def wrapper(self: Any, fullname: str) -> Any:
+        if _loader_is_unverified(self):
+            _refuse_unverified_loader(fullname)
+        return func(self, fullname)
 
     return wrapper
 
@@ -880,6 +909,7 @@ def patch_rules(learn: bool) -> dict[str, PatchFactory]:
         "importlib.__import__": _wrap_import,
         "importlib.import_module": _wrap_import_module,
         "importlib._bootstrap_external._LoaderBasics.exec_module": _wrap_loader_exec_module,
+        "zipimport.zipimporter.load_module": _wrap_loader_load_module,
     }
 
 

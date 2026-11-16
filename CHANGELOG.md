@@ -25,6 +25,7 @@
 
 ### Added
 
+- `unshare` and `gvisor`: a `slirp4netns` crash (or an external kill) outside a deliberate shutdown is now detected and logged, and fails the sandbox closed with a clear message instead of leaving every later call to retry or hang against a network that is down for good.
 - `with sandboxes():` no longer leaks a background thread running an idle event loop forever after the block exits, when it started with no event loop already running.
 - `with sandboxes(os_sandbox="none"):` (and the signal handler it installs) now actually stop the daemon on exit instead of believing, from that point on, that every later `with sandboxes():` in the same process is a nested call and never starting a real one.
 - A daemon whose shutdown fails is no longer mistaken for one still running: the next `with sandboxes():` now starts a real new daemon instead of reusing the dead one, and the original failure still reaches the caller.
@@ -51,9 +52,13 @@
 - The result channel's `data-only` mode now refuses a cyclic `OrderedDict`, `Counter` or `deque`, instead of letting it through unchecked because the three are also listed as opaque value types.
 - The sandbox daemon's own graceful-shutdown delay no longer blocks the event loop for its duration.
 - `python-sb`: a leading `--` before the script name on the sandboxed command line is no longer passed through as if it were the script itself.
+- `qemu` and `qemu-microvm`: the guest-side helper that applies a learned firewall address now listens only on the guest's user-mode-network address instead of every guest interface.
 - A loader built directly with `importlib.util.spec_from_file_location`/`module_from_spec` and run with `exec_module`, including under a forged spec name such as `"pysandboxes"`, no longer runs as a module in the user's own code without ever being judged by a `python-import=` rule.
 - `eval-*`: calling a stdlib entry point that forwards caller-supplied source to `compile`/`exec`/`eval` directly, such as `importlib.abc.InspectLoader.source_to_code`, `SourceFileLoader.get_code`, `code.InteractiveInterpreter.runsource`, `timeit.timeit` or `runpy.run_path`, no longer runs that source unguarded with no `eval-*` rule declared and no `python-api=ALLOW:dynamic-code` grant, instead of being mistaken for the library's own code generation.
 - `marshal.loads`/`marshal.load` are now refused like `eval`/`exec`/`compile` when called directly with no `eval-*` rule declared and no `python-api=ALLOW:dynamic-code` grant, instead of rebuilding and handing back a runnable code object unguarded.
+- `appcontainer`: the sandboxed process's Job Object now also restricts `DISPLAYSETTINGS`, completing the UI lockdown instead of leaving the host's display configuration reachable.
+- `zipimport.zipimporter.load_module`, called directly in the user's own code, no longer execs a zip member without ever being judged by a `python-import=` rule.
+- `eval-*`: a positional `case C(x):` pattern against anything but one of the eleven builtin types CPython's `MATCH_CLASS` opcode special-cases (`bool`, `bytearray`, `bytes`, `dict`, `float`, `frozenset`, `int`, `list`, `set`, `str`, `tuple`) is now refused instead of reading `C.__match_args__`'s attributes unguarded, past `eval-attribute` and even the non-overridable frame-capture deny; the keyword form `case C(attr=x):` is unaffected.
 
 ## [0.12.0] - 2026-11-13
 

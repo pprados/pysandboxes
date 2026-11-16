@@ -108,9 +108,6 @@ from .unshare_setup import UnshareSetupConfig
 logger = logging.getLogger(__name__)
 
 
-# TODO: handle slirp4netns crash
-
-
 class UnshareSSEDaemon(BaseSubProcessDaemon):
     """Unshare-based sandbox daemon with integrated namespace management.
 
@@ -449,7 +446,6 @@ class UnshareSSEDaemon(BaseSubProcessDaemon):
             "unshare",
             *unshare_flags,
             "--",
-            # "/usr/bin/bash" # FIXME
             sys.executable,
             "-m",
             "pysandboxes.remote.unshare_setup",
@@ -458,7 +454,7 @@ class UnshareSSEDaemon(BaseSubProcessDaemon):
         ]
 
         daemon_cmd = self._build_daemon_cmd()
-        args.extend(daemon_cmd)  # FIXME
+        args.extend(daemon_cmd)
 
         # Create slirp4netns temp files (shared helper)
         pid_file, api_socket = slirp_make_temp_files()
@@ -542,6 +538,8 @@ class UnshareSSEDaemon(BaseSubProcessDaemon):
                 "pid_file": self._slirp_pid_file_for_watcher,
                 "process_holder": self._slirp_process_holder,
                 "timeout": SLIRP_WATCHER_TIMEOUT,
+                "provider": "unshare",
+                "on_crash": self._on_slirp_crash,
             },
             daemon=True,
         ).start()
@@ -554,6 +552,16 @@ class UnshareSSEDaemon(BaseSubProcessDaemon):
                 args=(self._slirp_api_socket_for_watcher, self._ports_spec),
                 daemon=True,
             ).start()
+
+    def _on_slirp_crash(self, returncode: int) -> None:
+        """slirp4netns died on its own: fail the daemon closed, like the watchdog does for ``unshare`` itself.
+
+        The next (or pending) call then raises this message instead of waiting for an answer
+        that can never come, or retrying against a sandbox that can no longer be reached.
+        """
+        self._failure = f"slirp4netns exited unexpectedly (code {returncode}): network is down for this sandbox."
+        self._accept_incoming = False
+        self._is_started = False
 
     def _kill_slirp(self) -> None:
         """Terminate the slirp4netns process if it is still running, and the filtering resolver of the sandbox.
@@ -579,10 +587,16 @@ class UnshareSSEDaemon(BaseSubProcessDaemon):
         self._slirp_api_socket = None
 
     def _stop_previous_slirp(self) -> None:
-        """Stop the slirp4netns of a sandbox that died: it does not notice, and keeps the forwarded host ports."""
+        """Stop the slirp4netns of a sandbox that died: it does not notice, and keeps the forwarded host ports.
+
+        Sets the current watcher's shutdown event first, so its thread treats this kill as the
+        expected teardown it is, not a crash of its own. ``_launch`` replaces the event with a
+        fresh one for the watcher it starts next, so this one is never cleared back.
+        """
         previous = self._slirp_process_holder[0]
         if previous is None:
             return
+        self._slirp_shutdown_event.set()
         try:
             previous.kill()
             previous.wait(timeout=5)
@@ -763,6 +777,9 @@ class UnshareSSEDaemon(BaseSubProcessDaemon):
 
             # A restart: the sandbox that died left its slirp4netns running, holding the ports the new one forwards.
             await asyncio.to_thread(self._stop_previous_slirp)
+            # Fresh event for the watcher started below: the one above is set for good now, so a
+            # crash of this new slirp4netns must not be read against an already-set event.
+            self._slirp_shutdown_event = threading.Event()
 
             # Create slirp4netns temp files (shared helper)
             pid_file, api_socket = slirp_make_temp_files()
@@ -876,6 +893,8 @@ class UnshareSSEDaemon(BaseSubProcessDaemon):
                     "pid_file": pid_file,
                     "process_holder": self._slirp_process_holder,
                     "timeout": SLIRP_WATCHER_TIMEOUT,
+                    "provider": "unshare",
+                    "on_crash": self._on_slirp_crash,
                 },
                 daemon=True,
             ).start()

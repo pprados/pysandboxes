@@ -24,6 +24,13 @@ TIMEOUT = 10.0
 READY_TIMEOUT = 30.0
 _VERBS = ("-A", "-D")
 _CHAIN = "LEARNED"
+# QEMU's user-mode network (the project never overrides ``net=``/``dhcpstart=``): the guest's
+# single NIC always gets this address from slirp's built-in DHCP server. The host's hostfwd
+# (``hostfwd=tcp:127.0.0.1:P-:P``) leaves the guest address empty, which targets the guest's
+# NIC, not its loopback -- binding this server to 127.0.0.1 would silently refuse every
+# connection the host forwards, and binding to 0.0.0.0 would also accept one arriving on any
+# other guest interface.
+GUEST_USER_NET_ADDRESS = "10.0.2.15"
 
 
 def _run_iptables(argv: list[str]) -> int:
@@ -62,7 +69,11 @@ def _serve_one(conn: socket.socket, token: str, iptables: str, run: Callable[[li
 
 
 def serve(
-    port: int, token: str, iptables: str, run: Callable[[list[str]], int] = _run_iptables, host: str = "0.0.0.0"
+    port: int,
+    token: str,
+    iptables: str,
+    run: Callable[[list[str]], int] = _run_iptables,
+    host: str = GUEST_USER_NET_ADDRESS,
 ) -> socket.socket:
     """Listen on ``port`` in a daemon thread and return the listening socket (closing it ends the server)."""
     server = socket.socket()
@@ -92,14 +103,19 @@ def send(port: int, token: str, argv: list[str], host: str = "127.0.0.1") -> int
         return 1
 
 
-def start_helper(port: int, token: str, iptables: str) -> "subprocess.Popen[bytes]":
+def start_helper(port: int, token: str, iptables: str, host: str | None = None) -> "subprocess.Popen[bytes]":
     """Start the process that serves ``port``, and return once it listens.
 
     The token goes through its stdin, and closing the pipe ends it. The helper imports this package before it
     listens, which takes seconds on a guest: a program that resolved a name sooner would have its address refused.
+    ``host`` overrides the guest's user-mode-network address; production callers leave it unset so the real guest
+    binds to GUEST_USER_NET_ADDRESS, the one address a test outside a VM cannot bind to.
     """
+    argv = [sys.executable, "-c", "from pysandboxes.remote.guest_learned import main; main()", str(port), iptables]
+    if host is not None:
+        argv.append(host)
     helper = subprocess.Popen(
-        [sys.executable, "-c", "from pysandboxes.remote.guest_learned import main; main()", str(port), iptables],
+        argv,
         stdin=subprocess.PIPE,
         stdout=subprocess.PIPE,
         env={**os.environ, "PYTHONPATH": os.pathsep.join(p for p in sys.path if p)},
@@ -113,9 +129,10 @@ def start_helper(port: int, token: str, iptables: str) -> "subprocess.Popen[byte
 
 
 def main() -> None:
-    """Entry of the helper: ``port iptables`` as arguments, the token as the first line of stdin."""
+    """Entry of the helper: ``port iptables [host]`` as arguments, the token as the first stdin line."""
     port, iptables = int(sys.argv[1]), sys.argv[2]
+    host = sys.argv[3] if len(sys.argv) > 3 else GUEST_USER_NET_ADDRESS
     token = sys.stdin.readline().rstrip("\n")
-    serve(port, token, iptables)
+    serve(port, token, iptables, host=host)
     print("ready", flush=True)
     sys.stdin.read()

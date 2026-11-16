@@ -347,7 +347,9 @@ class BWrapSSEDaemon(BaseSubProcessDaemon):
             all_rules, process_config.port, self._dns_session.start(all_rules)
         )
         self._stop_previous_slirp()
-        self._slirp_shutdown_event.clear()
+        # Fresh event for the watcher started below: _stop_previous_slirp sets the one above for
+        # good, so an unrelated exit of the new slirp4netns must not be read against it.
+        self._slirp_shutdown_event = threading.Event()
         slirp_pipe_r, slirp_pipe_w = os.pipe()
         fd, api_socket = tempfile.mkstemp()
         os.close(fd)
@@ -744,10 +746,15 @@ class BWrapSSEDaemon(BaseSubProcessDaemon):
         self._accept_incoming = True
 
     def _stop_previous_slirp(self) -> None:
-        """Stop the slirp4netns of a sandbox that died: it does not notice, and keeps the forwarded host ports."""
+        """Stop the slirp4netns of a sandbox that died: it does not notice, and keeps the forwarded host ports.
+
+        Sets the current watcher's shutdown event first, so its thread treats this kill as the
+        expected teardown it is, not a crash of its own.
+        """
         previous = self._slirp_process_holder[0]
         if previous is None:
             return
+        self._slirp_shutdown_event.set()
         try:
             previous.kill()
             previous.wait(timeout=5)

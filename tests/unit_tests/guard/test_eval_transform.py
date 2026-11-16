@@ -268,6 +268,103 @@ def test_match_class_keyword_attribute_passes_once_granted() -> None:
     )
 
 
+_MATCH_POSITIONAL_SOURCE = "match x:\n    case {pattern}:\n        pass\n    case _:\n        pass\n"
+
+
+def test_match_class_positional_pattern_is_refused_by_default() -> None:
+    """`case User(a, b):` resolves its attribute names from `User.__match_args__` at runtime --
+    a name the AST never spells out, unlike the keyword form's literal `kwd_attrs` -- so there is
+    nothing here to check against `eval-attribute`/`eval-magic`, and it is refused outright."""
+    violations = _check(_MATCH_POSITIONAL_SOURCE.format(pattern="User(a, b)"), syntax=_match_syntax())
+    assert any("positional sub-pattern is not allowed" in v.message for v in violations)
+    assert any("case C(attr=x)" in v.remedy for v in violations)
+
+
+def test_match_class_positional_pattern_is_refused_even_when_the_attribute_is_granted() -> None:
+    """Granting `eval-attribute` does not open the positional form: the attribute name it would
+    read is not statically known, so there is nothing for that rule to check against."""
+    violations = _check(
+        _MATCH_POSITIONAL_SOURCE.format(pattern="User(a, b)"),
+        syntax=_match_syntax(),
+        attribute=_names("password_hash", "name"),
+    )
+    assert any("positional sub-pattern is not allowed" in v.message for v in violations)
+
+
+def test_match_class_keyword_pattern_still_reaches_the_denied_field() -> None:
+    """The keyword form names its attribute in the source, so the existing per-attribute check
+    still applies, unaffected by the new positional refusal."""
+    violations = _check(
+        "match x:\n    case User(password_hash=b):\n        pass\n    case _:\n        pass\n",
+        syntax=_match_syntax(),
+    )
+    assert any("eval-attribute=password_hash" in v.remedy for v in violations)
+    assert not any("positional" in v.message for v in violations)
+
+
+def test_match_class_keyword_pattern_passes_once_the_field_is_granted() -> None:
+    assert not _check(
+        "match x:\n    case User(name=a):\n        pass\n    case _:\n        pass\n",
+        syntax=_match_syntax(),
+        attribute=_names("name"),
+    )
+
+
+def test_match_class_positional_pattern_cannot_reach_a_frame_capture_attribute() -> None:
+    """The positional form never gets far enough to name an attribute at all -- any positional
+    pattern on a non-builtin class is refused outright, so the non-overridable `FRAME_CAPTURE`
+    deny the keyword form's own check already covers is unreachable here too."""
+    violations = _check(_MATCH_POSITIONAL_SOURCE.format(pattern="Spy(a)"), syntax=_match_syntax())
+    assert any("positional sub-pattern is not allowed" in v.message for v in violations)
+
+
+def test_match_class_positional_pattern_passes_for_a_single_capture_on_a_safe_builtin() -> None:
+    """CPython special-cases eleven builtin types: a positional pattern against one of them binds
+    the subject itself and never calls `__match_args__`/`getattr`, so there is nothing to guard."""
+    assert not _check(_MATCH_POSITIONAL_SOURCE.format(pattern="int(a)"), syntax=_match_syntax())
+    assert not _check(_MATCH_POSITIONAL_SOURCE.format(pattern="str(a)"), syntax=_match_syntax())
+
+
+def test_match_class_positional_pattern_is_refused_for_two_captures_on_a_safe_builtin() -> None:
+    """CPython itself refuses this at runtime (`int() accepts 1 positional sub-pattern (2
+    given)`), but the guard does not rely on that: two captures could never bind the subject
+    itself, so it is refused statically regardless."""
+    violations = _check(_MATCH_POSITIONAL_SOURCE.format(pattern="int(a, b)"), syntax=_match_syntax())
+    assert any("positional sub-pattern is not allowed" in v.message for v in violations)
+
+
+def test_match_class_positional_pattern_is_refused_for_a_dotted_class_name() -> None:
+    """`mod.int` is an `Attribute`, never a literal `Name`: it could resolve to anything at
+    runtime, so it is never trusted as one of the eleven safe builtins, whatever its text reads."""
+    violations = _check(_MATCH_POSITIONAL_SOURCE.format(pattern="mod.int(a)"), syntax=_match_syntax())
+    assert any("positional sub-pattern is not allowed" in v.message for v in violations)
+
+
+def test_match_class_positional_pattern_distrusts_a_builtin_name_the_source_rebinds() -> None:
+    """`int = Spy` anywhere in the source means `int` can no longer be trusted as the real
+    builtin by the time the pattern runs, whatever branch the assignment sits on."""
+    source = "int = Spy\n" + _MATCH_POSITIONAL_SOURCE.format(pattern="int(a)")
+    violations = _check(source, syntax=_match_syntax("Assign"), call=_names("Spy"))
+    assert any("positional sub-pattern is not allowed" in v.message for v in violations)
+
+
+def test_match_class_positional_pattern_is_refused_when_nested_in_a_sequence_pattern() -> None:
+    violations = _check(_MATCH_POSITIONAL_SOURCE.format(pattern="[User(a, b)]"), syntax=_match_syntax("MatchSequence"))
+    assert any("positional sub-pattern is not allowed" in v.message for v in violations)
+
+
+def test_match_class_positional_pattern_is_refused_when_nested_in_a_mapping_pattern() -> None:
+    violations = _check(_MATCH_POSITIONAL_SOURCE.format(pattern='{"k": User(a)}'), syntax=_match_syntax("MatchMapping"))
+    assert any("positional sub-pattern is not allowed" in v.message for v in violations)
+
+
+def test_match_class_positional_pattern_is_refused_when_nested_in_an_or_pattern() -> None:
+    violations = _check(
+        _MATCH_POSITIONAL_SOURCE.format(pattern="User(a) | None"), syntax=_match_syntax("MatchOr", "MatchSingleton")
+    )
+    assert any("positional sub-pattern is not allowed" in v.message for v in violations)
+
+
 def test_the_node_count_is_bounded() -> None:
     source = "[" + ", ".join("1" for _ in range(50)) + "]"
     violations = _check(source, syntax=_syntax(), max_nodes=10)

@@ -41,6 +41,8 @@ The daemon owns the **slirp4netns** lifecycle: after the `unshare` process start
 6. **Port forwarding**: From socket rules, **inbound ALLOW** TCP/UDP ports (plus the SSE port) are registered with slirp’s `add_hostfwd` API so host **127.0.0.1** reaches the guest on the same port (same mechanism as bwrap’s filtering mode).
 7. **main_sandbox**: Loads the config from the pipe, applies Python guards, starts the SSE server and serves RPC.
 
+If `slirp4netns` dies outside a deliberate shutdown (crash or an external kill, whatever the exit code), the watcher thread logs it and fails the daemon closed: every call made from that point on raises a clear error naming `slirp4netns`, instead of retrying or hanging against a network that is down for good; the network itself is not restarted, and a call already past that point when it happens still sees whatever the dead network gives it from inside the sandbox.
+
 ```mermaid
 flowchart LR
     subgraph Host ["Host"]

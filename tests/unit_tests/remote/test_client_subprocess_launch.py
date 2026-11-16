@@ -251,15 +251,12 @@ class TestFindFreePort:
         with socket.socket() as probe:
             probe.bind(("127.0.0.1", port))
 
-    def test_the_socket_is_bound_to_any_port_reusable_and_closed(self) -> None:
+    def test_the_socket_is_bound_to_any_port_then_closed(self) -> None:
         events: list[Any] = []
 
         class _Socket:
             def bind(self, address: Any) -> None:
                 events.append(("bind", address))
-
-            def setsockopt(self, *args: Any) -> None:
-                events.append(("setsockopt", args))
 
             def getsockname(self) -> tuple[str, int]:
                 return ("0.0.0.0", 5151)
@@ -272,7 +269,6 @@ class TestFindFreePort:
 
         assert events == [
             ("bind", ("", 0)),
-            ("setsockopt", (socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)),
             ("close",),
         ]
 
