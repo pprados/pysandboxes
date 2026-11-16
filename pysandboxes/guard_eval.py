@@ -748,6 +748,36 @@ _GATEWAY_EXCLUDED_FILE_PREFIXES: dict[str, str] = {
     "asyncio/__main__.py": "python -m asyncio's interactive REPL, a developer tool",
 }
 
+# pysandboxes' own dispatch of the sandboxed program's `-m` module: the Python-level stand-in for
+# the frame-less C-level call a plain `python -m pkg.mod` makes. A real `-m` launch has no Python
+# frame above the frozen import machinery, so the gateway walk below runs out of frames (or meets
+# another frozen one) and concludes ambient; `_python_module` inserts non-stdlib frames there
+# instead, which the walk would otherwise read as the application's own call site, denying the
+# `_compile_bytecode`/`marshal.loads` read of the entry module's own `.pyc` cache. Scoped to the
+# one-time frames that load the entry point -- the direct callers of `runpy.run_module` and of
+# `main_sandbox.py`'s own dispatch -- never to a frame of the entry point's code once it runs:
+# that code's own `eval`/`exec`/`compile`/`marshal.loads` calls still have the entry module's own
+# frame as their immediate caller, which matches none of these and stays judged. Keyed like
+# `_GATEWAYS`, resolved against the pysandboxes package root instead of the stdlib root.
+_FRAMEWORK_ROOT = str(Path(__file__).resolve().parent)
+_FRAMEWORK_GATEWAYS: frozenset[tuple[str, str]] = frozenset(
+    {
+        ("remote/python_in_sb.py", "_python_module"),
+        ("remote/python_in_sb.py", "python_in_sb"),
+        ("remote/main_sandbox.py", "main"),
+        ("remote/main_sandbox.py", "run_guest"),
+        ("remote/main_sandbox.py", "<module>"),
+    }
+)
+
+
+def _framework_key(filename: str) -> str | None:
+    """Return this frame's `_FRAMEWORK_GATEWAYS` key, or `None` when it is not under the package root."""
+    resolved = guard_files._safe_realpath(filename)
+    if resolved.startswith(_FRAMEWORK_ROOT):
+        return Path(resolved[len(_FRAMEWORK_ROOT) :].lstrip("/\\")).as_posix()
+    return None
+
 
 def is_ambient(frame: types.FrameType) -> bool:
     """Return whether this call is the runtime generating its own code.
@@ -798,6 +828,10 @@ def is_ambient(frame: types.FrameType) -> bool:
         filename = code.co_filename
         if filename.startswith(TAG_PREFIX):
             return False
+        framework_key = _framework_key(filename)
+        if framework_key is not None and (framework_key, code.co_qualname) in _FRAMEWORK_GATEWAYS:
+            current = current.f_back
+            continue
         module_key, resolved = _module_key(filename)
         if module_key is not None:
             if module_key in _GATEWAY_FILES or (module_key, code.co_qualname) in _GATEWAYS:

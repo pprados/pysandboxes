@@ -123,6 +123,56 @@ def test_every_gateway_table_entry_is_well_formed() -> None:
         assert qualname, module_key
 
 
+# ----------------------------------------------------------- framework's own `-m` dispatch
+
+
+def _pysandboxes_file(*parts: str) -> str:
+    """An absolute path to a real file under the pysandboxes package, for a frame that must
+    resolve against `_FRAMEWORK_ROOT` the same way a genuine one does."""
+    return str(Path(guard_eval.__file__).resolve().parent.joinpath(*parts))
+
+
+def test_the_m_dispatch_chain_through_python_in_sb_and_main_sandbox_stays_ambient() -> None:
+    """Pins the fix for the regression commit `02723db7` introduced: `_python_module` calls
+    `runpy.run_module` directly instead of the frame-less C-level `-m` dispatch a plain
+    `python -m pkg.mod` performs, so the entry module's `_compile_bytecode`/`marshal.loads` read
+    of its own `.pyc` cache used to land on a non-stdlib pysandboxes frame (`_python_module`'s own)
+    and be judged as if it were the application's own call site -- denying every `-m` launch under
+    every OS provider with no `python-api=ALLOW:dynamic-code` grant."""
+    python_in_sb_file = _pysandboxes_file("remote", "python_in_sb.py")
+    main_sandbox_file = _pysandboxes_file("remote", "main_sandbox.py")
+    frame = _frame_chain(
+        # Stands in for "ran out of frames": in a real `-m pysandboxes.remote.main_sandbox`
+        # launch, nothing but the frameless C-level interpreter entry sits above this chain. Any
+        # stdlib, non-gateway frame terminates the synthetic walk the same way, as the other
+        # tests in this file already rely on (e.g. the chain below ending at `_find_and_load`).
+        ("<frozen importlib._bootstrap>", "_find_and_load"),
+        (main_sandbox_file, "<module>"),
+        (main_sandbox_file, "main"),
+        (main_sandbox_file, "run_guest"),
+        (python_in_sb_file, "python_in_sb"),
+        (python_in_sb_file, "_python_module"),
+        ("<frozen runpy>", "run_module"),
+        ("<frozen runpy>", "_get_module_details"),
+        ("<frozen importlib._bootstrap_external>", "SourceLoader.get_code"),
+        ("<frozen importlib._bootstrap_external>", "_compile_bytecode"),
+    )
+    assert is_ambient(frame)
+
+
+def test_a_different_python_in_sb_function_is_not_treated_as_the_m_dispatch_gateway() -> None:
+    """Negative control: the exemption is scoped to the exact `-m` dispatch frames, not every
+    function in `python_in_sb.py`. `_python_script`/`_python_command` already launch the user's
+    code through the raw, unwrapped `exec`/`compile` captured before patching -- by design, never
+    reaching this guard at all -- and must never need this exemption either."""
+    python_in_sb_file = _pysandboxes_file("remote", "python_in_sb.py")
+    frame = _frame_chain(
+        (python_in_sb_file, "_python_script"),
+        ("<frozen importlib._bootstrap_external>", "_compile_bytecode"),
+    )
+    assert not is_ambient(frame)
+
+
 # ---------------------------------------------------------------- end-to-end, real activation
 
 

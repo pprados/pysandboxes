@@ -68,6 +68,7 @@
 - `eval-*`: a positional `case C(x):` pattern against anything but one of the eleven builtin types CPython's `MATCH_CLASS` opcode special-cases (`bool`, `bytearray`, `bytes`, `dict`, `float`, `frozenset`, `int`, `list`, `set`, `str`, `tuple`) is now refused instead of reading `C.__match_args__`'s attributes unguarded, past `eval-attribute` and even the non-overridable frame-capture deny; the keyword form `case C(attr=x):` is unaffected.
 - `gvisor` and `bwrap` now reserve their slirp4netns API socket path through the same helper `unshare` uses, instead of each duplicating the create-then-unlink dance inline.
 - `appcontainer`: a path's ACL is now granted or revoked on a verified, held-open handle instead of by name, closing a race where a junction or symlink swapped in after planning could redirect the change to another object.
+- Running a program with `-m` under any OS provider no longer denies `marshal.loads`/`builtins.compile` on the entry module's own bytecode cache with no `python-api=ALLOW:dynamic-code` grant declared, a regression that broke every `-m` launch.
 
 ## [0.12.0] - 2026-11-13
 
