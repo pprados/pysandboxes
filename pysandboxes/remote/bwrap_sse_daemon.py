@@ -687,10 +687,7 @@ class BWrapSSEDaemon(BaseSubProcessDaemon):
             self._process.pid,
             ping_url,
         )
-        try:
-            await self._on_process_started()
-        except Exception:
-            raise
+        await self._on_process_started()
         logger.info("Pinging subprocess daemon at %s", ping_url)
         gc.collect()
         ping_endpoint = self.endpoint or Endpoint(TCP, "127.0.0.1", port)
