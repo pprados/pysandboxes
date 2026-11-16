@@ -12,6 +12,7 @@ from pysandboxes.egress_filter import (
     FilteringResolver,
     LearnedTable,
     NameRule,
+    _question_end,
     answer_records,
     nxdomain,
     question_name,
@@ -38,6 +39,20 @@ def response(q: bytes, answers: list[tuple[int, int, bytes]], rcode: int = 0) ->
 
 def a_record(ip: str, ttl: int = 300) -> tuple[int, int, bytes]:
     return 1, ttl, IPv4Address(ip).packed
+
+
+def query_with_edns(name: str, bufsize: int, qtype: int = 1, ident: int = 0x1234) -> bytes:
+    """A query like :func:`query`, carrying an EDNS0 ``OPT`` record that advertises ``bufsize``."""
+    head = struct.pack(">HHHHHH", ident, 0x0100, 1, 0, 0, 1)
+    opt = b"\x00" + struct.pack(">HHIH", 41, bufsize, 0, 0)
+    return head + _name(name) + struct.pack(">HH", qtype, 1) + opt
+
+
+def response_to_edns_query(q: bytes, answers: list[tuple[int, int, bytes]], rcode: int = 0) -> bytes:
+    """Like :func:`response`, but ``q`` may carry extra records (an EDNS0 ``OPT``) after the question."""
+    head = q[:2] + struct.pack(">HHHHH", 0x8180 | rcode, 1, len(answers), 0, 0)
+    body = b"".join(b"\xc0\x0c" + struct.pack(">HHIH", t, 1, ttl, len(rd)) + rd for t, ttl, rd in answers)
+    return head + q[12 : _question_end(q)] + body
 
 
 class FakeEnforcer:
@@ -209,6 +224,40 @@ def test_oversized_udp_answer_is_truncated_and_tcp_returns_it_whole() -> None:
         assert not tcp[2] & 0x02 and len(answer_records(tcp)) == 59
 
     run(scenario, FilteringResolver(RULES, FakeEnforcer(), Upstream(many)))
+
+
+def test_edns_query_keeps_a_large_answer_whole_over_udp() -> None:
+    """A client that advertises an EDNS0 buffer larger than 512 bytes must not pay for a needless TCP
+    retry: the truncation threshold follows what the requester itself said it accepts, not a fixed 512.
+    """
+    many = [a_record(f"192.0.2.{i}") for i in range(1, 60)]
+
+    def upstream(packet: bytes) -> bytes:
+        return response_to_edns_query(packet, many)
+
+    async def scenario(_: FilteringResolver, port: int) -> None:
+        udp = await ask_udp(port, query_with_edns("api.example.com", 4096))
+        assert not udp[2] & 0x02
+        assert len(answer_records(udp)) == 59
+
+    run(scenario, FilteringResolver(RULES, FakeEnforcer(), upstream))
+
+
+def test_edns_query_with_a_tiny_buffer_still_gets_the_512_byte_floor() -> None:
+    """RFC 6891: a buffer size below 512 is floored to 512, not honored literally -- an answer that
+    exceeds the client's own tiny number but still fits in 512 bytes must not be truncated either.
+    """
+    few = [a_record(f"192.0.2.{i}") for i in range(1, 20)]
+
+    def upstream(packet: bytes) -> bytes:
+        return response_to_edns_query(packet, few)
+
+    async def scenario(_: FilteringResolver, port: int) -> None:
+        udp = await ask_udp(port, query_with_edns("api.example.com", 100))
+        assert not udp[2] & 0x02
+        assert len(answer_records(udp)) == len(few)
+
+    run(scenario, FilteringResolver(RULES, FakeEnforcer(), upstream))
 
 
 def test_expired_addresses_are_revoked_once() -> None:

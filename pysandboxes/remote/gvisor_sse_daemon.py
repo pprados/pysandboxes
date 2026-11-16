@@ -39,6 +39,7 @@ from .gvisor_launch import launcher_script, netfilter_rules, runtime_netfilter_r
 from .runtime_dns import RuntimeDnsSession
 from .slirp4netns_common import SLIRP_DNS, SLIRP_WATCHER_TIMEOUT
 from .slirp4netns_common import extract_port_forwards as slirp_extract_port_forwards
+from .slirp4netns_common import make_api_socket_path as slirp_make_api_socket_path
 from .slirp4netns_common import remove_slirp_temp_files as slirp_remove_temp_files
 from .slirp4netns_common import run_slirp_watcher as slirp_run_watcher
 from .slirp4netns_common import setup_port_forwarding as slirp_setup_port_forwarding
@@ -295,10 +296,7 @@ class GVisorSSEDaemon(BaseSubProcessDaemon):
             else runtime_netfilter_rules(all_rules, self.port, resolver_port)
         )
         (work / "rules").write_text("\n".join(rules) + "\n")
-        fd, api_socket = tempfile.mkstemp()
-        os.close(fd)
-        os.unlink(api_socket)
-        self._api_socket = api_socket
+        self._api_socket = slirp_make_api_socket_path()
 
         runsc_argv = [
             str(tools["runsc"]),

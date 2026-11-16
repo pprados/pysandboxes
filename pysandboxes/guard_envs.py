@@ -86,6 +86,7 @@ def parse_rules(
     # Between wildcards, the one with more fixed characters wins; a tie on different values is an error.
     wildcard_vars: dict[str, tuple[int, str | None, ConfigLine]] = {}
     wildcard_ties: dict[str, tuple[ConfigLine, ConfigLine]] = {}
+    exact_vars: dict[str, tuple[str | None, ConfigLine]] = {}
     unenv_patterns: list[GlobPattern] = []
     for orule in rules:
         if orule.rule.startswith("env="):
@@ -128,8 +129,21 @@ def parse_rules(
                 # Creating it empty would make os.getenv(key, default) return ""
                 # instead of the caller's default. A literal value is kept as
                 # written, so "key in os.environ" is True (e.g. My_ENV for tests).
-                if v or "${" not in value_pattern:
-                    new_vars[key_pattern] = v
+                effective = v if (v or "${" not in value_pattern) else None
+                previous_exact = exact_vars.get(key_pattern)
+                if previous_exact is not None and previous_exact[0] != effective:
+                    errors.append(
+                        (
+                            f"{format_ruleref(orule)}: {orule.rule!r} and "
+                            f"{format_ruleref(previous_exact[1])}: {previous_exact[1].rule!r} give "
+                            f"{key_pattern} different values. Remove one, or make them agree.",
+                            orule.path,
+                            orule.ln,
+                        )
+                    )
+                exact_vars[key_pattern] = (effective, orule)
+                if effective is not None:
+                    new_vars[key_pattern] = effective
                 envs_rules.add(EnvRule(_compile_key_pattern(key_pattern), orule))
         elif orule.rule.startswith("unenv="):
             remove_pattern = _compile_key_pattern(orule.rule[len("unenv=") :])
@@ -199,6 +213,10 @@ class LearnEnviron(os._Environ):
             self._unsure: WeakKeyDictionary[threading.Thread, list[str]] = WeakKeyDictionary()
             # The key a running scan just yielded
             self._yielded: WeakKeyDictionary[threading.Thread, str] = WeakKeyDictionary()
+            # How many scans are currently paused on each thread, one inside another's loop body.
+            # ``_scanned[t]`` alone cannot tell a paused outer scan from none at all: it reads just
+            # as empty right after its last yielded key was read back.
+            self._scan_depth: WeakKeyDictionary[threading.Thread, int] = WeakKeyDictionary()
             self._keys_used: set[str] = set()
             # Keys the code set or removed itself: reading one back needs no rule
             self._written: set[str] = set()
@@ -207,9 +225,23 @@ class LearnEnviron(os._Environ):
     def __iter__(self) -> Iterator[str]:
         root_iter = super().__iter__()
         t = threading.current_thread()
-        self._commit_unsure(t)
+        # A scan started while another is still paused on this thread (one nested inside the
+        # other's loop body) must not overwrite that outer scan's own bookkeeping: its remaining
+        # entries, last-yielded key and pending-unsure reads are saved here and restored once this
+        # (inner) scan ends, instead of being clobbered for the rest of the outer scan's lifetime.
+        nested = self._scan_depth.get(t, 0) > 0
+        outer_scanned = self._scanned.get(t)
+        outer_yielded = self._yielded.get(t)
+        outer_unsure = self._unsure.get(t)
+        if not nested:
+            # No enclosing scan is paused here: a leftover scan, if any, was abandoned without
+            # finishing, so whatever reads it kept aside were real uses after all.
+            self._commit_unsure(t)
+        self._scan_depth[t] = self._scan_depth.get(t, 0) + 1
         scanned: list[str] = []
         self._scanned[t] = scanned
+        self._unsure.pop(t, None)
+        self._yielded.pop(t, None)
 
         def _catch_for_all() -> Generator[Any, None, None]:
             try:
@@ -218,7 +250,15 @@ class LearnEnviron(os._Environ):
                     self._yielded[t] = k
                     yield k
             finally:
+                self._scan_depth[t] = self._scan_depth.get(t, 1) - 1
                 self._yielded.pop(t, None)
+                if nested:
+                    assert outer_scanned is not None  # nested implies a paused outer scan set this
+                    self._scanned[t] = outer_scanned
+                    if outer_yielded is not None:
+                        self._yielded[t] = outer_yielded
+                    if outer_unsure is not None:
+                        self._unsure[t] = outer_unsure
 
         return _catch_for_all()
 

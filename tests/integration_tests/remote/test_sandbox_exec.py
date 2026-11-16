@@ -124,6 +124,43 @@ print('files-ok')
     assert result.stdout.strip() == "files-ok"
 
 
+def test_ignore_pattern_with_a_literal_caret_class_denies_the_class_not_its_negation(tmp_path: Path) -> None:
+    """``ignore=file[^abc]`` means fnmatch's literal class {'^','a','b','c'} as the last
+    character -- fnmatch has no ``^``-negation syntax of its own, only ``!`` -- not "any
+    character except a, b or c". A translator passing the class through unescaped has Seatbelt
+    read the leading ``^`` as its own negation instead, denying the opposite set."""
+    exposed = tmp_path / "exposed"
+    exposed.mkdir()
+    denied_names = ("file^", "filea", "fileb", "filec")
+    allowed_name = "filed"
+    for name in (*denied_names, allowed_name):
+        (exposed / name).write_text(name, encoding="utf-8")
+    rules = (
+        FSExposeRule(str(exposed), False, _line(f"expose-ro={exposed}")),
+        IgnoreRule(str(exposed / "file[^abc]"), _line(f"ignore={exposed}/file[^abc]")),
+    )
+    profile = _profile(tmp_path, file_rules=rules)
+    code = f"""
+from pathlib import Path
+exposed = Path({str(exposed)!r})
+denied = []
+for name in {denied_names!r}:
+    try:
+        (exposed / name).read_text()
+        denied.append(False)
+    except PermissionError:
+        denied.append(True)
+assert all(denied), denied
+(exposed / {allowed_name!r}).read_text()
+print('caret-class-ok')
+"""
+
+    result = _run(tmp_path, profile, code)
+
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.strip() == "caret-class-ok"
+
+
 def test_outbound_port_filter_has_a_positive_and_negative_control(tmp_path: Path) -> None:
     servers: list[socket.socket] = []
     for _ in range(2):

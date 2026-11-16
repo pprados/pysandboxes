@@ -193,6 +193,33 @@ def answer_records(packet: bytes) -> list[tuple[IPAddress, int]]:
     return records
 
 
+def requester_udp_size(packet: bytes) -> int:
+    """The UDP payload size a query's EDNS0 ``OPT`` record advertises, or the classic 512 without one.
+
+    An ``OPT`` pseudo-record (type 41) in the additional section of a query carries the requester's own
+    buffer size in its class field (RFC 6891): a reply must not be truncated below what the requester
+    itself said it accepts over UDP, or every answer over 512 bytes pays for an unneeded TCP retry.
+    """
+    try:
+        offset = _question_end(packet)
+        if offset is None:
+            return _UDP_LIMIT
+        answers, authorities, additional = struct.unpack(">HHH", packet[6:12])
+        for _ in range(answers + authorities):
+            offset = _skip_name(packet, offset)
+            offset += 10 + struct.unpack(">H", packet[offset + 8 : offset + 10])[0]
+        for _ in range(additional):
+            offset = _skip_name(packet, offset)
+            rtype, rclass = struct.unpack(">HH", packet[offset : offset + 4])
+            size = struct.unpack(">H", packet[offset + 8 : offset + 10])[0]
+            if rtype == 41:
+                return max(_UDP_LIMIT, rclass)
+            offset += 10 + size
+    except (IndexError, struct.error):
+        pass
+    return _UDP_LIMIT
+
+
 def _truncate(reply: bytes) -> bytes:
     flags = struct.unpack(">H", reply[2:4])[0] | 0x0200
     return reply[:2] + struct.pack(">HHHHH", flags, 1, 0, 0, 0) + reply[_HEADER : _question_end(reply)]
@@ -298,7 +325,7 @@ class FilteringResolver:
         except Exception:
             logger.warning("egress filter: %s withheld, upstream or enforcer failed", name, exc_info=True)
             return servfail(packet)
-        return _truncate(reply) if udp and len(reply) > _UDP_LIMIT else reply
+        return _truncate(reply) if udp and len(reply) > requester_udp_size(packet) else reply
 
     async def _serve_tcp(self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
         try:

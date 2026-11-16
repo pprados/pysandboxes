@@ -10,7 +10,12 @@ import pytest
 
 from pysandboxes.all_rules import EmptyRules
 from pysandboxes.guard_socket import Action, Direction, Kind, SocketMask, SocketRule
-from pysandboxes.remote.slirp4netns_common import extract_port_forwards, remove_slirp_temp_files
+from pysandboxes.remote.slirp4netns_common import (
+    extract_port_forwards,
+    make_api_socket_path,
+    make_slirp_temp_files,
+    remove_slirp_temp_files,
+)
 from pysandboxes.sb_types import ConfigLine
 
 _ANY = IPv4Network("0.0.0.0/0")
@@ -72,6 +77,36 @@ class TestExtractPortForwards:
             _spec(_rule(Action.ALLOW, (Direction.IN,), range(1, 65536)), log_wildcard=False)
 
         assert caplog.text == ""
+
+
+class TestMakeApiSocketPath:
+    def test_the_returned_path_does_not_exist_yet(self) -> None:
+        path = make_api_socket_path()
+        try:
+            assert not Path(path).exists()
+            assert Path(path).parent.is_dir()
+        finally:
+            remove_slirp_temp_files(None, path)
+
+    def test_two_calls_never_collide(self) -> None:
+        first = make_api_socket_path()
+        second = make_api_socket_path()
+        try:
+            assert first != second
+        finally:
+            remove_slirp_temp_files(None, first)
+            remove_slirp_temp_files(None, second)
+
+
+class TestMakeSlirpTempFiles:
+    def test_the_pid_file_exists_and_the_api_socket_does_not(self) -> None:
+        pid_file, api_socket = make_slirp_temp_files()
+        try:
+            assert Path(pid_file).exists()
+            assert not Path(api_socket).exists()
+            assert pid_file != api_socket
+        finally:
+            remove_slirp_temp_files(pid_file, api_socket)
 
 
 class TestRemoveSlirpTempFiles:

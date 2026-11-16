@@ -2,7 +2,9 @@
 # License: Apache V2
 """Tests for macOS Seatbelt profile generation."""
 
+import fnmatch
 import os
+import re
 import stat
 import threading
 import time
@@ -21,6 +23,7 @@ from pysandboxes.remote.sandbox_exec_daemon import (
     SandboxExecSSEDaemon,
     _build_profile,
     _feed_profile,
+    _glob_regex,
     _ignore_paths,
     _network_ports,
     _network_rules,
@@ -521,3 +524,82 @@ def test_the_profile_writer_thread_is_a_daemon_thread(tmp_path: Path) -> None:
     daemon.release_sandbox_temp()
 
     assert thread.call_args.kwargs["daemon"] is True
+
+
+# `_glob_regex` targets Seatbelt's regex engine, not Python's, but compiling its output with
+# `re` and comparing against `fnmatch.fnmatchcase` -- the semantics `ignore=` patterns are
+# documented to follow -- catches a translation that silently drifts from what a pattern
+# author wrote, on any OS. The character-class cases were additionally confirmed against the
+# real Seatbelt engine, on a macOS VM, during this fix (see CHANGELOG.md / the PR notes).
+_GLOB_REGEX_PATTERNS = (
+    "*.pyc",
+    "__pycache__",
+    "?.tmp",
+    "[abc]",
+    "[!abc]",
+    "[]abc]",
+    "[!]abc]",
+    "[^abc]",
+    "[abc^]",
+    "[[ab]",
+    "a(b)c",
+    "x{y}z",
+    "a+b",
+    "a|b",
+    "a$b",
+    "a.b",
+    "no_wildcard",
+)
+_GLOB_REGEX_CANDIDATES = (
+    "a",
+    "b",
+    "c",
+    "d",
+    "]",
+    "^",
+    "[",
+    "ab",
+    "abc",
+    "a.pyc",
+    "q.pyc",
+    "__pycache__",
+    "x.tmp",
+    "a(b)c",
+    "aXb)c",
+    "x{y}z",
+    "a+b",
+    "a|b",
+    "a$b",
+    "a.b",
+    "aXb",
+    "no_wildcard",
+    "no_wildcardX",
+)
+
+
+@pytest.mark.parametrize("pattern", _GLOB_REGEX_PATTERNS)
+def test_glob_regex_matches_fnmatch_over_a_candidate_corpus(pattern: str) -> None:
+    compiled = re.compile(_glob_regex(pattern))
+    for candidate in _GLOB_REGEX_CANDIDATES:
+        expected = fnmatch.fnmatchcase(candidate, pattern)
+        actual = bool(compiled.match(candidate))
+        assert actual == expected, f"{pattern=} {candidate=}: fnmatch={expected} _glob_regex={actual}"
+
+
+def test_glob_regex_does_not_turn_a_literal_caret_class_into_negation() -> None:
+    """`[^abc]` means the literal class {'^','a','b','c'} to fnmatch -- it has no negation
+    syntax of its own `!` -- but an unescaped leading '^' is negation to a regex engine."""
+    compiled = re.compile(_glob_regex("[^abc]"))
+    assert compiled.match("^")
+    assert compiled.match("a")
+    assert not compiled.match("d")
+
+
+def test_glob_regex_keeps_a_wildcard_inside_a_leading_bracket_literal() -> None:
+    """A `*` right after a literal leading ']' is still inside the class to fnmatch, not a
+    match-anything wildcard let loose outside it by a translator that closed the class early."""
+    compiled = re.compile(_glob_regex("[]*]"))
+    assert compiled.match("]")
+    assert compiled.match("*")
+    assert not compiled.match("x")
+    assert not compiled.match("**")

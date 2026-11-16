@@ -302,6 +302,18 @@ def _run_slirp_watcher(
             pass
 
 
+def make_api_socket_path() -> str:
+    """Return a free path for slirp4netns's API socket, for it to create fresh as a Unix socket.
+
+    ``mkstemp`` reserves a unique name; the immediate ``unlink`` leaves nothing there for slirp4netns
+    to bind a socket onto. The caller removes it afterwards, through :func:`remove_slirp_temp_files`.
+    """
+    fd, api_socket = tempfile.mkstemp()
+    os.close(fd)
+    os.unlink(api_socket)
+    return api_socket
+
+
 def make_slirp_temp_files() -> tuple[str, str]:
     """Create temporary pid file and API socket path for slirp4netns.
 
@@ -311,10 +323,7 @@ def make_slirp_temp_files() -> tuple[str, str]:
     """
     fd, pid_file = tempfile.mkstemp()
     os.close(fd)
-    fd, api_socket = tempfile.mkstemp()
-    os.close(fd)
-    os.unlink(api_socket)
-    return pid_file, api_socket
+    return pid_file, make_api_socket_path()
 
 
 def remove_slirp_temp_files(pid_file: str | None, api_socket: str | None) -> None:

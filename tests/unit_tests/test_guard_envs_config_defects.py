@@ -95,6 +95,25 @@ def test_two_wildcards_as_specific_with_the_same_value_agree() -> None:
     }
 
 
+@pytest.mark.parametrize(
+    "lines",
+    [
+        ("env=DUMMY_KEY=one", "env=DUMMY_KEY=two"),
+        ("env=DUMMY_KEY=two", "env=DUMMY_KEY=one"),
+    ],
+)
+def test_two_exact_rules_with_different_values_are_an_error(lines: tuple[str, str]) -> None:
+    errors = _env_errors(*lines)
+    assert len(errors) == 1
+    assert "DUMMY_KEY" in errors[0]
+    assert "profile(1)" in errors[0] and "profile(2)" in errors[0]
+
+
+def test_two_exact_rules_with_the_same_value_agree() -> None:
+    """A negative control for the check above: a repeated, consistent rule is not a contradiction."""
+    assert _envs("env=DUMMY_KEY=same", "env=DUMMY_KEY=same") == {"DUMMY_KEY": "same"}
+
+
 @pytest.mark.parametrize("settle", ["env=DUMMY_KEY=exact", "unenv=DUMMY_KEY"])
 def test_an_exact_rule_or_unenv_settles_two_wildcards_as_specific(settle: str) -> None:
     envs = _envs("env=*_KEY=one", "env=DUMM*=two", settle)

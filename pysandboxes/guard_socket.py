@@ -65,6 +65,7 @@ from typing import (
     Iterator,
     NamedTuple,
     TypeAlias,
+    TypeGuard,
     cast,
 )
 
@@ -1435,15 +1436,31 @@ def _socket_add_learning_rule(
         add_learning_rule(rule)
 
 
+_INET_FAMILIES = (socket.AF_INET, socket.AF_INET6)
+
+
+def _is_inet_address(address: Any, sock: Any) -> TypeGuard[tuple[str, int] | tuple[str, int, int, int]]:
+    """Whether ``address`` is the host/port pair a ``net=`` rule can judge.
+
+    Several address families share this very ``(str, int, ...)`` shape without meaning a hostname and a
+    port at all: AF_PACKET (interface name, protocol number), AF_BLUETOOTH (device address, PSM/channel)
+    among them. Judging one of those as a hostname either resolves a DNS query for a string that was never
+    a name, or reaches ``Kind(sock.type)`` with a socket type no ``net=`` rule can name. The family, not
+    the shape alone, decides whether an endpoint is one a ``net=`` rule could ever cover.
+    """
+    return (
+        isinstance(address, tuple)
+        and len(address) >= 2
+        and isinstance(address[0], str)
+        and isinstance(address[1], int)
+        and getattr(sock, "family", None) in _INET_FAMILIES
+    )
+
+
 def _wrap_socket_bind(func: Callable) -> Callable:
     @guard_wraps(func)
     def wrapper(self: Any, address: Adresse_Type) -> None:
-        if (
-            isinstance(address, tuple)
-            and len(address) >= 2
-            and isinstance(address[0], str)
-            and isinstance(address[1], int)
-        ):
+        if _is_inet_address(address, self):
             if is_learning_mode():
                 _socket_add_learning_rule(
                     self,
@@ -1514,12 +1531,7 @@ def _wrap_socket_listen(func: Callable) -> Callable:
 def _wrap_socket_connect(func: Callable) -> Callable:
     @guard_wraps(func)
     def wrapper(self: Any, address: Adresse_Type) -> None:
-        if (
-            isinstance(address, tuple)
-            and len(address) >= 2
-            and isinstance(address[0], str)
-            and isinstance(address[1], int)
-        ):
+        if _is_inet_address(address, self):
             if is_learning_mode():
                 _socket_add_learning_rule(
                     self,
@@ -1553,12 +1565,7 @@ def _wrap_socket_connect(func: Callable) -> Callable:
 def _wrap_socket_connect_ex(func: Callable) -> Callable:
     @guard_wraps(func)
     def wrapper(self: Any, address: Adresse_Type) -> int:
-        if (
-            isinstance(address, tuple)
-            and len(address) >= 2
-            and isinstance(address[0], str)
-            and isinstance(address[1], int)
-        ):
+        if _is_inet_address(address, self):
             if is_learning_mode():
                 _socket_add_learning_rule(
                     self,
@@ -1592,7 +1599,7 @@ def _check_send_address(self: Any, address: _Address, operation: str) -> _Addres
     A send with an address reaches it on every type: a datagram goes there, and on TCP ``MSG_FASTOPEN``
     makes ``sendto``/``sendmsg`` connect to it.
     """
-    if isinstance(address, tuple) and len(address) >= 2 and isinstance(address[0], str) and isinstance(address[1], int):
+    if _is_inet_address(address, self):
         if self.type not in (Kind.TCP.value, Kind.UDP.value):
             # A net= rule speaks TCP or UDP only, so no rule can be evaluated
             # for any other type -- SOCK_RAW above all -- and the whitelist

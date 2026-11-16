@@ -45,25 +45,42 @@ def _sbpl_string(value: str) -> str:
 
 
 def _glob_regex(pattern: str) -> str:
-    """Translate the fnmatch wildcards used by ignore= to a whole-path regex."""
+    """Translate the fnmatch wildcards used by ignore= to a whole-path regex.
+
+    Scans a character class the way CPython's ``fnmatch.translate`` does: a leading ``!``
+    negates it, and a ``]`` that immediately follows ``[`` or ``[!`` is a literal member, not
+    the terminator -- so ``[]abc]`` is the four-member class ``]abc``, not an empty ``[]``
+    followed by the literal text ``abc]`` (which would also leak any ``*``/``?`` inside the
+    class past the scan, as the match-anything wildcards they are everywhere else, instead of
+    the literal characters fnmatch means there). A literal leading ``^`` or ``[`` -- as
+    opposed to the ``!`` negation marker -- is escaped, since an unescaped ``^`` there is read
+    by the regex engine as negation, not as the character fnmatch means.
+    """
     result = ["^"]
     index = 0
-    while index < len(pattern):
+    length = len(pattern)
+    while index < length:
         char = pattern[index]
         if char == "*":
             result.append(".*")
         elif char == "?":
             result.append(".")
         elif char == "[":
-            end = pattern.find("]", index + 1)
-            if end >= 0:
-                content = pattern[index + 1 : end]
-                if content.startswith("!"):
-                    content = "^" + content[1:]
-                result.append("[" + content.replace("\\", "\\\\") + "]")
-                index = end
-            else:
+            start = index + 1
+            negated = start < length and pattern[start] == "!"
+            if negated:
+                start += 1
+            j = start + 1 if start < length and pattern[start] == "]" else start
+            while j < length and pattern[j] != "]":
+                j += 1
+            if j >= length:
                 result.append(r"\[")
+            else:
+                content = pattern[start:j].replace("\\", "\\\\")
+                if content[:1] in ("^", "["):
+                    content = "\\" + content
+                result.append("[" + ("^" if negated else "") + content + "]")
+                index = j
         elif char in r".\+(){}^$|":
             result.append("\\" + char)
         else:

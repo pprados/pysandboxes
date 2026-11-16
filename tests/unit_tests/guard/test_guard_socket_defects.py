@@ -548,6 +548,45 @@ def test_sendto_refuses_a_list_destination_as_an_unsupported_shape() -> None:
         wrapped(_FakeSocket(SocketKind.SOCK_DGRAM), b"x", ["127.0.0.1", 9999])
 
 
+# %% 1b. Address families that share the (str, int) shape of an INET endpoint
+
+
+@pytest.mark.skipif(not hasattr(socket, "AF_PACKET"), reason="AF_PACKET is Linux-only")
+@pytest.mark.parametrize("operation", ["bind", "connect", "connect_ex", "sendto"])
+def test_af_packet_address_is_refused_not_misjudged_as_a_hostname(operation: str) -> None:
+    """AF_PACKET's address is (interface name, protocol number): the exact ``(str, int)`` shape a net=
+    rule judges for AF_INET. Before the fix, the interface name was resolved as if it were a hostname --
+    a DNS lookup for "eth0" -- or reached ``Kind(self.type)`` with a socket type no net= rule can name,
+    instead of a clean refusal for an address family no net= rule can ever cover.
+    """
+    _arm("net=ALLOW|*|*|*|OUT")  # Deliberately permissive: the refusal must come from the family, not the rule.
+    sock = _FakeSocket(SocketKind.SOCK_DGRAM, family=AddressFamily.AF_PACKET)
+    wrapped = patch_rules(learn=False)[f"socket.socket.{operation}"](lambda *a, **k: None)
+
+    with pytest.raises(SandBoxError, match="unsupported address") as refused:
+        if operation == "sendto":
+            wrapped(sock, b"x", ("eth0", 0))
+        else:
+            wrapped(sock, ("eth0", 0))
+    assert sandbox_denials(refused.value)
+
+
+def test_an_inet_address_of_the_same_shape_is_still_judged_by_the_rules() -> None:
+    """Negative control for the test above: the family check must not widen into refusing every
+    ``(str, int)`` address. An AF_INET socket's address has the identical shape (hostname, port); it must
+    keep reaching the net= rules -- allowed when one covers it, refused when none does -- exactly as
+    before the fix.
+    """
+    _arm("net=ALLOW|TCP|127.0.0.1|9999|OUT")
+    wrapped = patch_rules(learn=False)["socket.socket.connect"](lambda *a, **k: None)
+    sock = _FakeSocket(SocketKind.SOCK_STREAM, family=AddressFamily.AF_INET)
+
+    wrapped(sock, ("127.0.0.1", 9999))  # Allowed by the rule: no exception.
+
+    with pytest.raises(RuleSocketConnectionRefusedError):
+        wrapped(sock, ("127.0.0.1", 1))  # A different port: still judged, and still refusable.
+
+
 def test_sendmsg_with_fewer_than_three_trailing_args_defers_to_the_builtin() -> None:
     """``sendmsg(buffers, ancdata)`` -- the documented minimal form -- carries no address to judge."""
     calls: list[tuple[Any, ...]] = []

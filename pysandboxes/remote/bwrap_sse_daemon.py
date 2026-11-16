@@ -22,7 +22,6 @@ import signal
 import site
 import subprocess
 import sys
-import tempfile
 import threading
 import time
 from collections.abc import Callable
@@ -68,6 +67,9 @@ from .slirp4netns_common import (
 )
 from .slirp4netns_common import (
     extract_port_forwards as slirp_extract_port_forwards,
+)
+from .slirp4netns_common import (
+    make_api_socket_path as slirp_make_api_socket_path,
 )
 from .slirp4netns_common import (
     run_slirp_watcher as slirp_run_watcher,
@@ -351,9 +353,7 @@ class BWrapSSEDaemon(BaseSubProcessDaemon):
         # good, so an unrelated exit of the new slirp4netns must not be read against it.
         self._slirp_shutdown_event = threading.Event()
         slirp_pipe_r, slirp_pipe_w = os.pipe()
-        fd, api_socket = tempfile.mkstemp()
-        os.close(fd)
-        os.unlink(api_socket)
+        api_socket = slirp_make_api_socket_path()
         self._slirp_api_socket = api_socket
 
         def on_launched(pid: int) -> None:

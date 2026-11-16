@@ -52,6 +52,27 @@ def test_a_missing_path_is_reported_as_an_os_error(tmp_path: Path) -> None:
         appcontainer_acl._grant_dacl(tmp_path / "missing", _ALL_APPLICATION_PACKAGES, appcontainer_acl._MODIFY, False)
 
 
+def test_a_junction_swapped_in_for_the_planned_path_is_refused(tmp_path: Path) -> None:
+    decoy = tmp_path / "decoy"
+    decoy.mkdir()
+    link = tmp_path / "link"
+    subprocess.run(["cmd", "/c", "mklink", "/J", str(link), str(decoy)], check=True, capture_output=True)
+
+    with pytest.raises(OSError, match="reparse point"):
+        appcontainer_acl._grant_dacl(link, _ALL_APPLICATION_PACKAGES, appcontainer_acl._READ_EXECUTE, False)
+
+
+def test_a_plain_directory_is_granted_normally(tmp_path: Path) -> None:
+    """Negative control for test_a_junction_swapped_in_for_the_planned_path_is_refused: a plain directory,
+    not a reparse point, must still be granted."""
+    plain = tmp_path / "plain"
+    plain.mkdir()
+
+    appcontainer_acl._grant_dacl(plain, _ALL_APPLICATION_PACKAGES, appcontainer_acl._READ_EXECUTE, False)
+
+    assert appcontainer_acl._has_allow_ace(plain, (_ALL_APPLICATION_PACKAGES,), appcontainer_acl._READ_EXECUTE)
+
+
 _PACKAGE = "S-1-15-2-1"
 _RUNTIME = "S-1-15-3-4096"
 _OTHER = "S-1-5-32-545"

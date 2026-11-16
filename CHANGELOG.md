@@ -26,12 +26,17 @@
 ### Added
 
 - `unshare` and `gvisor`: a `slirp4netns` crash (or an external kill) outside a deliberate shutdown is now detected and logged, and fails the sandbox closed with a clear message instead of leaving every later call to retry or hang against a network that is down for good.
+- `smolvm`: a symlinked path already present in the guest image no longer stops the guest's init script under `set -e`; the link is now forced into place instead.
+- `qemu-microvm`: the cached kernel/initrd pair extracted from the guest image now gets a checksum sidecar, like the image download does, so a corrupted or tampered cache entry is re-extracted instead of trusted as-is.
 - `with sandboxes():` no longer leaks a background thread running an idle event loop forever after the block exits, when it started with no event loop already running.
 - `with sandboxes(os_sandbox="none"):` (and the signal handler it installs) now actually stop the daemon on exit instead of believing, from that point on, that every later `with sandboxes():` in the same process is a nested call and never starting a real one.
 - A daemon whose shutdown fails is no longer mistaken for one still running: the next `with sandboxes():` now starts a real new daemon instead of reusing the dead one, and the original failure still reaches the caller.
 - Reject `port=` values above 65535 at config parsing instead of letting the sandbox daemon crash later with an opaque `OverflowError` from `socket.bind()`.
 - A corrupted or hostile `ImmutableDict` pickle stream with a non-hashable key now raises `ValueError` like every other malformed stream, instead of `TypeError`.
+- `sandbox-exec`: an `ignore=` pattern with a literal `^` in a `[...]` character class (e.g. `[^abc]`, fnmatch's literal class, not a regex negation) is now translated to a Seatbelt regex that denies that class, instead of one that Seatbelt reads as negated and denies the opposite set of names.
 - `net-resolve=runtime`: a host name whose first resolution attempt needed the socket's own type to succeed is now learned and opened like any other allowed name, instead of being refused by the default policy.
+- The network guard now refuses `bind()`, `connect()`, `connect_ex()` and `sendto()` on an `AF_PACKET` (and similarly-shaped) address with a clean refusal instead of resolving its interface name as a hostname or crashing on its socket type.
+- `net-resolve=runtime`'s filtering DNS resolver now honors a client's own EDNS0 buffer size instead of always truncating a UDP answer over 512 bytes, so a resolver-aware program no longer pays for a needless TCP retry.
 - `eval-max-alloc` now also refuses an integer multiplication (`a * b`) in evaluated source whose result would exceed it, and reports every such refusal, including the pre-existing `**` and `<<` ones, without converting the oversized operand to decimal, which used to raise `ValueError` instead of the refusal itself once past CPython's own int-to-str digit limit.
 - A `case Cls(name=binding):` keyword attribute pattern in evaluated source is now checked against `eval-attribute`/`eval-magic` and the non-overridable frame-capture deny, closing the route `gi_frame`, `__class__` and any other attribute took around `__sb_getattr__` through the `MATCH_CLASS` opcode's own, unguarded `getattr`.
 - `locals()` in evaluated source is now refused like `globals()`, instead of handing back the live namespace: evaluated code rebinding `locals()["__sb_tick__"]` used to silence every later tick, defeating `eval-max-iterations` and leaving only the cooperative timeout standing.
@@ -42,6 +47,8 @@
 - `bwrap`, `unshare`, `firejail`, `sandbox-exec`, `gvisor` and `smolvm`: a path exposed both `expose-ro` and `expose-rw` now ends up read-write, the broader right (`expose-rw`) winning, instead of read-only.
 - `qemu` and `qemu-microvm`: the guest working directory is now shell-quoted in the bootstrap script instead of interpolated raw into `cd "..."`, closing a shell-injection route for a mount path containing a quote or a newline.
 - `qemu`: a redirect from `https://` to `http://` while downloading the guest image is now refused instead of silently followed.
+- Two `env=` rules giving the same exact variable different values are now rejected at parse time with a clear error, instead of the last one silently winning.
+- Learning mode no longer mistakes a read-back of a paused `os.environ` iteration for a real use when another iteration is nested inside it; only variables the code actually reads are now learned.
 - `bwrap`, `unshare`, `firejail`, `qemu` and `qemu-microvm`: an `ignore=` pattern now also hides a match under every `expose-ro=`/`expose-rw=` path, not only under the current directory, matching `gvisor` and `smolvm`.
 - `qemu` and `qemu-microvm`: a host path or image path containing a comma is now escaped before being placed in a `-virtfs`/`-fsdev`/`-drive` argument, instead of letting the comma start an unintended QEMU sub-option (e.g. turning a read-only mount writable); an unknown `qemu.virtfs_security_model` value now falls back to the default instead of being forwarded as-is.
 - `qemu`: the downloaded guest image is now hashed while it streams to disk and verified against a checksums file fetched next to it (or `PYSANDBOXES_QEMU_IMAGE_SHA256` for a custom URL), refusing a standard Debian/Ubuntu download outright when no digest is available, retrying once on a mismatch, and checking the byte count against `Content-Length` even without a checksum; a verified cached image gets a `.sha256` sidecar so a later run only re-checks its size and mtime instead of re-hashing it.
@@ -59,6 +66,8 @@
 - `appcontainer`: the sandboxed process's Job Object now also restricts `DISPLAYSETTINGS`, completing the UI lockdown instead of leaving the host's display configuration reachable.
 - `zipimport.zipimporter.load_module`, called directly in the user's own code, no longer execs a zip member without ever being judged by a `python-import=` rule.
 - `eval-*`: a positional `case C(x):` pattern against anything but one of the eleven builtin types CPython's `MATCH_CLASS` opcode special-cases (`bool`, `bytearray`, `bytes`, `dict`, `float`, `frozenset`, `int`, `list`, `set`, `str`, `tuple`) is now refused instead of reading `C.__match_args__`'s attributes unguarded, past `eval-attribute` and even the non-overridable frame-capture deny; the keyword form `case C(attr=x):` is unaffected.
+- `gvisor` and `bwrap` now reserve their slirp4netns API socket path through the same helper `unshare` uses, instead of each duplicating the create-then-unlink dance inline.
+- `appcontainer`: a path's ACL is now granted or revoked on a verified, held-open handle instead of by name, closing a race where a junction or symlink swapped in after planning could redirect the change to another object.
 
 ## [0.12.0] - 2026-11-13
 

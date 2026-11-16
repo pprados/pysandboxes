@@ -2,6 +2,7 @@
 # License: Apache V2
 """Boot extraction tests using small real partitioned cloud-image layouts."""
 
+import hashlib
 import multiprocessing
 import shutil
 import subprocess
@@ -54,6 +55,42 @@ def test_discovers_partition_and_reuses_complete_cache(image: Path) -> None:
     assert boot.ensure_microvm_boot_artifacts(image, {})[0].read_bytes() == b"kernel"
     image.touch()
     assert boot.ensure_microvm_boot_artifacts(image, {})[0] != kernel
+
+
+def test_the_cached_pair_gets_a_checksum_sidecar_each(image: Path) -> None:
+    kernel, initrd = boot.ensure_microvm_boot_artifacts(image, {})
+
+    for path in (kernel, initrd):
+        sidecar = path.with_name(path.name + ".sha256")
+        assert sidecar.is_file()
+        algorithm, digest, *_ = sidecar.read_text(encoding="utf-8").strip().split(":")
+        assert algorithm == "sha256"
+        assert digest == hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def test_a_stale_sidecar_triggers_a_fresh_extraction_instead_of_trusting_the_cache(
+    image: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The negative control for the sidecar above: a cache that no longer matches it is not trusted as-is."""
+    kernel, initrd = boot.ensure_microvm_boot_artifacts(image, {})
+    sidecar = kernel.with_name(kernel.name + ".sha256")
+    stale = "sha256:deadbeef:999999:123456789\n"
+    sidecar.write_text(stale, encoding="utf-8")
+
+    extract = boot._extract
+    calls: list[str] = []
+
+    def counting_extract(archive: Path, member: str, target: Path) -> None:
+        calls.append(member)
+        extract(archive, member, target)
+
+    monkeypatch.setattr(boot, "_extract", counting_extract)
+
+    kernel2, initrd2 = boot.ensure_microvm_boot_artifacts(image, {})
+
+    assert calls, "a stale sidecar must trigger re-extraction, not a silent cache hit"
+    assert (kernel2.read_bytes(), initrd2.read_bytes()) == (b"kernel", b"initrd")
+    assert sidecar.read_text(encoding="utf-8") != stale
 
 
 def test_overrides_do_not_require_image_or_extraction(tmp_path: Path) -> None:

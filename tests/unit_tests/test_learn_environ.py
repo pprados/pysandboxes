@@ -246,3 +246,28 @@ def test_update_from_environ() -> None:
     envs._keys_used.clear()
     d.update(envs)
     assert not envs._keys_used
+
+
+def test_a_scan_nested_inside_another_does_not_corrupt_its_bookkeeping() -> None:
+    """A full scan started while another is still paused (nested in its loop body) must not
+    overwrite the outer scan's own tracking: once it used to, every outer read-back after the
+    nested scan was wrongly learned as a real use, because it no longer matched anything.
+    """
+    envs = LearnEnviron()  # Reset singleton
+    envs._keys_used.clear()
+
+    outer = iter(envs)
+    try:
+        first = next(outer)
+        _ = envs[first]  # an immediate read-back of the outer scan: learns nothing by itself
+
+        for _ in envs:  # a whole, unrelated scan nested inside the outer one
+            pass
+
+        second = next(outer)
+        _ = envs[second]  # another immediate read-back of the (still paused) outer scan
+
+        assert first not in envs._keys_used, "the outer scan's own read-back must not be learned"
+        assert second not in envs._keys_used, "a read-back resumed after a nested scan must not be learned either"
+    finally:
+        outer.close()

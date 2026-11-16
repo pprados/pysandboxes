@@ -148,7 +148,12 @@ def mask_targets(all_rules: AllRules, cwd: str, exposed: list[str]) -> list[tupl
 def _bind_read_only(path: str, source: str) -> str:
     q = shlex.quote
     if os.path.islink(path):
-        return f"mkdir -p {q(os.path.dirname(path))} && ln -s {q(os.readlink(path))} {q(path)}"
+        # -f replaces whatever the guest image already has at path (a stale symlink or a plain
+        # file), instead of failing under `set -e`; -n keeps that replacement on path itself even
+        # when path is already a symlink to a directory, rather than following it and dropping the
+        # new link inside that directory. A real (non-symlink) directory at path is left alone: -f
+        # cannot unlink one, so the script still fails loudly instead of silently losing it.
+        return f"mkdir -p {q(os.path.dirname(path))} && ln -sfn {q(os.readlink(path))} {q(path)}"
     if os.path.isdir(path):
         prepare = f"mkdir -p {q(path)}"
     else:

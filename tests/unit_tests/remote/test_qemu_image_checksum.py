@@ -128,6 +128,95 @@ class TestFetchChecksumsText:
         assert qemu_image._fetch_checksums_text(server.url("/SHA256SUMS")) is None
 
 
+# A fixed Debian-style SHA512SUMS sample: GNU coreutils text-mode, two spaces before the name.
+_SHA512_DIGEST_AMD64 = "ab" * 64
+_SHA512_DIGEST_ARM64 = "cd" * 64
+_DEBIAN_SHA512SUMS = (
+    f"{_SHA512_DIGEST_AMD64}  debian-12-generic-amd64.qcow2\n{_SHA512_DIGEST_ARM64}  debian-12-generic-arm64.qcow2\n"
+)
+
+# A fixed Ubuntu-style SHA256SUMS sample: binary-mode marker ("*name"), as Ubuntu publishes it.
+_SHA256_DIGEST_AMD64 = "ef" * 32
+_UBUNTU_SHA256SUMS = f"{_SHA256_DIGEST_AMD64} *ubuntu-24.04-server-cloudimg-amd64.img\n"
+
+
+class TestChecksumsCandidatesForHost:
+    def test_debian_is_pinned_to_sha512sums(self) -> None:
+        assert qemu_image._checksums_candidates_for_host("cloud.debian.org") == [("sha512", "SHA512SUMS")]
+
+    def test_ubuntu_is_pinned_to_sha256sums(self) -> None:
+        assert qemu_image._checksums_candidates_for_host("cloud-images.ubuntu.com") == [("sha256", "SHA256SUMS")]
+
+    def test_an_unknown_host_tries_both_conventions(self) -> None:
+        assert qemu_image._checksums_candidates_for_host("example.com") == [
+            ("sha256", "SHA256SUMS"),
+            ("sha512", "SHA512SUMS"),
+        ]
+
+
+class TestParseChecksumLine:
+    def test_a_debian_style_sha512sums_line_is_matched(self) -> None:
+        digest = qemu_image._parse_checksum_line(_DEBIAN_SHA512SUMS, "debian-12-generic-arm64.qcow2")
+
+        assert digest == _SHA512_DIGEST_ARM64
+
+    def test_an_ubuntu_style_binary_mode_line_is_matched(self) -> None:
+        digest = qemu_image._parse_checksum_line(_UBUNTU_SHA256SUMS, "ubuntu-24.04-server-cloudimg-amd64.img")
+
+        assert digest == _SHA256_DIGEST_AMD64
+
+    def test_the_digest_is_lowercased(self) -> None:
+        text = f"{_SHA512_DIGEST_AMD64.upper()}  debian-12-generic-amd64.qcow2\n"
+
+        assert qemu_image._parse_checksum_line(text, "debian-12-generic-amd64.qcow2") == _SHA512_DIGEST_AMD64
+
+    def test_a_filename_absent_from_the_listing_is_none(self) -> None:
+        assert qemu_image._parse_checksum_line(_DEBIAN_SHA512SUMS, "debian-12-generic-ppc64el.qcow2") is None
+
+    def test_a_filename_that_is_only_a_prefix_of_a_listed_one_does_not_match(self) -> None:
+        assert qemu_image._parse_checksum_line(_DEBIAN_SHA512SUMS, "debian-12-generic-amd64") is None
+
+
+class TestNeighborChecksumAndResolveExpectedChecksum:
+    def test_a_debian_sha512sums_neighbor_is_found_and_parsed(self, server: Any) -> None:
+        # No /SHA256SUMS route: it 404s, so the fallback tries /SHA512SUMS next, which is what matters here.
+        server.serve("/SHA512SUMS", _DEBIAN_SHA512SUMS.encode())
+
+        result = qemu_image._neighbor_checksum(server.url("/debian-12-generic-amd64.qcow2"))
+
+        assert result == ("sha512", _SHA512_DIGEST_AMD64)
+
+    def test_an_ubuntu_sha256sums_neighbor_is_found_and_parsed(self, server: Any) -> None:
+        server.serve("/SHA256SUMS", _UBUNTU_SHA256SUMS.encode())
+
+        result = qemu_image._neighbor_checksum(server.url("/ubuntu-24.04-server-cloudimg-amd64.img"))
+
+        assert result == ("sha256", _SHA256_DIGEST_AMD64)
+
+    def test_no_checksums_file_at_all_is_none(self, server: Any) -> None:
+        assert qemu_image._neighbor_checksum(server.url("/vm.img")) is None
+
+    def test_resolve_expected_checksum_prefers_the_pinned_env_over_the_neighbor_file(
+        self, server: Any, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        server.serve("/SHA256SUMS", _UBUNTU_SHA256SUMS.encode())
+        monkeypatch.setenv(qemu_image.ENV_VM_IMAGE_SHA256, "11" * 32)
+
+        result = qemu_image._resolve_expected_checksum(server.url("/ubuntu-24.04-server-cloudimg-amd64.img"))
+
+        assert result == ("sha256", "11" * 32)
+
+    def test_resolve_expected_checksum_falls_back_to_the_neighbor_file(
+        self, server: Any, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.delenv(qemu_image.ENV_VM_IMAGE_SHA256, raising=False)
+        server.serve("/SHA512SUMS", _DEBIAN_SHA512SUMS.encode())
+
+        result = qemu_image._resolve_expected_checksum(server.url("/debian-12-generic-arm64.qcow2"))
+
+        assert result == ("sha512", _SHA512_DIGEST_ARM64)
+
+
 class TestEnsureImageChecksum:
     @pytest.fixture(autouse=True)
     def clean_env(self, monkeypatch: pytest.MonkeyPatch) -> None:

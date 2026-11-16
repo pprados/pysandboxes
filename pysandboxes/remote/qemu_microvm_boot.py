@@ -11,6 +11,8 @@ from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 
+from .qemu_image import _sidecar_matches, _write_sidecar
+
 
 def _readable(path: Path) -> None:
     with path.open("rb") as stream:
@@ -69,6 +71,8 @@ def _ensure_cached_artifacts(image: Path) -> tuple[Path, Path]:
     try:
         for path in pair:
             _readable(path)
+            if not _sidecar_matches(path):
+                raise ValueError(f"Cached microvm boot artifact {path} no longer matches its checksum sidecar")
         return pair
     except (OSError, ValueError):
         pass
@@ -102,6 +106,7 @@ def _ensure_cached_artifacts(image: Path) -> tuple[Path, Path]:
                     target = ready / name
                     _extract(partition, source, target)
                     _readable(target)
+                    _write_sidecar(target, "sha256", hashlib.sha256(target.read_bytes()).hexdigest())
                 if _identity(image) != identity:
                     raise ValueError("Root image changed during microvm boot extraction")
                 # Publish the pair as one directory; a failed extraction never becomes a cache entry.

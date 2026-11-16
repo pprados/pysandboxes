@@ -4,6 +4,7 @@
 
 import logging
 import os
+import shlex
 import subprocess
 import sys
 from pathlib import Path
@@ -222,6 +223,27 @@ class TestInitScript:
         script = _script(ro=[str(tmp_path), str(tmp_path / "inner")], masks=[], rw=[], cwd=str(tmp_path))
 
         assert str(tmp_path / "inner") not in script
+
+    def test_a_symlinked_path_is_recreated_with_a_forced_symlink(self, tmp_path: Path) -> None:
+        target = tmp_path / "target"
+        target.mkdir()
+        link = tmp_path / "link"
+        link.symlink_to(target)
+
+        script = _script(ro=[str(link)], masks=[], rw=[], cwd=str(tmp_path))
+
+        assert f"ln -sfn {shlex.quote(str(target))} {shlex.quote(str(link))}" in script
+        assert "mount --bind" not in script
+
+    def test_a_real_directory_at_the_same_name_is_bound_not_turned_into_a_link(self, tmp_path: Path) -> None:
+        """The negative control for the symlink case above: a real directory is never replaced by ``ln``."""
+        real = tmp_path / "real"
+        real.mkdir()
+
+        script = _script(ro=[str(real)], masks=[], rw=[], cwd=str(tmp_path))
+
+        assert "ln -sfn" not in script
+        assert "mount --bind" in script
 
     def test_a_writable_directory_is_bound_read_write_after_the_read_only_ones(self) -> None:
         script = _script()

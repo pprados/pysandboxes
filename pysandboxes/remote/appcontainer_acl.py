@@ -178,7 +178,6 @@ _SUB_CONTAINERS_AND_OBJECTS_INHERIT = 3
 _GRANT_ACCESS = 1
 _REVOKE_ACCESS = 4
 _ACL_SIZE_INFORMATION = 2
-_ACE_SID_OFFSET = 8
 _ACL_REVISION = 2
 _ACL_HEADER_SIZE = 8
 _ACE_HEADER_SIZE = 8
@@ -188,6 +187,15 @@ _FULL_CONTROL = 0x1F01FF
 _OWNER_RIGHTS = "S-1-3-4"
 _SDDL_REVISION = 1
 _NO_INDEX = 0xFFFFFFFF
+_FILE_FLAG_BACKUP_SEMANTICS = 0x02000000
+_FILE_FLAG_OPEN_REPARSE_POINT = 0x00200000
+_FILE_ATTRIBUTE_REPARSE_POINT = 0x00000400
+_OPEN_EXISTING = 3
+_FILE_SHARE_READ = 0x00000001
+_FILE_SHARE_WRITE = 0x00000002
+_READ_CONTROL = 0x00020000
+_WRITE_DAC = 0x00040000
+_SE_FILE_OBJECT = 1
 
 
 class _Trustee(ctypes.Structure):
@@ -222,19 +230,44 @@ class _AceHeader(ctypes.Structure):
     ]
 
 
+# ACCESS_ALLOWED_ACE / ACCESS_DENIED_ACE both start with this header (ACE_HEADER + Mask); the SID follows right after.
+_ACE_SID_OFFSET = ctypes.sizeof(_AceHeader)
+
+
+class _ByHandleFileInformation(ctypes.Structure):
+    """Matches the layout of BY_HANDLE_FILE_INFORMATION; only dwFileAttributes is read here."""
+
+    _fields_ = [
+        ("dwFileAttributes", ctypes.c_uint32),
+        ("ftCreationTime", ctypes.c_uint64),
+        ("ftLastAccessTime", ctypes.c_uint64),
+        ("ftLastWriteTime", ctypes.c_uint64),
+        ("dwVolumeSerialNumber", ctypes.c_uint32),
+        ("nFileSizeHigh", ctypes.c_uint32),
+        ("nFileSizeLow", ctypes.c_uint32),
+        ("nNumberOfLinks", ctypes.c_uint32),
+        ("nFileIndexHigh", ctypes.c_uint32),
+        ("nFileIndexLow", ctypes.c_uint32),
+    ]
+
+
 def _win32_apis() -> tuple[Any, Any]:
     """Return advapi32 and kernel32 with the prototypes of the security functions used here."""
     advapi32 = ctypes.__dict__["WinDLL"]("advapi32", use_last_error=True)
     kernel32 = ctypes.__dict__["WinDLL"]("kernel32", use_last_error=True)
     pointer, dword, out = ctypes.c_void_p, ctypes.c_uint32, ctypes.POINTER(ctypes.c_void_p)
     advapi32.ConvertStringSidToSidW.argtypes = (ctypes.c_wchar_p, out)
-    advapi32.GetNamedSecurityInfoW.argtypes = (ctypes.c_wchar_p, dword, dword, pointer, pointer, out, pointer, out)
-    advapi32.GetNamedSecurityInfoW.restype = dword
+    # Handle-based, not GetNamedSecurityInfoW/SetNamedSecurityInfoW: a name is re-resolved at the time of the
+    # call, so acting by name on a path planned earlier (build_acl_plan) is a TOCTOU if a reparse point is
+    # swapped in between planning and this call. _verified_handle() opens and checks the object once, and
+    # every DACL read or write here acts on that same handle, never on the name again.
+    advapi32.GetSecurityInfo.argtypes = (pointer, dword, dword, pointer, pointer, out, pointer, out)
+    advapi32.GetSecurityInfo.restype = dword
     advapi32.GetSecurityDescriptorControl.argtypes = (pointer, ctypes.POINTER(ctypes.c_uint16), ctypes.POINTER(dword))
     advapi32.SetEntriesInAclW.argtypes = (dword, ctypes.POINTER(_ExplicitAccess), pointer, out)
     advapi32.SetEntriesInAclW.restype = dword
-    advapi32.SetNamedSecurityInfoW.argtypes = (ctypes.c_wchar_p, dword, dword, pointer, pointer, pointer, pointer)
-    advapi32.SetNamedSecurityInfoW.restype = dword
+    advapi32.SetSecurityInfo.argtypes = (pointer, dword, dword, pointer, pointer, pointer, pointer)
+    advapi32.SetSecurityInfo.restype = dword
     advapi32.GetAclInformation.argtypes = (pointer, pointer, dword, dword)
     advapi32.GetAce.argtypes = (pointer, dword, out)
     advapi32.EqualSid.argtypes = (pointer, pointer)
@@ -244,6 +277,12 @@ def _win32_apis() -> tuple[Any, Any]:
     advapi32.AddAce.argtypes = (pointer, dword, dword, pointer, dword)
     advapi32.AddAccessDeniedAce.argtypes = (pointer, dword, dword, pointer)
     advapi32.ConvertSecurityDescriptorToStringSecurityDescriptorW.argtypes = (pointer, dword, dword, out, pointer)
+    kernel32.CreateFileW.argtypes = (ctypes.c_wchar_p, dword, dword, pointer, dword, dword, pointer)
+    kernel32.CreateFileW.restype = pointer
+    kernel32.GetFinalPathNameByHandleW.argtypes = (pointer, ctypes.c_wchar_p, dword, dword)
+    kernel32.GetFinalPathNameByHandleW.restype = dword
+    kernel32.GetFileInformationByHandle.argtypes = (pointer, ctypes.POINTER(_ByHandleFileInformation))
+    kernel32.CloseHandle.argtypes = (pointer,)
     kernel32.LocalFree.argtypes = (pointer,)
     kernel32.LocalFree.restype = pointer
     return advapi32, kernel32
@@ -271,14 +310,59 @@ def _sid_pointer(sid: str) -> Iterator[ctypes.c_void_p]:
 
 
 @contextmanager
-def _dacl_of(path: Path) -> Iterator[tuple[ctypes.c_void_p, bool, ctypes.c_void_p]]:
-    """Yield a path's DACL and whether it is protected from inheritance, without translating any SID to a name."""
+def _verified_handle(path: Path) -> Iterator[Any]:
+    """Open ``path`` and prove it is still the object ``build_acl_plan`` planned, not a reparse point swapped in since.
+
+    A name-based call (GetNamedSecurityInfoW/SetNamedSecurityInfoW) re-resolves the path at the time it runs, so
+    acting on a path resolved earlier is a TOCTOU: a junction or symlink dropped in between build_acl_plan and the
+    call redirects the ACL change to another object. Opening the path once, refusing a reparse point, and comparing
+    the handle's real final path to the one planned closes the window; every DACL read or write then happens on
+    this same handle, never on the name again. FILE_SHARE_DELETE is deliberately left out of the share mode, so the
+    object cannot be renamed or deleted out from under the handle while it is held open.
+    """
+    _, kernel32 = _win32_apis()
+    invalid_handle = ctypes.c_void_p(-1).value
+    handle = kernel32.CreateFileW(
+        str(path),
+        _READ_CONTROL | _WRITE_DAC,
+        _FILE_SHARE_READ | _FILE_SHARE_WRITE,
+        None,
+        _OPEN_EXISTING,
+        _FILE_FLAG_BACKUP_SEMANTICS | _FILE_FLAG_OPEN_REPARSE_POINT,
+        None,
+    )
+    if handle in (None, invalid_handle):
+        _check_call(0)
+    try:
+        info = _ByHandleFileInformation()
+        _check_call(kernel32.GetFileInformationByHandle(handle, ctypes.byref(info)))
+        if info.dwFileAttributes & _FILE_ATTRIBUTE_REPARSE_POINT:
+            raise OSError(f"Refusing to change the ACL of a reparse point: {path}")
+        buffer = ctypes.create_unicode_buffer(32768)
+        if not kernel32.GetFinalPathNameByHandleW(handle, buffer, len(buffer), 0):
+            _check_call(0)
+        final_path = buffer.value
+        if final_path.startswith("\\\\?\\"):
+            final_path = final_path[4:]
+        if os.path.normcase(final_path) != os.path.normcase(str(path)):
+            raise OSError(
+                f"Refusing an ACL change: {path} now resolves to {final_path}, a different object than the one "
+                "planned (possible path-substitution attack)"
+            )
+        yield handle
+    finally:
+        kernel32.CloseHandle(handle)
+
+
+@contextmanager
+def _dacl_of_handle(handle: ctypes.c_void_p) -> Iterator[tuple[ctypes.c_void_p, bool, ctypes.c_void_p]]:
+    """Yield an open handle's DACL and whether it is protected from inheritance."""
     advapi32, kernel32 = _win32_apis()
     dacl = ctypes.c_void_p()
     descriptor = ctypes.c_void_p()
     _check_status(
-        advapi32.GetNamedSecurityInfoW(
-            str(path), 1, _DACL_INFORMATION, None, None, ctypes.byref(dacl), None, ctypes.byref(descriptor)
+        advapi32.GetSecurityInfo(
+            handle, _SE_FILE_OBJECT, _DACL_INFORMATION, None, None, ctypes.byref(dacl), None, ctypes.byref(descriptor)
         )
     )
     try:
@@ -290,10 +374,21 @@ def _dacl_of(path: Path) -> Iterator[tuple[ctypes.c_void_p, bool, ctypes.c_void_
         kernel32.LocalFree(descriptor)
 
 
+@contextmanager
+def _dacl_of(path: Path) -> Iterator[tuple[ctypes.c_void_p, bool, ctypes.c_void_p]]:
+    """Yield a path's DACL and whether it is protected from inheritance, without translating any SID to a name."""
+    with _verified_handle(path) as handle, _dacl_of_handle(handle) as result:
+        yield result
+
+
 def _edit_dacl(path: Path, sid: str, mode: int, mask: int, inherit: bool) -> None:
     """Merge one access entry for ``sid`` into a path's DACL, keeping its inheritance protection."""
     advapi32, kernel32 = _win32_apis()
-    with _sid_pointer(sid) as sid_pointer, _dacl_of(path) as (dacl, protected, _):
+    with (
+        _verified_handle(path) as handle,
+        _sid_pointer(sid) as sid_pointer,
+        _dacl_of_handle(handle) as (dacl, protected, _),
+    ):
         access = _ExplicitAccess(
             mask,
             mode,
@@ -305,7 +400,7 @@ def _edit_dacl(path: Path, sid: str, mode: int, mask: int, inherit: bool) -> Non
         try:
             flag = _PROTECTED_DACL if protected else _UNPROTECTED_DACL
             _check_status(
-                advapi32.SetNamedSecurityInfoW(str(path), 1, _DACL_INFORMATION | flag, None, None, merged, None)
+                advapi32.SetSecurityInfo(handle, _SE_FILE_OBJECT, _DACL_INFORMATION | flag, None, None, merged, None)
             )
         finally:
             kernel32.LocalFree(merged)
@@ -366,8 +461,10 @@ def _deny_access(path: Path, package_sid: str, runtime_sid: str, *, protect_inhe
 
     The other entries keep their order. Cutting the inheritance makes the inherited entries explicit.
     """
-    advapi32, kernel32 = _win32_apis()
-    with ExitStack() as stack, _dacl_of(path) as (dacl, protected, _):
+    advapi32, _ = _win32_apis()
+    with ExitStack() as stack:
+        handle = stack.enter_context(_verified_handle(path))
+        dacl, protected, _ = stack.enter_context(_dacl_of_handle(handle))
         removed = [stack.enter_context(_sid_pointer(sid)) for sid in (package_sid, runtime_sid, _OWNER_RIGHTS)]
         kept: list[bytes] = []
         if dacl.value:
@@ -400,8 +497,8 @@ def _deny_access(path: Path, package_sid: str, runtime_sid: str, *, protect_inhe
             )
         flag = _PROTECTED_DACL if protect_inheritance or protected else _UNPROTECTED_DACL
         _check_status(
-            advapi32.SetNamedSecurityInfoW(
-                str(path), 1, _DACL_INFORMATION | flag, None, None, ctypes.addressof(buffer), None
+            advapi32.SetSecurityInfo(
+                handle, _SE_FILE_OBJECT, _DACL_INFORMATION | flag, None, None, ctypes.addressof(buffer), None
             )
         )
 
@@ -450,9 +547,9 @@ def _set_acl_sddl(path: Path, sddl: str) -> None:
         get_dacl.restype = wintypes.BOOL
         if not get_dacl(descriptor, ctypes.byref(present), ctypes.byref(dacl), ctypes.byref(defaulted)):
             raise ctypes.__dict__["WinError"](ctypes.__dict__["get_last_error"]())
-        set_named = advapi32.SetNamedSecurityInfoW
-        set_named.argtypes = (
-            wintypes.LPWSTR,
+        set_security = advapi32.SetSecurityInfo
+        set_security.argtypes = (
+            ctypes.c_void_p,
             wintypes.DWORD,
             wintypes.DWORD,
             ctypes.c_void_p,
@@ -460,9 +557,12 @@ def _set_acl_sddl(path: Path, sddl: str) -> None:
             ctypes.c_void_p,
             ctypes.c_void_p,
         )
-        set_named.restype = wintypes.DWORD
+        set_security.restype = wintypes.DWORD
         dacl_information = 0x00000004 | (0x80000000 if "D:P" in sddl else 0x20000000)
-        status = set_named(str(path), 1, dacl_information, None, None, dacl if present.value else None, None)
+        with _verified_handle(path) as handle:
+            status = set_security(
+                handle, _SE_FILE_OBJECT, dacl_information, None, None, dacl if present.value else None, None
+            )
         if status:
             raise ctypes.__dict__["WinError"](status)
     finally:
