@@ -615,8 +615,27 @@ def _runtime_acl_cache_path() -> Path:
     return _mask_journal_path().with_name("runtime-acls.json")
 
 
+def _runtime_acl_fingerprint(path: Path) -> str:
+    """A cheap signal that a venv was resynced since the tree was last ACL'd.
+
+    `uv sync` (or pip) replaces files inside ``Lib/site-packages`` -- notably an editable
+    install's ``.pth`` -- without touching the venv root's own timestamp, so adding or
+    removing a package there still bumps that directory's own last-write-time (Windows
+    updates a directory's mtime when its immediate entries change). Stat both instead of
+    walking the whole tree, which would defeat the point of caching.
+    """
+    stamps = []
+    for candidate in (path, path / "Lib" / "site-packages"):
+        try:
+            stamps.append(candidate.stat().st_mtime_ns)
+        except OSError:
+            continue
+    return "-".join(str(stamp) for stamp in stamps)
+
+
 def _runtime_acl_key(path: Path, sid: str) -> str:
-    return f"{os.path.normcase(str(path.resolve(strict=False)))}|{sid}|objects-v2"
+    fingerprint = _runtime_acl_fingerprint(path)
+    return f"{os.path.normcase(str(path.resolve(strict=False)))}|{sid}|{fingerprint}|objects-v3"
 
 
 def _runtime_acl_cached(path: Path, sid: str) -> bool:

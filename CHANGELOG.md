@@ -69,6 +69,7 @@
 - `gvisor` and `bwrap` now reserve their slirp4netns API socket path through the same helper `unshare` uses, instead of each duplicating the create-then-unlink dance inline.
 - `appcontainer`: a path's ACL is now granted or revoked on a verified, held-open handle instead of by name, closing a race where a junction or symlink swapped in after planning could redirect the change to another object.
 - Running a program with `-m` under any OS provider no longer denies `marshal.loads`/`builtins.compile` on the entry module's own bytecode cache with no `python-api=ALLOW:dynamic-code` grant declared, a regression that broke every `-m` launch.
+- `appcontainer`: a venv resynced since its last run (`uv sync`, a reinstalled editable package, a rebuilt `.venv`) now gets its interpreter tree re-scanned for the AppContainer grant instead of reusing a cache keyed only on the venv's own path, which could leave a newly written file, notably an editable install's own `.pth`, without the read access needed to import it; this could make an editable install's own module fail to import under `appcontainer` whenever the sandboxed program's working directory happened not to be the project root (a `-m` launch from the project root masked it, since Python then finds the package through its own directory on `sys.path` regardless of the `.pth` file).
 
 ## [0.12.0] - 2026-11-13
 

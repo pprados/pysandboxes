@@ -143,6 +143,32 @@ def test_runtime_acl_cache_is_scoped_to_path_and_capability(tmp_path: Path, monk
     assert not appcontainer_acl._runtime_acl_cached(path, "runtime-b")
 
 
+def test_runtime_acl_cache_is_invalidated_when_site_packages_changes(tmp_path: Path, monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    """A resync (`uv sync`) replaces files under ``Lib/site-packages`` without touching the
+    venv root's own timestamp. If the cache survived that, existing files freshly written
+    there -- notably an editable install's own ``.pth`` -- would be left without the AppContainer
+    runtime grant, cached as if the whole tree had already been handled (observed in production:
+    an editable install's module import failing under appcontainer from a non-root cwd)."""
+    monkeypatch.setenv("LOCALAPPDATA", str(tmp_path))
+    venv = tmp_path / "venv"
+    site_packages = venv / "Lib" / "site-packages"
+    site_packages.mkdir(parents=True)
+    (site_packages / "some_package.pth").write_text("x")
+
+    assert not appcontainer_acl._runtime_acl_cached(venv, "runtime-a")
+    appcontainer_acl._cache_runtime_acl(venv, "runtime-a")
+    assert appcontainer_acl._runtime_acl_cached(venv, "runtime-a")
+
+    # A resync drops a new .pth file (or rewrites an existing one) without touching `venv`'s
+    # own mtime -- only `site-packages`'s, since that is the directory whose own entries changed.
+    # Force the mtime forward explicitly: real writes can land in the same filesystem tick.
+    (site_packages / "a_new_editable_install.pth").write_text("C:\\new-package")
+    bumped = site_packages.stat().st_mtime + 5
+    os.utime(site_packages, (bumped, bumped))
+
+    assert not appcontainer_acl._runtime_acl_cached(venv, "runtime-a")
+
+
 def test_read_only_grant_reuses_windows_appcontainer_access(tmp_path: Path, monkeypatch) -> None:  # type: ignore[no-untyped-def]
     path = tmp_path / "system"
     monkeypatch.setattr(appcontainer_acl, "_has_broad_appcontainer_read_access", lambda target: True)
