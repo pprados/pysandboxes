@@ -25,6 +25,8 @@
 
 ### Added
 
+- Nested sandbox contexts now refuse a different policy instead of silently reusing the active daemon.
+
 - `unshare` and `gvisor`: a `slirp4netns` crash (or an external kill) outside a deliberate shutdown is now detected and logged, and fails the sandbox closed with a clear message instead of leaving every later call to retry or hang against a network that is down for good.
 - `smolvm`: a symlinked path already present in the guest image no longer stops the guest's init script under `set -e`; the link is now forced into place instead.
 - `qemu-microvm`: the cached kernel/initrd pair extracted from the guest image now gets a checksum sidecar, like the image download does, so a corrupted or tampered cache entry is re-extracted instead of trusted as-is.

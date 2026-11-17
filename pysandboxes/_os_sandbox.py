@@ -16,7 +16,7 @@ import sys
 import threading
 import uuid
 from collections.abc import Iterator, Mapping
-from typing import Any, Callable, cast
+from typing import Any, Callable, NamedTuple, cast
 
 from .all_rules import AllRules
 from .base_daemon import BaseDaemon
@@ -167,6 +167,49 @@ def default_os_sandbox() -> str:
     return "landlock"
 
 
+class _PolicyFingerprint(NamedTuple):
+    rules: tuple[object, ...]
+    envs: frozenset[tuple[str, str]]
+    init_fn: SyncOrAsyncFunc | None
+    log_level: int
+    python_args: tuple[str, ...]
+
+
+def _freeze_policy(value: Any) -> Any:
+    """Snapshot parsed rule containers without retaining their mutable contents."""
+    if isinstance(value, Mapping):
+        return frozenset((_freeze_policy(key), _freeze_policy(item)) for key, item in value.items())
+    if isinstance(value, (list, tuple)):
+        return tuple(_freeze_policy(item) for item in value)
+    if isinstance(value, (set, frozenset)):
+        return frozenset(_freeze_policy(item) for item in value)
+    return value
+
+
+def _policy_fingerprint(
+    all_rules: AllRules,
+    envs: Environ,
+    log_level: int,
+    init_fn: SyncOrAsyncFunc | None,
+    python_args: list[str] | None,
+) -> _PolicyFingerprint:
+    # Raw config holds source locations; every parsed field, including protected config paths, is kept.
+    rules = tuple(_freeze_policy(value) for name, value in all_rules._asdict().items() if name != "config")
+    return _PolicyFingerprint(rules, frozenset(envs.items()), init_fn, log_level, tuple(python_args or ()))
+
+
+def _check_nested_policy(fingerprint: _PolicyFingerprint) -> None:
+    if (
+        _active_fingerprint is None
+        or _active_fingerprint.init_fn is not fingerprint.init_fn
+        or _active_fingerprint != fingerprint
+    ):
+        raise SandBoxError("Cannot reuse an active daemon with a different sandbox policy")
+
+
+_active_fingerprint: _PolicyFingerprint | None = None
+
+
 # Singleton with the current daemon used by the sandbox
 _current_daemon: BaseDaemon | None = None
 # Number of times the daemon has been started. Used for reference counting.
@@ -233,8 +276,8 @@ async def async_start_daemon(
     Core logic to asynchronously start a daemon.
 
     It ensures that only one daemon is started at a time using a lock.
-    If a daemon is already running, it increments a counter and returns
-    the existing instance.
+    If a daemon is already running with the same policy, it increments a counter
+    and returns the existing instance. A different policy is refused.
 
     Args:
         all_rules: The security rules for the sandbox.
@@ -247,12 +290,15 @@ async def async_start_daemon(
         The started daemon instance.
 
     Raises:
+        SandBoxError: If an active daemon has a different sandbox policy.
         ValueError: If the specified os_sandbox name is unknown.
     """
     assert all_rules.os_sandbox
     async with _async_start_lock:
-        global _current_daemon, _startup_counter, _starting_daemon
+        global _current_daemon, _startup_counter, _starting_daemon, _active_fingerprint
+        fingerprint = _policy_fingerprint(all_rules, envs, log_level, init_fn, python_args)
         if _current_daemon is not None:
+            _check_nested_policy(fingerprint)
             logger.info("Daemon already started")
             _startup_counter += 1
             return _current_daemon
@@ -272,8 +318,9 @@ async def async_start_daemon(
             _starting_daemon = os_provider
             await os_provider._start(all_rules, envs=envs, log_level=log_level, init_fn=init_fn)
             _starting_daemon = None
-            _current_daemon = os_provider
             assert os_provider.is_started
+            _current_daemon = os_provider
+            _active_fingerprint = fingerprint
             _startup_counter += 1
             return os_provider
         except BaseException as e:
@@ -313,7 +360,7 @@ async def async_shutdown_daemon(graceful_shutdown: bool = True) -> None:
     Args:
         graceful_shutdown: If True, waits for pending tasks to complete.
     """
-    global _current_daemon, _startup_counter
+    global _current_daemon, _startup_counter, _active_fingerprint
     async with _async_start_lock:
         if not _current_daemon:
             logger.info("Daemon not started when daemon_shutdown")
@@ -334,6 +381,7 @@ async def async_shutdown_daemon(graceful_shutdown: bool = True) -> None:
             assert not _current_daemon.is_started
         finally:
             _current_daemon = None
+            _active_fingerprint = None
             _startup_counter = 0
             # Give back the private event-loop thread a sync start_daemon() may have created, and any
             # `none`-provider flag a failed `_shutdown` never got to clear: without this, a thread leaks
@@ -370,6 +418,7 @@ def start_daemon(
 
     Raises:
         RuntimeError: If the daemon fails to start.
+        SandBoxError: If an active daemon has a different sandbox policy.
         ValueError: If the specified os_sandbox name is unknown.
     """
     assert all_rules.os_sandbox
@@ -377,7 +426,9 @@ def start_daemon(
 
     check_mixte_async_async()
     with _start_lock:
+        fingerprint = _policy_fingerprint(all_rules, envs, log_level, init_fn, python_args)
         if _current_daemon is not None:
+            _check_nested_policy(fingerprint)
             logger.info("Daemon already started")
             _startup_counter += 1
             return _current_daemon

@@ -12,6 +12,7 @@ from pysandboxes import _os_sandbox
 from pysandboxes.all_rules import AllRules, EmptyRules
 from pysandboxes.base_daemon import BaseDaemon, FakeDaemon
 from pysandboxes.e import SandBoxError
+from pysandboxes.immutable_dict import ImmutableDict
 from pysandboxes.remote.base_sse_daemon import BaseSSESandbox
 from pysandboxes.tools import Environ, SyncOrAsyncFunc
 
@@ -92,10 +93,12 @@ def _fake_provider(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
     _os_sandbox._current_daemon = None
     _os_sandbox._startup_counter = 0
     _os_sandbox._starting_daemon = None
+    _os_sandbox._active_fingerprint = None
     yield
     _os_sandbox._current_daemon = None
     _os_sandbox._startup_counter = 0
     _os_sandbox._starting_daemon = None
+    _os_sandbox._active_fingerprint = None
 
 
 def _rules(name: str = _FAKE, **kwargs: Any) -> AllRules:
@@ -541,3 +544,79 @@ def test_a_generated_profile_names_subprocess_without_a_warning_on_an_unsupporte
 
     assert provider == "subprocess"
     assert not caplog.records
+
+
+@pytest.mark.parametrize(
+    "change",
+    ["provider", "rules", "environment", "result-mode", "result-guard", "init", "logging", "python-args"],
+)
+@pytest.mark.parametrize("asynchronous", [False, True], ids=["sync", "async"])
+async def test_nested_requests_refuse_a_different_policy(change: str, asynchronous: bool) -> None:
+    rules = _rules()
+    kwargs: dict[str, Any] = {"envs": {}, "log_level": 0, "init_fn": None}
+    if asynchronous:
+        first = await _os_sandbox.async_start_daemon(rules, **kwargs)
+    else:
+        first = await asyncio.to_thread(_os_sandbox.start_daemon, rules, **kwargs)
+    if change == "provider":
+        rules = _rules("subprocess")
+    elif change == "rules":
+        rules = rules._replace(use_py_sandbox=True)
+    elif change == "environment":
+        kwargs["envs"] = {"NESTED_POLICY": "different"}
+    elif change == "result-mode":
+        rules = rules._replace(remote_result_data_only=False)
+    elif change == "result-guard":
+        rules = rules._replace(remote_result_guard=False)
+    elif change == "init":
+        kwargs["init_fn"] = lambda: None
+    elif change == "logging":
+        kwargs["log_level"] = 10
+    else:
+        kwargs["python_args"] = ["-X", "dev"]
+    try:
+        with pytest.raises(SandBoxError, match="different sandbox policy"):
+            if asynchronous:
+                await _os_sandbox.async_start_daemon(rules, **kwargs)
+            else:
+                await asyncio.to_thread(_os_sandbox.start_daemon, rules, **kwargs)
+        assert _os_sandbox._current_daemon is first
+        assert _os_sandbox._startup_counter == 1
+    finally:
+        await _os_sandbox.async_shutdown_daemon()
+
+
+@pytest.mark.parametrize("change", ["environment", "provider-parameters"])
+async def test_nested_policy_keeps_an_immutable_snapshot(change: str) -> None:
+    envs = {"POLICY": "original"}
+    values = ["original"]
+    rules = _rules(os_sandbox_params=ImmutableDict({"values": values}))
+    await _os_sandbox.async_start_daemon(rules, envs=envs, log_level=0, init_fn=None)
+    if change == "environment":
+        envs["POLICY"] = "changed"
+    else:
+        values.append("changed")
+    try:
+        with pytest.raises(SandBoxError, match="different sandbox policy"):
+            await _os_sandbox.async_start_daemon(rules, envs=envs, log_level=0, init_fn=None)
+        assert _os_sandbox._startup_counter == 1
+    finally:
+        await _os_sandbox.async_shutdown_daemon()
+
+
+async def test_policy_fingerprint_follows_successful_start_and_terminal_shutdown() -> None:
+    _Daemon.start_error = _Boom("start failed")
+    with pytest.raises(_Boom, match="start failed"):
+        await _start()
+    assert _os_sandbox._active_fingerprint is None
+    _Daemon.start_error = None
+    await _start()
+    fingerprint = _os_sandbox._active_fingerprint
+    assert fingerprint is not None
+    await _start()
+    await _os_sandbox.async_shutdown_daemon()
+    assert _os_sandbox._active_fingerprint is fingerprint
+    _Daemon.shutdown_error = _Boom("shutdown failed")
+    with pytest.raises(_Boom, match="shutdown failed"):
+        await _os_sandbox.async_shutdown_daemon()
+    assert _os_sandbox._active_fingerprint is None
