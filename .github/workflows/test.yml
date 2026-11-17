@@ -8,9 +8,10 @@ on:
     branches: [ "**" ]
     paths-ignore: [ "**.md", "wiki/**" ]
 
-# Unit tests only. integration-tests, container-tests and sample-tests are
-# not run here: they need an OS provider, minikube-built images and the
-# samples' own API keys. See integration.yml for the integration suite.
+# Unit tests, plus a small provider smoke subset of the integration suite (see the
+# provider-smoke job below). The rest of integration-tests, container-tests and sample-tests
+# are not run here: they need a VM, minikube-built images or the samples' own API keys.
+# See integration.yml for the full integration suite.
 jobs:
   test:
     runs-on: ubuntu-latest
@@ -55,3 +56,57 @@ jobs:
 
     - name: Run unit tests
       run: make unit-tests
+
+  provider-smoke:
+    runs-on: ubuntu-latest
+    # subprocess, landlock, bwrap and unshare: the Linux providers that launch a real sandboxed child
+    # with no VM, no container and nothing beyond bwrap's/unshare's own needs. The unit tier above never
+    # launches one, so a regression like commit 02723db7 -- which broke every `-m` launch under every OS
+    # provider -- reached `develop` before the nightly tests/integration_tests/test_usage_with_providers.py
+    # run (.github/workflows/integration.yml) caught it. firejail, qemu, gvisor and smolvm still run only
+    # there, or in cross-os.yml for macOS/Windows: they need a VM, extra packages, or a kernel feature this
+    # fast job does not install.
+    steps:
+    - uses: actions/checkout@v5
+      with:
+        token: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Install build tools
+      run: sudo apt-get update && sudo apt-get install -y make build-essential
+
+    - name: Set up Python
+      uses: actions/setup-python@v6
+      with:
+        python-version: "3.14"
+
+    - name: Install Python development headers
+      run: sudo apt-get install -y python3-dev
+
+    # bwrap and unshare need their own namespaces; Ubuntu 24.04 restricts unprivileged user namespaces
+    # through AppArmor by default (see wiki/unshare.md). A container, as under `act`, cannot change that
+    # sysctl: the two rows then skip or fail there, not on a hosted runner.
+    - name: Install the provider binaries
+      run: |
+        sudo apt-get install -y bubblewrap slirp4netns iptables iproute2
+        sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0 || true
+
+    - name: Install uv
+      shell: bash
+      run: |
+        UV_VERSION="0.8.17"
+        UV_BIN_DIR="$RUNNER_TEMP/uv_bin"
+        mkdir -p "$UV_BIN_DIR"
+
+        # Download binary Linux/x86_64
+        curl -LsSf https://astral.sh/uv/install.sh | sh -s --
+
+        echo "$UV_BIN_DIR" >> $GITHUB_PATH
+
+    - name: Check installation of uv
+      run: uv --version
+
+    - name: Install dependencies
+      run: uv sync --group test
+
+    - name: Run the provider smoke tests
+      run: make provider-smoke-tests

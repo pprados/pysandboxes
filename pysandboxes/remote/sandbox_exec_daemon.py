@@ -44,6 +44,46 @@ def _sbpl_string(value: str) -> str:
     return '"' + value.replace("\\", "\\\\").replace('"', '\\"').replace("\n", "\\n") + '"'
 
 
+def _escape_class_ranges(content: str) -> str:
+    """Resolve the '-' characters of a character-class body the way CPython's
+    ``fnmatch.translate`` does: a '-' forms a range only between two single characters, not when
+    it is leading, trailing, or otherwise stray (``-abc``, ``abc-``, ``a-c-e``). Unlike
+    ``fnmatch.translate``, which escapes a stray hyphen with a backslash for a PCRE-style engine,
+    this moves it to the front of the class instead: a macOS VM confirms Seatbelt's regex engine
+    reads a backslash inside a bracket expression as a literal character, not an escape --
+    ``[a\\-c]`` denies 'a', 'b', 'c' and the range's own backslash endpoint, but not '-' itself --
+    and that, unlike POSIX bracket expressions, it only treats a *leading* '-' as literal: a
+    *trailing* one is a compile error ("unterminated bracket expression"), confirmed the same way.
+    """
+    if "-" not in content:
+        return content
+    chunks = []
+    i = 0
+    k = 1
+    n = len(content)
+    while True:
+        k = content.find("-", k, n)
+        if k < 0:
+            break
+        chunks.append(content[i:k])
+        i = k + 1
+        k = k + 3
+    tail = content[i:n]
+    if tail:
+        chunks.append(tail)
+    else:
+        chunks[-1] += "-"
+    has_literal_hyphen = False
+    clean_chunks = []
+    for chunk in chunks:
+        if "-" in chunk:
+            has_literal_hyphen = True
+            chunk = chunk.replace("-", "")
+        clean_chunks.append(chunk)
+    body = "-".join(clean_chunks)
+    return "-" + body if has_literal_hyphen else body
+
+
 def _glob_regex(pattern: str) -> str:
     """Translate the fnmatch wildcards used by ignore= to a whole-path regex.
 
@@ -54,7 +94,13 @@ def _glob_regex(pattern: str) -> str:
     class past the scan, as the match-anything wildcards they are everywhere else, instead of
     the literal characters fnmatch means there). A literal leading ``^`` or ``[`` -- as
     opposed to the ``!`` negation marker -- is escaped, since an unescaped ``^`` there is read
-    by the regex engine as negation, not as the character fnmatch means.
+    by the regex engine as negation, not as the character fnmatch means. A ``-`` inside the
+    class is resolved by ``_escape_class_ranges`` the same way fnmatch.translate resolves it, so
+    ``[a-z]``, ``[!a-z]`` and a literal ``-`` at either end match fnmatch's semantics. The
+    anchors stay ``^``/``$`` without a DOTALL wrapper: a macOS VM confirms Seatbelt's ``.``
+    already matches an embedded newline on its own, and its ``$``/``^`` are already strict (no
+    trailing/leading-newline leniency), so there is no behavioral gap for fnmatch.translate's
+    ``(?s:...)\\Z`` wrapper to close -- and that wrapper does not compile on this engine.
     """
     result = ["^"]
     index = 0
@@ -76,7 +122,7 @@ def _glob_regex(pattern: str) -> str:
             if j >= length:
                 result.append(r"\[")
             else:
-                content = pattern[start:j].replace("\\", "\\\\")
+                content = _escape_class_ranges(pattern[start:j].replace("\\", "\\\\"))
                 if content[:1] in ("^", "["):
                     content = "\\" + content
                 result.append("[" + ("^" if negated else "") + content + "]")

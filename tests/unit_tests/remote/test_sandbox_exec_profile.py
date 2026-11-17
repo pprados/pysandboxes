@@ -529,8 +529,12 @@ def test_the_profile_writer_thread_is_a_daemon_thread(tmp_path: Path) -> None:
 # `_glob_regex` targets Seatbelt's regex engine, not Python's, but compiling its output with
 # `re` and comparing against `fnmatch.fnmatchcase` -- the semantics `ignore=` patterns are
 # documented to follow -- catches a translation that silently drifts from what a pattern
-# author wrote, on any OS. The character-class cases were additionally confirmed against the
-# real Seatbelt engine, on a macOS VM, during this fix (see CHANGELOG.md / the PR notes).
+# author wrote, on any OS. The character-class and range cases were additionally confirmed
+# against the real Seatbelt engine, on a macOS VM, during this fix (see CHANGELOG.md / the PR
+# notes). The oracle below uses `fullmatch` with `re.DOTALL`: a VM probe confirms Seatbelt's own
+# `$`/`^` are strict (no trailing/leading-newline leniency, unlike Python's lenient default `$`)
+# and that its `.` already matches an embedded newline (unlike Python's non-DOTALL `.`) -- so
+# `fullmatch` plus `DOTALL` is what actually models the target engine, not `re`'s own defaults.
 _GLOB_REGEX_PATTERNS = (
     "*.pyc",
     "__pycache__",
@@ -542,12 +546,17 @@ _GLOB_REGEX_PATTERNS = (
     "[^abc]",
     "[abc^]",
     "[[ab]",
+    "[a-c]",
+    "[!a-c]",
+    "[-ac]",
+    "[ac-]",
     "a(b)c",
     "x{y}z",
     "a+b",
     "a|b",
     "a$b",
     "a.b",
+    "a*b",
     "no_wildcard",
 )
 _GLOB_REGEX_CANDIDATES = (
@@ -555,6 +564,7 @@ _GLOB_REGEX_CANDIDATES = (
     "b",
     "c",
     "d",
+    "-",
     "]",
     "^",
     "[",
@@ -574,15 +584,18 @@ _GLOB_REGEX_CANDIDATES = (
     "aXb",
     "no_wildcard",
     "no_wildcardX",
+    "a\nb",
+    "a\n",
+    "\na",
 )
 
 
 @pytest.mark.parametrize("pattern", _GLOB_REGEX_PATTERNS)
 def test_glob_regex_matches_fnmatch_over_a_candidate_corpus(pattern: str) -> None:
-    compiled = re.compile(_glob_regex(pattern))
+    compiled = re.compile(_glob_regex(pattern), re.DOTALL)
     for candidate in _GLOB_REGEX_CANDIDATES:
         expected = fnmatch.fnmatchcase(candidate, pattern)
-        actual = bool(compiled.match(candidate))
+        actual = bool(compiled.fullmatch(candidate))
         assert actual == expected, f"{pattern=} {candidate=}: fnmatch={expected} _glob_regex={actual}"
 
 

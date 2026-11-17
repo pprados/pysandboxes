@@ -1,6 +1,6 @@
 SHELL=/bin/bash
 .PHONY: all format format_diff lint lint_diff claude-lint coverage security-corpus fuzz crosshair \
-	unit-tests integration-tests container-tests sample-tests sample-tests-matrix all-tests gh-tests gh-all-tests \
+	unit-tests provider-smoke-tests integration-tests container-tests sample-tests sample-tests-matrix all-tests gh-tests gh-all-tests \
 	spell_check spell_fix pip-audit pip-audit-all clean extra-clean help \
 	api_docs_build api_docs_clean api_docs_linkcheck \
 	build-images build-image-base build-image-landlock build-image-unshare build-image-bwrap build-image-qemu build-image-qemu-microvm build-image-gvisor build-image-smolvm build-smolvm-guest build-image-docker build-image-podman build-image-clean \
@@ -53,6 +53,17 @@ compress-templates:
 ## Make unit test
 unit-tests:
 	set -a && if [ -f .env ]; then source .env; fi && unset VIRTUAL_ENV && uv run pytest -v tests/unit_tests/
+
+# The Linux providers that need no VM, no container and no extra privilege beyond bwrap's/unshare's own
+# (bubblewrap, slirp4netns, iptables, iproute2, plus an unprivileged-userns sysctl on some distros -- see
+# .github/workflows/test.yml): landlock, bwrap and unshare still need their own rows outside the pure unit
+# tier, which never launches a real sandboxed child. PYSANDBOXES_FAIL_ON_SKIP turns a provider that silently
+# skips here into a failure, since every one of the four is expected to actually run in this job.
+## Run the no-VM, no-container provider rows of test_usage_with_providers.py (subprocess, landlock, bwrap, unshare)
+provider-smoke-tests:
+	set -a && if [ -f .env ]; then source .env; fi && unset VIRTUAL_ENV && \
+		PYSANDBOXES_FAIL_ON_SKIP=1 uv run pytest -v tests/integration_tests/test_usage_with_providers.py \
+		-k "subprocess or landlock or bwrap or unshare"
 
 ## Run the known Python and transport attack regression corpus
 security-corpus:
@@ -966,7 +977,7 @@ lock: uv.lock
 # format is not a prerequisite: it rewrites the sources, which would make the
 # `ruff format --check` inside lint pass unconditionally.
 ## Validate the code
-validate: uv.lock lint spell_check pip-audit-all pip-audit unit-tests quick-demo-gif
+validate: uv.lock lint spell_check pip-audit-all pip-audit unit-tests provider-smoke-tests quick-demo-gif
 
 # quick-demo.gif is recorded from these files. A change to their content records it again: a hash, kept in
 # git, is compared rather than the dates, which a clone or a pull resets.

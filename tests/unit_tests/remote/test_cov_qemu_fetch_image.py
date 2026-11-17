@@ -2,6 +2,7 @@
 # License: Apache V2
 """``python -m pysandboxes.remote.qemu_fetch_image``, as CI and the qemu Dockerfile run it."""
 
+import sys
 from pathlib import Path
 
 import pytest  # type: ignore[import-untyped]
@@ -11,6 +12,7 @@ from pysandboxes.remote import qemu_fetch_image
 
 @pytest.fixture
 def image(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+    monkeypatch.setattr(sys, "argv", ["qemu_fetch_image"])
     path = tmp_path / "images" / "default.qcow2"
     monkeypatch.setattr(qemu_fetch_image, "get_vm_images_dir", lambda: path.parent)
     monkeypatch.setattr(qemu_fetch_image, "get_default_image_path", lambda: path)

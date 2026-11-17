@@ -21,6 +21,15 @@
   "skipped": 940,
   "source": "756ccc02f44c"
  },
+ "pysandboxes/guard_eval.py": {
+  "commit": "v0.12.0-87-g2798b3d-dirty",
+  "date": "2026-11-17",
+  "equivalent": 1,
+  "killed": 65,
+  "note": "scoped to the gateway-climb lines test_guard_eval_ambient_gateways.py alone executes (MUTATION_TESTS=that file); the rest of this large module is not covered by this run",
+  "skipped": 1706,
+  "source": "94d038fd069e"
+ },
  "pysandboxes/guard_socket.py": {
   "commit": "v0.7.0-68-gc642d90",
   "date": "2026-10-29",

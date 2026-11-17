@@ -432,7 +432,14 @@ def test_a_real_import_through_find_spec_is_accepted_pyc_cache_included(
 ) -> None:
     """An ordinary import must keep working: ``find_spec`` vets the loader it approves, so
     ``GuardLoader.exec_module``'s delegation to it is not refused. Importing a second time,
-    after evicting it, exercises the ``.pyc``-cache read the first import wrote."""
+    after evicting it, exercises the ``.pyc``-cache read the first import wrote.
+
+    Forces bytecode writing regardless of the runner's own ``PYTHONDONTWRITEBYTECODE``: without
+    a ``.pyc`` to read back, the second import silently falls back to compiling the source
+    again, and this test would keep passing without ever exercising the cache-read path it is
+    named for.
+    """
+    monkeypatch.setattr(sys, "dont_write_bytecode", False)
     module_path = tmp_path / "ordinary_import.py"
     module_path.write_text("VALUE = 1\n", encoding="utf-8")
     monkeypatch.syspath_prepend(str(tmp_path))
@@ -441,8 +448,10 @@ def test_a_real_import_through_find_spec_is_accepted_pyc_cache_included(
             with user_code():
                 module = importlib.import_module("ordinary_import")
                 assert module.VALUE == 1  # type: ignore[attr-defined]
+                cached = module.__cached__  # type: ignore[attr-defined]
                 del sys.modules["ordinary_import"]
                 importlib.invalidate_caches()
+                assert cached and Path(cached).exists(), "the first import must have written a .pyc to re-read"
                 module = importlib.import_module("ordinary_import")
                 assert module.VALUE == 1  # type: ignore[attr-defined]
     finally:

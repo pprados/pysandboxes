@@ -141,7 +141,7 @@ stays in scope ([`SECURITY.md`](SECURITY.md#what-counts-as-a-vulnerability)).
 
 ```bash
 make format
-make validate          # lock, lint, spell check, dependency audit, unit tests
+make validate          # lock, lint, spell check, dependency audit, unit tests, provider smoke tests
 make integration-tests # when the change touches a provider, the remote layer or a full workflow
 ```
 

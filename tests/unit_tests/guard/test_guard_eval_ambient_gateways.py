@@ -18,6 +18,7 @@ import builtins
 import code
 import importlib.abc
 import importlib.machinery
+import inspect
 import marshal
 import os
 import runpy
@@ -123,6 +124,16 @@ def test_every_gateway_table_entry_is_well_formed() -> None:
         assert qualname, module_key
 
 
+def test_a_bare_string_tag_is_not_mistaken_for_a_frozen_module() -> None:
+    """`<string>` ends with `>`, exactly like every frozen module name, but does not start with
+    `<frozen `: a plain `exec(source)` with no filename argument stamps the caller's own code
+    this way, so misreading it as frozen would make every later eval/exec/compile call from that
+    frame wrongly ambient -- exempting the application itself, the one thing this guard exists to
+    cover (see `is_ambient`'s own docstring on `<string>`)."""
+    frame = _frame_chain(("<string>", "<module>"))
+    assert not is_ambient(frame)
+
+
 # ----------------------------------------------------------- framework's own `-m` dispatch
 
 
@@ -160,6 +171,43 @@ def test_the_m_dispatch_chain_through_python_in_sb_and_main_sandbox_stays_ambien
     assert is_ambient(frame)
 
 
+def test_the_m_dispatch_chain_is_denied_once_the_framework_gateway_table_is_emptied(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Negative control for the fix itself, not only for its scope: the exact chain the test
+    above pins as ambient must stop being ambient once `_FRAMEWORK_GATEWAYS` is emptied,
+    proving that table -- and not some other rule -- is what makes it so.
+
+    Calling `_python_module` directly from a real frame (in-process or in a child process) is
+    not a usable substitute: it always ends up denied, with or without `_FRAMEWORK_GATEWAYS`,
+    because the caller then sitting above the dispatch chain (a test function, never frozen or
+    in the table) is exactly the application's-own-call-site case
+    `test_the_m_dispatch_gateway_keeps_climbing_past_itself_instead_of_concluding_there` covers;
+    only a real `-m` launch has nothing but frozen import machinery there, which is what the
+    synthetic chain below stands in for (see its own comment). An end-to-end launch proves the
+    production table still works (`tests/unit_tests/remote/test_m_launch_regression.py`); this
+    test isolates *why*.
+    """
+    python_in_sb_file = _pysandboxes_file("remote", "python_in_sb.py")
+    main_sandbox_file = _pysandboxes_file("remote", "main_sandbox.py")
+    frame = _frame_chain(
+        ("<frozen importlib._bootstrap>", "_find_and_load"),
+        (main_sandbox_file, "<module>"),
+        (main_sandbox_file, "main"),
+        (main_sandbox_file, "run_guest"),
+        (python_in_sb_file, "python_in_sb"),
+        (python_in_sb_file, "_python_module"),
+        ("<frozen runpy>", "run_module"),
+        ("<frozen runpy>", "_get_module_details"),
+        ("<frozen importlib._bootstrap_external>", "SourceLoader.get_code"),
+        ("<frozen importlib._bootstrap_external>", "_compile_bytecode"),
+    )
+
+    monkeypatch.setattr(guard_eval, "_FRAMEWORK_GATEWAYS", frozenset())
+
+    assert not is_ambient(frame)
+
+
 def test_a_different_python_in_sb_function_is_not_treated_as_the_m_dispatch_gateway() -> None:
     """Negative control: the exemption is scoped to the exact `-m` dispatch frames, not every
     function in `python_in_sb.py`. `_python_script`/`_python_command` already launch the user's
@@ -170,6 +218,29 @@ def test_a_different_python_in_sb_function_is_not_treated_as_the_m_dispatch_gate
         (python_in_sb_file, "_python_script"),
         ("<frozen importlib._bootstrap_external>", "_compile_bytecode"),
     )
+    assert not is_ambient(frame)
+
+
+def test_a_non_dispatch_frame_under_the_package_root_is_still_judged_on_its_own() -> None:
+    """`_framework_key(filename) is not None` alone must never be enough to keep climbing past a
+    frame; only together with the exact `(key, qualname)` match. The frame handed to `is_ambient`
+    is `_python_script` (under the package root, not one of the five dispatch qualnames); above
+    it sits a frame the ordinary module-key rule alone would call ambient (a non-gateway frozen
+    frame). Wrongly treating the first frame as a forwarding gateway would climb past it and
+    conclude ambient there; judging it on its own, as the application's call site, concludes not
+    ambient instead, without even reaching the frame above it."""
+    python_in_sb_file = _pysandboxes_file("remote", "python_in_sb.py")
+    frame = _frame_chain(("<frozen importlib._bootstrap>", "_find_and_load"), (python_in_sb_file, "_python_script"))
+    assert not is_ambient(frame)
+
+
+def test_the_m_dispatch_gateway_keeps_climbing_past_itself_instead_of_concluding_there() -> None:
+    """A dispatch frame only forwards the climb to whoever is above it; it is never itself the
+    answer. Stacking a frame above it that is unambiguously the application's own call site (an
+    arbitrary non-stdlib path) must still be reached and judged, not skipped by concluding ambient
+    right at the dispatch frame."""
+    python_in_sb_file = _pysandboxes_file("remote", "python_in_sb.py")
+    frame = _frame_chain(("/tmp/attacker.py", "<module>"), (python_in_sb_file, "_python_module"))
     assert not is_ambient(frame)
 
 
@@ -298,7 +369,13 @@ def test_a_real_import_with_a_pyc_cache_still_works_while_marshal_is_armed(
     _armed_with_no_eval_rule_at_all: None, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """The route `_compile_bytecode` takes to read a `.pyc` must stay ambient: it is the
-    library reading its own earlier output, not the caller's."""
+    library reading its own earlier output, not the caller's.
+
+    Forces bytecode writing regardless of the runner's own `PYTHONDONTWRITEBYTECODE`: the test
+    needs a `.pyc` to exist for the second import to read back, independent of the environment
+    it runs in.
+    """
+    monkeypatch.setattr(sys, "dont_write_bytecode", False)
     module_path = tmp_path / "pyc_cache_probe.py"
     module_path.write_text("VALUE = 2\n", encoding="utf-8")
     monkeypatch.syspath_prepend(str(tmp_path))
@@ -371,6 +448,82 @@ def _scan_file(path: Path, rel: str) -> list[tuple[str, str]]:
 
     Visitor().visit(tree)
     return findings
+
+
+# ------------------------------------------------------------------------ wrapper mechanics
+
+
+def test_wrapping_a_fresh_eval_like_builtin_produces_a_real_wrapper() -> None:
+    """The idempotency check's default (`getattr(func, "__pysandbox_eval__", False)`) must read
+    `False`, not `True`, for a builtin with no such attribute at all -- the ordinary case, the
+    very first time a builtin is wrapped. Reading `True` there would make a fresh, unwrapped
+    builtin look already-guarded and hand it straight back, unwrapped."""
+    wrapped = guard_eval._wrap_eval_like(builtins.eval, qualname="builtins.eval", mode="eval")
+    assert wrapped is not builtins.eval
+
+
+def test_wrapping_an_already_wrapped_eval_like_builtin_is_a_no_op() -> None:
+    """The idempotency check itself: wrapping the wrapper again must hand back the same object,
+    not nest a second guard around it (which would, among other things, shift the frame
+    `sys._getframe(1)` reads one level further from the true caller)."""
+    wrapped_once = guard_eval._wrap_eval_like(builtins.eval, qualname="builtins.eval", mode="eval")
+    wrapped_twice = guard_eval._wrap_eval_like(wrapped_once, qualname="builtins.eval", mode="eval")
+    assert wrapped_twice is wrapped_once
+
+
+def test_wrapping_an_already_wrapped_compile_is_a_no_op() -> None:
+    wrapped_once = guard_eval._wrap_compile(builtins.compile)
+    wrapped_twice = guard_eval._wrap_compile(wrapped_once)
+    assert wrapped_twice is wrapped_once
+
+
+def test_wrapping_an_already_wrapped_marshal_function_is_a_no_op() -> None:
+    wrapped_once = guard_eval._wrap_marshal(marshal.loads, qualname="marshal.loads")
+    wrapped_twice = guard_eval._wrap_marshal(wrapped_once, qualname="marshal.loads")
+    assert wrapped_twice is wrapped_once
+
+
+@pytest.mark.parametrize(
+    ("original", "wrapped"),
+    [
+        (builtins.eval, guard_eval._wrap_eval_like(builtins.eval, qualname="builtins.eval", mode="eval")),
+        (builtins.compile, guard_eval._wrap_compile(builtins.compile)),
+        (marshal.loads, guard_eval._wrap_marshal(marshal.loads, qualname="marshal.loads")),
+    ],
+    ids=["eval", "compile", "marshal.loads"],
+)
+def test_a_wrapped_builtin_keeps_the_original_name_and_signature(
+    original: Callable[..., Any], wrapped: Callable[..., Any]
+) -> None:
+    """`@guard_wraps(func)` copies `__name__`/`__doc__`/`__signature__` from the original so the
+    wrapper still introspects like it, which the samples rely on; dropping the decorator leaves
+    the wrapper's own literal name (`"wrapper"`) and no restored signature instead."""
+    assert wrapped.__name__ == original.__name__
+    assert inspect.signature(wrapped) == inspect.signature(original)
+
+
+def test_eval_wrapper_reconstructs_both_positional_globals_and_locals(monkeypatch: pytest.MonkeyPatch) -> None:
+    """`len(args) >= 1`/`>= 2` must stay `>=`, not `==`: a real `eval(source, g, l)` call passes
+    both extra arguments positionally (`len(args) == 2`), which must still read `g` as `globals_`
+    and `l` as `locals_`, not silently fall back to `frame.f_globals`/an empty `kwargs.pop`."""
+    monkeypatch.setattr(guard_eval, "is_armed", lambda: False)
+    wrapped = guard_eval._wrap_eval_like(builtins.eval, qualname="builtins.eval", mode="eval")
+    sentinel_globals = {"__builtins__": builtins, "answer": 42}
+    assert wrapped("answer", sentinel_globals, {}) == 42
+
+
+def test_eval_wrapper_still_enforces_when_armed_with_no_rule_declared(monkeypatch: pytest.MonkeyPatch) -> None:
+    """`not is_armed() or is_ambient(...) or is_allowed(...)` is the unguarded passthrough; it
+    must stay a passthrough only while *not* armed, never while armed. Forcing every other
+    disjunct False isolates `is_armed()` itself: armed, not ambient, not allowed must still reach
+    the refusal, not fall through to the raw builtin."""
+    monkeypatch.setattr(guard_eval, "is_armed", lambda: True)
+    monkeypatch.setattr(guard_eval, "is_ambient", lambda frame: False)
+    monkeypatch.setattr(guard_eval.guard_api, "is_allowed", lambda name: False)
+    monkeypatch.setattr(guard_eval, "_profiles", ImmutableDict({}))
+    wrapped = guard_eval._wrap_eval_like(builtins.eval, qualname="builtins.eval", mode="eval")
+    with pytest.raises(RuleApiPermissionError):
+        wrapped("1 + 1")
 
 
 def test_every_stdlib_exec_eval_compile_gateway_is_covered_or_excluded() -> None:

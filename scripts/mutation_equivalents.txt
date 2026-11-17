@@ -28,6 +28,7 @@ pysandboxes/netfilter.py | ReplaceComparisonOperator_Eq_Is | if (dns.version == 
 pysandboxes/py_sandbox.py | ReplaceComparisonOperator_Eq_Is | if caller_name == "__main__" and caller_spec is not None:
 pysandboxes/tools.py | ReplaceComparisonOperator_Lt_NotEq | while i < len(line):
 pysandboxes/remote/slirp4netns_common.py | ReplaceComparisonOperator_Eq_Is | if kind == Kind.TCP:
+pysandboxes/guard_eval.py | ReplaceComparisonOperator_GtE_Eq | locals_: Any = args[1] if len(args) >= 2 else kwargs.pop("locals", None)
 pysandboxes/remote/slirp4netns_common.py | ReplaceComparisonOperator_Eq_Is | elif kind == Kind.UDP:
 pysandboxes/remote/qemu_sse_daemon.py | ReplaceTrueWithFalse | out.add(p.resolve(strict=True))
 pysandboxes/remote/qemu_sse_daemon.py | ReplaceTrueWithFalse | dirs.add(dep.parent.resolve(strict=True))

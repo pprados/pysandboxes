@@ -375,6 +375,96 @@ def _sidecar_matches(path: Path) -> bool:
         return False
 
 
+_HASH_CHUNK_BYTES = 1024 * 1024  # 1 MiB: hashes a 600+ MiB cached image without loading it whole.
+
+
+def _upstream_url_for_cached_name(name: str) -> str | None:
+    """Return the standard download URL whose filename matches a cached image's own name.
+
+    Tried against every (release, pattern) pysandboxes currently maps a Python version to, and
+    the Debian one, across every known architecture -- never the current interpreter's own
+    version or arch, since a cached image can be older than either and still need verifying.
+
+    A release this process no longer maps to a Python version (a retired devel codename, for
+    example) resolves to no URL here, even if its name would otherwise match: a codename's
+    ``current/`` directory moves on, so its ``SHA256SUMS``/``SHA512SUMS`` would be compared
+    against bytes that are no longer the ones published when the image was cached, which is a
+    mismatch this function should never manufacture by resolving a URL for it.
+    """
+    for debian_arch in set(_ARCH_TO_DEBIAN.values()):
+        candidate = f"debian-12-generic-{debian_arch}.qcow2"
+        if name == candidate:
+            return f"{DEBIAN_CLOUD_BASE}/{candidate}"
+    seen: set[tuple[str, str]] = set()
+    for release, pattern in PYTHON_VERSION_TO_UBUNTU_IMAGE.values():
+        if (release, pattern) in seen or not _UBUNTU_NUMERIC_RELEASE_DIR.fullmatch(release):
+            continue
+        seen.add((release, pattern))
+        for debian_arch in set(_ARCH_TO_DEBIAN.values()):
+            filename = pattern.format(arch=debian_arch)
+            if name == filename:
+                return f"{UBUNTU_CLOUD_RELEASES_BASE}/{release}/release/{filename}"
+    return None
+
+
+def _hash_file(path: Path, algorithm: str) -> str:
+    """Return the lowercase hex digest of path, read in chunks so a 600+ MiB image never loads whole."""
+    digest = hashlib.new(algorithm)
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(_HASH_CHUNK_BYTES), b""):
+            digest.update(chunk)
+    return digest.hexdigest().lower()
+
+
+def verify_cached_image(path: Path, *, url: str | None = None) -> str:
+    """Verify one cached image against its upstream checksum, writing its sidecar on a match.
+
+    Returns ``"verified"``, ``"mismatch"``, or ``"unavailable"`` (no URL could be derived for
+    this filename, or no checksums file could be fetched for it) -- the same "nothing to verify
+    against" case :func:`ensure_image` already treats as non-fatal for a cached file. Never
+    raises for a network condition, never downloads anything, and never modifies or removes the
+    image itself, whatever the outcome.
+
+    Args:
+        path: The cached image to verify. Hashed in place, in chunks: never fully loaded.
+        url: The upstream URL to check it against, overriding the one its own filename would
+            otherwise resolve to.
+    """
+    resolved_url = url or _upstream_url_for_cached_name(path.name)
+    if resolved_url is None:
+        return "unavailable"
+    expected = _neighbor_checksum(resolved_url)
+    if expected is None:
+        return "unavailable"
+    algorithm, expected_hex = expected
+    actual_hex = _hash_file(path, algorithm)
+    if actual_hex != expected_hex.strip().lower():
+        return "mismatch"
+    _write_sidecar(path, algorithm, actual_hex)
+    return "verified"
+
+
+def migrate_image_cache(images_dir: Path | None = None) -> dict[Path, str]:
+    """Verify every cached image without a checksum sidecar in images_dir, writing one on a match.
+
+    Returns ``{path: outcome}`` for every candidate found (see :func:`verify_cached_image` for
+    the three outcomes), so a caller can report what happened without re-deriving the scan.
+    Only files already in images_dir are touched: nothing is downloaded, and no image is ever
+    removed or rewritten, only the small sidecar a verified one gets.
+    """
+    resolved_dir = images_dir if images_dir is not None else get_vm_images_dir()
+    results: dict[Path, str] = {}
+    if not resolved_dir.is_dir():
+        return results
+    for candidate in sorted(resolved_dir.iterdir()):
+        if not candidate.is_file() or candidate.suffix not in (".img", ".qcow2"):
+            continue
+        if _sidecar_path(candidate).is_file():
+            continue
+        results[candidate] = verify_cached_image(candidate)
+    return results
+
+
 class _ChecksumMismatch(OSError):
     """Raised internally when a download's digest does not match the expected one."""
 

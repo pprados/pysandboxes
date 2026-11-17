@@ -31,6 +31,11 @@ Execute the unit test suite. This is the main test surface that CI runs.
 
 make unit-tests
 
+CI also runs a small provider smoke subset of the integration suite on every push (subprocess, landlock,
+bwrap, unshare -- see the `provider-smoke` job in `.github/workflows/test.yml`):
+
+make provider-smoke-tests
+
 ### Step 3: Run integration tests
 
 Run integration tests if your change touches remote or sandbox behavior.

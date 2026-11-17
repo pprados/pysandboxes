@@ -633,9 +633,13 @@ def _runtime_acl_fingerprint(path: Path) -> str:
     return "-".join(str(stamp) for stamp in stamps)
 
 
+def _runtime_acl_key_prefix(path: Path, sid: str) -> str:
+    return f"{os.path.normcase(str(path.resolve(strict=False)))}|{sid}|"
+
+
 def _runtime_acl_key(path: Path, sid: str) -> str:
     fingerprint = _runtime_acl_fingerprint(path)
-    return f"{os.path.normcase(str(path.resolve(strict=False)))}|{sid}|{fingerprint}|objects-v3"
+    return f"{_runtime_acl_key_prefix(path, sid)}{fingerprint}|objects-v3"
 
 
 def _runtime_acl_cached(path: Path, sid: str) -> bool:
@@ -654,6 +658,8 @@ def _cache_runtime_acl(path: Path, sid: str) -> None:
 
     cache_path = _runtime_acl_cache_path()
     cached = set(json.loads(cache_path.read_text(encoding="utf-8"))) if cache_path.exists() else set()
+    prefix = _runtime_acl_key_prefix(path, sid)
+    cached = {key for key in cached if not key.startswith(prefix)}
     cached.add(_runtime_acl_key(path, sid))
     with tempfile.NamedTemporaryFile("w", encoding="utf-8", dir=cache_path.parent, delete=False) as stream:
         json.dump(sorted(cached), stream)

@@ -217,7 +217,17 @@ For the standard Debian/Ubuntu image, a download is refused outright if neither 
 
 A digest mismatch is retried once (the file may have been mid-publish upstream) before failing closed and deleting the partial download. The byte count is also checked against `Content-Length` regardless of any checksum, since a connection cut short does not reliably raise inside `urllib.request`.
 
-Once verified, a `<image>.sha256` sidecar records the digest, size and mtime next to the cached image; reuse on a later run checks only size and mtime against it (no re-hash). A cached image without a sidecar (e.g. placed there manually, or downloaded before this feature existed) is used as-is with one warning, never re-verified retroactively. A sidecar that no longer matches its image triggers a fresh, verified download.
+Once verified, a `<image>.sha256` sidecar records the digest, size and mtime next to the cached image; reuse on a later run checks only size and mtime against it (no re-hash). A cached image without a sidecar (e.g. placed there manually, or downloaded before this feature existed) is used as-is with one warning, never re-verified on its own. A sidecar that no longer matches its image triggers a fresh, verified download.
+
+### Retroactively verifying a cached image
+
+```bash
+python -m pysandboxes.remote.qemu_fetch_image --migrate-cache
+```
+
+Verifies every image in the VM images directory that has no `.sha256` sidecar yet, and writes one for each that matches its own upstream checksum. The upstream URL is derived from each image's own filename (its Debian or Ubuntu release), never from the current Python version or architecture, so an older cached image (e.g. an Ubuntu 23.04 image kept around for Python 3.11 while another version runs this command) is checked against its own release, not today's default. An image whose release no longer maps to a supported Python version (a retired development codename, for example) is reported as `unavailable`: its upstream directory tracks the latest development snapshot rather than a fixed release, so there would be nothing stable to compare it against.
+
+Nothing is ever downloaded, deleted or rewritten besides the sidecar: a mismatch is reported and the image is left exactly as it was, still usable with the one-time warning above.
 
 ### Mapping: Python version → image (Ubuntu, 3.11 to 3.14)
 

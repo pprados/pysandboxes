@@ -3,6 +3,7 @@
 """``python -m pysandboxes.remote.qemu_fetch_image``: the exit code of the process is the one ``main()`` returns."""
 
 import runpy
+import sys
 from pathlib import Path
 
 import pytest  # type: ignore[import-untyped]
@@ -17,6 +18,7 @@ pytestmark = pytest.mark.filterwarnings(f"ignore:'{_MODULE}' found in sys.module
 
 @pytest.fixture
 def image(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+    monkeypatch.setattr(sys, "argv", ["qemu_fetch_image"])
     path = tmp_path / "images" / "default.qcow2"
     monkeypatch.setattr(qemu_image, "get_vm_images_dir", lambda: path.parent)
     monkeypatch.setattr(qemu_image, "get_default_image_path", lambda: path)

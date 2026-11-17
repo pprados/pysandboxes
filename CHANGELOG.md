@@ -34,6 +34,7 @@
 - Reject `port=` values above 65535 at config parsing instead of letting the sandbox daemon crash later with an opaque `OverflowError` from `socket.bind()`.
 - A corrupted or hostile `ImmutableDict` pickle stream with a non-hashable key now raises `ValueError` like every other malformed stream, instead of `TypeError`.
 - `sandbox-exec`: an `ignore=` pattern with a literal `^` in a `[...]` character class (e.g. `[^abc]`, fnmatch's literal class, not a regex negation) is now translated to a Seatbelt regex that denies that class, instead of one that Seatbelt reads as negated and denies the opposite set of names.
+- `sandbox-exec`: an `ignore=` pattern with a character-class range (e.g. `[a-z]`, `[!a-z]`) or a literal `-` at either end of a class (e.g. `[-abc]`, `[abc-]`) is now translated to match fnmatch's semantics, instead of a trailing `-` making the whole Seatbelt profile fail to compile ("unterminated bracket expression") and every file access under that os-sandbox fail with it.
 - `net-resolve=runtime`: a host name whose first resolution attempt needed the socket's own type to succeed is now learned and opened like any other allowed name, instead of being refused by the default policy.
 - The network guard now refuses `bind()`, `connect()`, `connect_ex()` and `sendto()` on an `AF_PACKET` (and similarly-shaped) address with a clean refusal instead of resolving its interface name as a hostname or crashing on its socket type.
 - `net-resolve=runtime`'s filtering DNS resolver now honors a client's own EDNS0 buffer size instead of always truncating a UDP answer over 512 bytes, so a resolver-aware program no longer pays for a needless TCP retry.
@@ -70,6 +71,7 @@
 - `appcontainer`: a path's ACL is now granted or revoked on a verified, held-open handle instead of by name, closing a race where a junction or symlink swapped in after planning could redirect the change to another object.
 - Running a program with `-m` under any OS provider no longer denies `marshal.loads`/`builtins.compile` on the entry module's own bytecode cache with no `python-api=ALLOW:dynamic-code` grant declared, a regression that broke every `-m` launch.
 - `appcontainer`: a venv resynced since its last run (`uv sync`, a reinstalled editable package, a rebuilt `.venv`) now gets its interpreter tree re-scanned for the AppContainer grant instead of reusing a cache keyed only on the venv's own path, which could leave a newly written file, notably an editable install's own `.pth`, without the read access needed to import it; this could make an editable install's own module fail to import under `appcontainer` whenever the sandboxed program's working directory happened not to be the project root (a `-m` launch from the project root masked it, since Python then finds the package through its own directory on `sys.path` regardless of the `.pth` file).
+- `qemu`: `python -m pysandboxes.remote.qemu_fetch_image --migrate-cache` now verifies a cached image downloaded before the checksum feature existed against its own upstream checksums and writes its sidecar on a match, instead of leaving it unverified for good.
 
 ## [0.12.0] - 2026-11-13
 

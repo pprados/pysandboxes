@@ -309,3 +309,123 @@ class TestEnsureImageChecksum:
             assert qemu_image.ensure_image(image) == image
 
         assert "without a checksum sidecar" in caplog.text
+
+
+class TestUpstreamUrlForCachedName:
+    def test_a_debian_image_name_resolves_to_the_debian_url(self) -> None:
+        url = qemu_image._upstream_url_for_cached_name("debian-12-generic-amd64.qcow2")
+
+        assert url == f"{qemu_image.DEBIAN_CLOUD_BASE}/debian-12-generic-amd64.qcow2"
+
+    def test_an_ubuntu_image_name_resolves_to_its_own_release_not_the_current_one(self) -> None:
+        """23.04 is the image for Python 3.11, not the interpreter running this test."""
+        url = qemu_image._upstream_url_for_cached_name("ubuntu-23.04-server-cloudimg-amd64.img")
+
+        assert url == f"{qemu_image.UBUNTU_CLOUD_RELEASES_BASE}/23.04/release/ubuntu-23.04-server-cloudimg-amd64.img"
+
+    def test_a_retired_codename_image_resolves_to_nothing(self) -> None:
+        """`resolute` tracked a devel series and is no longer in PYTHON_VERSION_TO_UBUNTU_IMAGE: its
+        `current/` directory has moved on since any such cached image was fetched, so resolving a URL
+        for it would compare against bytes that were never the ones cached."""
+        assert qemu_image._upstream_url_for_cached_name("resolute-server-cloudimg-amd64.img") is None
+
+    def test_an_unknown_name_resolves_to_nothing(self) -> None:
+        assert qemu_image._upstream_url_for_cached_name("my-custom-image.qcow2") is None
+
+
+class TestHashFile:
+    def test_matches_hashlib_computed_directly(self, tmp_path: Path) -> None:
+        content = b"some image bytes" * 1000
+        path = tmp_path / "image.bin"
+        path.write_bytes(content)
+
+        assert qemu_image._hash_file(path, "sha256") == hashlib.sha256(content).hexdigest()
+
+    def test_reads_in_chunks_not_whole(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setattr(qemu_image, "_HASH_CHUNK_BYTES", 4)
+        content = b"0123456789abcdef"
+        path = tmp_path / "image.bin"
+        path.write_bytes(content)
+
+        assert qemu_image._hash_file(path, "sha256") == hashlib.sha256(content).hexdigest()
+
+
+class TestVerifyCachedImage:
+    def test_a_matching_image_is_verified_and_gets_a_sidecar(self, server: Any, tmp_path: Path) -> None:
+        content = b"a cached image, fetched before the checksum feature existed"
+        image = tmp_path / "vm.img"
+        image.write_bytes(content)
+        digest = hashlib.sha256(content).hexdigest()
+        server.serve("/SHA256SUMS", f"{digest} *vm.img\n".encode())
+
+        outcome = qemu_image.verify_cached_image(image, url=server.url("/vm.img"))
+
+        assert outcome == "verified"
+        sidecar = tmp_path / "vm.img.sha256"
+        assert sidecar.is_file()
+        assert sidecar.read_text().startswith(f"sha256:{digest}:")
+        assert image.read_bytes() == content, "the image itself is never rewritten"
+
+    def test_a_mismatching_image_is_refused_and_gets_no_sidecar(self, server: Any, tmp_path: Path) -> None:
+        content = b"a cached image that does not match what upstream now publishes"
+        image = tmp_path / "vm.img"
+        image.write_bytes(content)
+        server.serve("/SHA256SUMS", f"{'0' * 64} *vm.img\n".encode())
+
+        outcome = qemu_image.verify_cached_image(image, url=server.url("/vm.img"))
+
+        assert outcome == "mismatch"
+        assert not (tmp_path / "vm.img.sha256").exists()
+        assert image.read_bytes() == content, "a refused image is never deleted or modified"
+
+    def test_no_checksums_file_is_unavailable_not_an_error(self, server: Any, tmp_path: Path) -> None:
+        image = tmp_path / "vm.img"
+        image.write_bytes(b"content")
+
+        outcome = qemu_image.verify_cached_image(image, url=server.url("/vm.img"))
+
+        assert outcome == "unavailable"
+        assert not (tmp_path / "vm.img.sha256").exists()
+
+    def test_a_name_with_no_derivable_url_is_unavailable_without_any_network_call(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setattr(
+            qemu_image, "_neighbor_checksum", lambda url: pytest.fail("must not even try to fetch anything")
+        )
+        image = tmp_path / "my-custom-image.qcow2"
+        image.write_bytes(b"content")
+
+        assert qemu_image.verify_cached_image(image) == "unavailable"
+
+
+class TestMigrateImageCache:
+    def test_a_cached_image_matching_its_upstream_sums_is_verified(
+        self, server: Any, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setattr(qemu_image, "DEBIAN_CLOUD_BASE", server.base_url)
+        content = b"a real debian cloud image's bytes, cached before this feature existed"
+        image = tmp_path / "debian-12-generic-amd64.qcow2"
+        image.write_bytes(content)
+        digest = hashlib.sha512(content).hexdigest()
+        server.serve("/SHA512SUMS", f"{digest}  debian-12-generic-amd64.qcow2\n".encode())
+
+        results = qemu_image.migrate_image_cache(tmp_path)
+
+        assert results == {image: "verified"}
+        assert (tmp_path / "debian-12-generic-amd64.qcow2.sha256").is_file()
+
+    def test_an_image_that_already_has_a_sidecar_is_left_alone(self, tmp_path: Path) -> None:
+        image = tmp_path / "debian-12-generic-amd64.qcow2"
+        image.write_bytes(b"content")
+        (tmp_path / "debian-12-generic-amd64.qcow2.sha256").write_text("sha256:abc:7:1\n", encoding="utf-8")
+
+        assert qemu_image.migrate_image_cache(tmp_path) == {}
+
+    def test_non_image_files_are_ignored(self, tmp_path: Path) -> None:
+        (tmp_path / "README.txt").write_text("not an image\n", encoding="utf-8")
+
+        assert qemu_image.migrate_image_cache(tmp_path) == {}
+
+    def test_a_missing_directory_returns_an_empty_result_without_raising(self, tmp_path: Path) -> None:
+        assert qemu_image.migrate_image_cache(tmp_path / "absent") == {}

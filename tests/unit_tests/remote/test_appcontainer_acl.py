@@ -4,6 +4,7 @@
 
 import builtins
 import errno
+import json
 import os
 from contextlib import nullcontext
 from ipaddress import ip_network
@@ -167,6 +168,42 @@ def test_runtime_acl_cache_is_invalidated_when_site_packages_changes(tmp_path: P
     os.utime(site_packages, (bumped, bumped))
 
     assert not appcontainer_acl._runtime_acl_cached(venv, "runtime-a")
+
+
+def test_caching_a_new_fingerprint_drops_the_stale_entry_for_the_same_path_and_sid(  # type: ignore[no-untyped-def]
+    tmp_path: Path, monkeypatch
+) -> None:
+    """Each resync adds a key with a new fingerprint (the fix above); nothing ever removed the
+    old one, so the cache file only grew across the lifetime of a venv. The stale entry for the
+    same (path, sid) must be dropped when a new one is cached; a key for another path or
+    capability is unrelated and must survive."""
+    monkeypatch.setenv("LOCALAPPDATA", str(tmp_path))
+    venv = tmp_path / "venv"
+    site_packages = venv / "Lib" / "site-packages"
+    site_packages.mkdir(parents=True)
+    other_path = tmp_path / "other"
+    other_path.mkdir()
+
+    appcontainer_acl._cache_runtime_acl(venv, "runtime-a")
+    appcontainer_acl._cache_runtime_acl(other_path, "runtime-a")  # negative control: other path
+
+    # A resync changes the fingerprint without us ever clearing the old entry by hand. It
+    # invalidates every sid's grant for this path (the pre-existing fix above), so the
+    # "other capability" negative control is cached at the new fingerprint, like a real run
+    # would re-cache it too -- the point here is only that pruning never touches its own key.
+    bumped = site_packages.stat().st_mtime + 5
+    os.utime(site_packages, (bumped, bumped))
+    appcontainer_acl._cache_runtime_acl(venv, "runtime-b")  # negative control: other capability
+    appcontainer_acl._cache_runtime_acl(venv, "runtime-a")
+
+    cache_path = appcontainer_acl._runtime_acl_cache_path()
+    cached = json.loads(cache_path.read_text(encoding="utf-8"))
+    prefix = appcontainer_acl._runtime_acl_key_prefix(venv, "runtime-a")
+    matching = [key for key in cached if key.startswith(prefix)]
+
+    assert matching == [appcontainer_acl._runtime_acl_key(venv, "runtime-a")]
+    assert appcontainer_acl._runtime_acl_cached(other_path, "runtime-a")
+    assert appcontainer_acl._runtime_acl_cached(venv, "runtime-b")
 
 
 def test_read_only_grant_reuses_windows_appcontainer_access(tmp_path: Path, monkeypatch) -> None:  # type: ignore[no-untyped-def]
