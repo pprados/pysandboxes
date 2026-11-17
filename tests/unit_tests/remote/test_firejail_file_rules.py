@@ -8,7 +8,7 @@ from unittest.mock import patch
 
 import pytest
 
-from pysandboxes.all_rules import EmptyRules
+from pysandboxes.all_rules import AllRules, EmptyRules
 from pysandboxes.guard_files import FSExposeRule, IgnoreRule, parse_rules
 from pysandboxes.remote import firejail_sse_daemon
 from pysandboxes.remote.firejail_sse_daemon import FireJailSSEDaemon
@@ -25,7 +25,7 @@ def _firejail_args(rule: str, tmp_path: Path) -> list[str]:
     return list(args)
 
 
-def _firejail_args_for_rules(rules: EmptyRules, tmp_path: Path) -> list[str]:
+def _firejail_args_for_rules(rules: AllRules, tmp_path: Path) -> list[str]:
     with patch.object(firejail_sse_daemon, "which_command", return_value="/usr/bin/firejail"):
         args, _ = FireJailSSEDaemon("token")._firejail_args(rules, {}, None, tmp_path)
     return list(args)
