@@ -152,9 +152,9 @@ The OS layer is selected with `os-sandbox=<provider>` in `.py-sandboxes`, or for
 |---|---|
 | Default on Linux, nothing to install, no privilege (files and TCP ports) | `landlock` |
 | Untrusted native code, or host and UDP filtering | `bwrap` or `unshare` |
-| Strongest separation, a VM (slower: more than 20 s to start) | `qemu` |
+| Strongest separation, a VM (slower: about 13 s to start) | `qemu` |
 | Smaller QEMU machine, Linux x86_64, with an eight-transport ceiling | `qemu-microvm` |
-| Compiled code or kernel exploits, with a user-space kernel (starts in about a second) | `gvisor` |
+| Compiled code or kernel exploits, with a user-space kernel (adds about 0.4 s to start) | `gvisor` |
 | Resource limits and seccomp | `firejail` |
 | Inside Docker or Podman | `landlock`, `qemu` or `qemu-microvm` unprivileged; `unshare`, `bwrap` or `gvisor` with `--privileged` |
 | Files and ports on macOS (no host filtering) | `sandbox-exec` |
