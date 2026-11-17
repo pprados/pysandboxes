@@ -16,6 +16,7 @@ import sys
 import threading
 import uuid
 from collections.abc import Iterator, Mapping
+from concurrent.futures import CancelledError as FutureCancelledError
 from typing import Any, Callable, NamedTuple, cast
 
 from .all_rules import AllRules
@@ -201,6 +202,7 @@ def _policy_fingerprint(
 def _check_nested_policy(fingerprint: _PolicyFingerprint) -> None:
     if (
         _active_fingerprint is None
+        or getattr(_current_daemon, "_failure", None) is not None
         or _active_fingerprint.init_fn is not fingerprint.init_fn
         or _active_fingerprint != fingerprint
     ):
@@ -264,6 +266,16 @@ def _kill_unstarted_sandbox(os_provider: BaseDaemon | None) -> None:
         pass
 
 
+async def _invalidate_daemon(daemon: BaseDaemon) -> None:
+    """Terminate a timed-out daemon while retaining its open context references."""
+    global _active_fingerprint
+    async with _async_start_lock:
+        if _current_daemon is daemon:
+            _active_fingerprint = None
+        daemon._accept_incoming = False
+        await daemon._shutdown(False)
+
+
 async def async_start_daemon(
     all_rules: AllRules,
     *,
@@ -271,6 +283,7 @@ async def async_start_daemon(
     log_level: int,
     init_fn: SyncOrAsyncFunc | None,
     python_args: list[str] | None = None,
+    _cancelled: threading.Event | None = None,
 ) -> BaseDaemon:
     """
     Core logic to asynchronously start a daemon.
@@ -317,6 +330,8 @@ async def async_start_daemon(
                 os_provider._result_data_only = all_rules.remote_result_data_only
             _starting_daemon = os_provider
             await os_provider._start(all_rules, envs=envs, log_level=log_level, init_fn=init_fn)
+            if _cancelled is not None and _cancelled.is_set():
+                raise asyncio.CancelledError
             _starting_daemon = None
             assert os_provider.is_started
             _current_daemon = os_provider
@@ -325,8 +340,17 @@ async def async_start_daemon(
             return os_provider
         except BaseException as e:
             _current_daemon = None
-            _starting_daemon = None
+            _active_fingerprint = None
+            if os_provider is not None:
+                os_provider._accept_incoming = False
+                await os_provider._stop(0)
             _kill_unstarted_sandbox(os_provider)
+            process = getattr(os_provider, "_process", None)
+            try:
+                if process is not None:
+                    await process.wait()
+            finally:
+                _starting_daemon = None
             raise e
 
 
@@ -426,6 +450,8 @@ def start_daemon(
 
     check_mixte_async_async()
     with _start_lock:
+        if _starting_daemon is not None:
+            raise SandBoxError("Previous daemon startup has not finished cancellation")
         fingerprint = _policy_fingerprint(all_rules, envs, log_level, init_fn, python_args)
         if _current_daemon is not None:
             _check_nested_policy(fingerprint)
@@ -439,6 +465,7 @@ def start_daemon(
 
         loop = get_sandbox_loop()
         start_event = threading.Event()
+        start_cancelled = threading.Event()
         start_failure: list[BaseException] = []
 
         async def _start_daemon_and_signal() -> None:
@@ -456,6 +483,7 @@ def start_daemon(
                     log_level=log_level,
                     init_fn=init_fn,
                     python_args=python_args,
+                    _cancelled=start_cancelled,
                 )
             except Exception as e:  # noqa: BLE001 — re-raised by the caller
                 start_failure.append(e)
@@ -475,17 +503,34 @@ def start_daemon(
             all_rules.os_sandbox,
             start_timeout,
         )
-        start_tasks: list[asyncio.Task[None]] = []
-        loop.call_soon_threadsafe(
-            lambda: start_tasks.append(loop.create_task(_start_daemon_and_signal(), name="Start daemon"))
-        )
+        start_future = asyncio.run_coroutine_threadsafe(_start_daemon_and_signal(), loop)
         if not start_event.wait(timeout=start_timeout):
-            # The start task is still running on the sandbox loop and would keep trying
-            # past this point, even counting a start nobody waits for: cancel it, and kill
-            # whatever it launched. This caller raises, the process exits, and with QEMU a
-            # whole VM was left behind.
-            loop.call_soon_threadsafe(lambda: [task.cancel() for task in start_tasks])
-            _kill_unstarted_sandbox(_starting_daemon)
+            start_cancelled.set()
+            start_future.cancel()
+            try:
+                start_future.result()
+            except FutureCancelledError:
+                pass
+            if not start_event.wait(timeout=TIMEOUT_FOR_STOP_DAEMON):
+                _kill_unstarted_sandbox(_starting_daemon)
+                raise RuntimeError("Daemon startup cancellation was not acknowledged; reuse is refused")
+            # Startup may have completed between the deadline and cancel().
+            if _current_daemon is not None:
+
+                async def purge_completed_start() -> None:
+                    assert _current_daemon is not None
+                    daemon = _current_daemon
+                    daemon._accept_incoming = False
+                    await daemon._stop(0)
+                    _kill_unstarted_sandbox(daemon)
+                    process = getattr(daemon, "_process", None)
+                    if process is not None:
+                        await process.wait()
+                    daemon._is_started = False
+                    await async_shutdown_daemon()
+
+                cleanup = asyncio.run_coroutine_threadsafe(purge_completed_start(), loop)
+                cleanup.result(timeout=TIMEOUT_FOR_STOP_DAEMON)
             raise RuntimeError(
                 f"Daemon failed to start within {start_timeout}s. "
                 "Check that unshare/slirp4netns are installed and the environment allows namespaces."

@@ -25,6 +25,8 @@
 
 ### Added
 
+- Sandbox timeouts stop unfinished calls and reap their processes before the daemon can be reused.
+
 - Nested sandbox contexts now refuse a different policy instead of silently reusing the active daemon.
 
 - `unshare` and `gvisor`: a `slirp4netns` crash (or an external kill) outside a deliberate shutdown is now detected and logged, and fails the sandbox closed with a clear message instead of leaving every later call to retry or hang against a network that is down for good.

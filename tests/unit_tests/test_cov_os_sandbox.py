@@ -24,6 +24,13 @@ class _Process:
         self.returncode = returncode
         self.kill_error = kill_error
         self.killed = 0
+        self.waited = False
+
+    async def wait(self) -> int:
+        self.waited = True
+        if self.returncode is None:
+            self.returncode = -9
+        return self.returncode
 
     def kill(self) -> None:
         self.killed += 1
@@ -304,6 +311,7 @@ async def test_a_failed_start_kills_the_process_left_behind_and_reraises() -> No
         await _start()
 
     assert _Daemon.process.killed == 1
+    assert _Daemon.process.waited
     assert _os_sandbox._current_daemon is None
     assert _os_sandbox._starting_daemon is None
     assert _os_sandbox._startup_counter == 0

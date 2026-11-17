@@ -278,3 +278,40 @@ class TestFindFreePort:
                 find_free_port()
 
         assert isinstance(info.value.__cause__, OSError)
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="requires a FIFO")
+def test_cancelled_fifo_launch_reaps_child(tmp_path: Path) -> None:
+    async def scenario() -> None:
+        entered = asyncio.Event()
+        processes: list[asyncio.subprocess.Process] = []
+        original = asyncio.create_subprocess_exec
+
+        async def capture(*args: Any, **kwargs: Any) -> asyncio.subprocess.Process:
+            process = await original(*args, **kwargs)
+            processes.append(process)
+            return process
+
+        with patch.object(csd.asyncio, "create_subprocess_exec", capture):
+            task = asyncio.create_task(
+                launch_sandbox(
+                    [sys.executable, "-c", "import time; time.sleep(60)"],
+                    tmp_path / "blocked.fifo",
+                    Envs({}),
+                    None,  # type: ignore[arg-type]
+                    on_launched=lambda pid: entered.set(),
+                )
+            )
+            try:
+                await asyncio.wait_for(entered.wait(), 5)
+                task.cancel()
+                with pytest.raises(asyncio.CancelledError):
+                    await task
+                assert processes[0].returncode is not None
+            finally:
+                for process in processes:
+                    if process.returncode is None:
+                        process.kill()
+                    await process.wait()
+
+    asyncio.run(scenario())
