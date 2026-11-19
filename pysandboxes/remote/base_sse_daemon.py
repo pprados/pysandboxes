@@ -5,6 +5,7 @@ import json
 import logging
 import socket
 import sys
+import threading
 from concurrent.futures import TimeoutError as FutureTimeoutError
 from datetime import timedelta
 from typing import Any, Callable, Dict, cast
@@ -22,7 +23,7 @@ from ..sb_types import Envs
 from ..tools import get_callable_info, is_in_sandbox
 from .endpoint import Endpoint
 from .endpoint_connector import ENDPOINT_URL, make_session
-from .parameters import INTERVAL_FOR_RETRY_CONNECTION, TIMEOUT_FOR_RPC_CALL, rpc_call_timeout
+from .parameters import INTERVAL_FOR_RETRY_CONNECTION, TIMEOUT_FOR_RPC_CALL, TIMEOUT_FOR_STOP_DAEMON, rpc_call_timeout
 from .tools import (
     SSE_READ_BUFSIZE,
     descriptor_predicate,
@@ -337,13 +338,40 @@ class BaseSSESandbox(BaseDaemon):
         # daemon was started from another loop (e.g. pytest async fixture).
         loop = get_sandbox_loop()
 
-        future = asyncio.run_coroutine_threadsafe(
-            self.async_call_in_sandbox(func, _force_incomming, *args, **kwargs), loop
-        )
+        completed = threading.Event()
+
+        async def call_and_signal() -> Any:
+            try:
+                return await self.async_call_in_sandbox(func, _force_incomming, *args, **kwargs)
+            finally:
+                completed.set()
+
+        future = asyncio.run_coroutine_threadsafe(call_and_signal(), loop)
         rpc_timeout = rpc_call_timeout(TIMEOUT_FOR_RPC_CALL)
         try:
             return future.result(timeout=rpc_timeout)
-        except FutureTimeoutError:
+        except FutureTimeoutError as error:
+            if future.done() and not future.cancelled() and future.exception() is error:
+                raise
+            from pysandboxes._os_sandbox import _invalidate_daemon
+
+            self._failure = "The sandbox is unavailable after an RPC timeout."
+            self._accept_incoming = False
+            future.cancel()
+            try:
+                future.result()
+            except BaseException:
+                pass
+            # Cancelling the concurrent future is not acknowledgement from its coroutine,
+            # and even client cleanup cannot prove that the remote function stopped.
+            acknowledged = completed.wait(timeout=TIMEOUT_FOR_STOP_DAEMON)
+            termination = asyncio.run_coroutine_threadsafe(_invalidate_daemon(self), loop)
+            termination.result(timeout=TIMEOUT_FOR_STOP_DAEMON)
+            if not acknowledged:
+                raise SandBoxProtocolError(
+                    f"Sandbox RPC did not respond within {rpc_timeout:g}s; "
+                    "client cancellation was not acknowledged, but the daemon was terminated."
+                ) from None
             raise SandBoxProtocolError(
                 f"Sandbox RPC did not respond within {rpc_timeout:g}s. "
                 "Check that the guest is reachable (e.g. QEMU hostfwd, firewall), "

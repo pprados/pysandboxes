@@ -338,7 +338,7 @@ _JOIN_GRACE = 0.5
 """Seconds given to a worker to notice its flag before it is called leaked."""
 
 _profiles: EvalProfiles = ImmutableDict({})
-_leaked: list[threading.Thread] = []
+_leaked: list[threading.Event] = []
 _leak_lock = threading.Lock()
 _inline = False
 
@@ -364,7 +364,7 @@ def leaked_threads() -> int:
     """Return how many uncooperative workers are still burning CPU."""
     with _leak_lock:
         # A worker whose C call finally returned no longer burns anything.
-        _leaked[:] = [worker for worker in _leaked if worker.is_alive()]
+        _leaked[:] = [done for done in _leaked if not done.is_set()]
         return len(_leaked)
 
 
@@ -489,24 +489,36 @@ def _run_in_worker_thread(
     box: dict[str, Any],
     rules: EvalRules,
     source_ref: str,
-    watchdog: threading.Timer,
 ) -> None:
+    done = threading.Event()
+
+    def run_worker() -> None:
+        try:
+            _worker(code, mode, namespace, state, box)
+        finally:
+            done.set()
+
     worker = threading.Thread(
-        target=_worker,
-        args=(code, mode, namespace, state, box),
+        target=run_worker,
         name=f"guard_eval{source_ref}",
         daemon=True,
     )
     _start_unguarded(worker)
-    worker.join(rules.timeout + _JOIN_GRACE)
-    watchdog.cancel()
-    if worker.is_alive():
+    try:
+        worker.join(rules.timeout + _JOIN_GRACE)
+    except BaseException:
+        _interrupt(state, rules.timeout)
+        if not done.is_set():
+            with _leak_lock:
+                _leaked.append(done)
+        raise
+    if not done.is_set():
         # A blocking C call never returns to a tick. The caller gets its
         # exception; the thread keeps burning CPU, cumulatively across calls.
         # The real guarantee is the OS layer, where a timeout is a process
         # kill. Documented as a limit, not presented as covered.
         with _leak_lock:
-            _leaked.append(worker)
+            _leaked.append(done)
         logger.warning("guard_eval: %s did not stop; %d leaked thread(s)", source_ref, leaked_threads())
         raise EvalInterrupted(f"eval-timeout={rules.timeout}s exhausted, and the worker did not stop")
 
@@ -538,7 +550,8 @@ def run_guarded(
         Exception: Whatever the evaluated code itself raised.
     """
     learn = is_learning_mode()
-    if leaked_threads() >= rules.max_leaked_threads:
+    leaks = leaked_threads()
+    if leaks and leaks >= rules.max_leaked_threads:
         raise EvalInterrupted(
             f"eval-max-leaked-threads={rules.max_leaked_threads} reached: "
             "earlier evaluations blocked in a C call and are still running"
@@ -565,12 +578,14 @@ def run_guarded(
     code = _RAW_COMPILE(cast("ast.Module | ast.Expression", inject(tree)), source_ref, mode)
     box: dict[str, Any] = {}
     watchdog = threading.Timer(rules.timeout, _interrupt, args=(state, rules.timeout))
-    _start_unguarded(watchdog)
-    if _inline:
-        _worker(code, mode, namespace, state, box)
+    try:
+        _start_unguarded(watchdog)
+        if _inline:
+            _worker(code, mode, namespace, state, box)
+        else:
+            _run_in_worker_thread(code, mode, namespace, state, box, rules, source_ref)
+    finally:
         watchdog.cancel()
-    else:
-        _run_in_worker_thread(code, mode, namespace, state, box, rules, source_ref, watchdog)
     if "error" in box:
         _reraise_from_worker(box["error"])
     if learn:

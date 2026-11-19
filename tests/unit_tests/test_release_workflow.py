@@ -274,7 +274,7 @@ def test_the_build_decides_whether_python_sb_is_published() -> None:
 
 
 def test_python_sb_is_built_apart_from_the_pysandboxes_dist() -> None:
-    build = _steps_running("build", "uv build python-sb")
+    build = _steps_running("build", "uv build --no-build-isolation python-sb")
     assert len(build) == 1
     assert build[0]["if"] == "steps.python-sb.outputs.publish == 'true'"
     assert "--out-dir dist-python-sb" in build[0]["run"]
@@ -316,15 +316,13 @@ def test_master_is_fast_forwarded_never_forced() -> None:
     assert "--force" not in runs and "+$SHA" not in runs and "-f " not in runs
 
 
-def test_the_temporary_switch_skips_only_the_nightly_lookup() -> None:
+def test_nightly_lookup_cannot_skip_the_full_gate() -> None:
     job = _jobs()["reuse-lookup"]
     step = next(s for s in job["steps"] if s.get("id") == "lookup")
-    assert job["env"]["SKIP_FULL_GATE"] == "${{ vars.RELEASE_SKIP_FULL_GATE }}"
-    assert "if [[ $SKIP_FULL_GATE == true ]]; then" in step["run"]
-    assert 'echo "reuse=true" >>"$GITHUB_OUTPUT"' in step["run"]
+    assert "SKIP_FULL_GATE" not in job.get("env", {})
+    assert "SKIP_FULL_GATE" not in step["run"]
     assert ".github/scripts/find-nightly-gate.sh" in step["run"]
     assert ".github/scripts/checked-commits.sh" in step["run"]
-    assert "::warning::RELEASE_SKIP_FULL_GATE=true: integration, sample and container suites skipped" in step["run"]
 
 
 NIGHTLY_WORKFLOW = WORKFLOW.parent / "nightly-trigger.yml"
@@ -340,13 +338,20 @@ def test_the_trigger_starts_the_nightly_full_gate_on_develop() -> None:
     workflow = _workflow(NIGHTLY_WORKFLOW)
     assert workflow["permissions"] == {"contents": "read", "actions": "write"}
     step = workflow["jobs"]["trigger"]["steps"][0]
-    assert step["run"] == 'gh workflow run full-gate.yml --repo "$GITHUB_REPOSITORY" --ref develop -f nightly=true'
+    assert step["run"] == (
+        'gh workflow run full-gate.yml --repo "$GITHUB_REPOSITORY" --ref develop -f nightly=true '
+        '-f \'vm-sample-python-versions=["3.11", "3.12", "3.13", "3.14"]\''
+    )
 
 
 def test_only_the_full_nightly_is_titled_nightly() -> None:
     # find-nightly-gate.sh trusts this title: a run that leaves out the TCG rows must not carry it.
     title = " ".join(_workflow(FULL_GATE_WORKFLOW)["run-name"].split())
-    assert title == "${{ inputs.nightly == true && inputs.exclude-tcg != true && 'Nightly' || 'Full Gate' }}"
+    assert title == (
+        "${{ inputs.nightly == true && inputs.exclude-tcg != true "
+        '&& inputs.vm-sample-python-versions == \'["3.11", "3.12", "3.13", "3.14"]\' '
+        "&& 'Nightly full matrix' || 'Full Gate' }}"
+    )
 
 
 def test_exclude_tcg_reaches_the_emulated_sample_row() -> None:

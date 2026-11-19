@@ -70,3 +70,11 @@ def test_the_help_is_wrapped_at_80_columns_whatever_the_terminal(
         parse_python_cmd_line(["--help"])
 
     assert max(len(line) for line in capsys.readouterr().out.splitlines()) <= 80
+
+
+def test_help_spells_sandbox_correctly(capsys: pytest.CaptureFixture[str]) -> None:
+    with pytest.raises(SystemExit):
+        parse_python_cmd_line(["--help"])
+    help_text = capsys.readouterr().out
+    assert "SANDBOX" in help_text
+    assert "SANBOX" not in help_text

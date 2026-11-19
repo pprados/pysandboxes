@@ -63,6 +63,33 @@ class _Launch:
         return asyncio.run(asyncio.wait_for(scenario(), 10))
 
 
+def test_launch_failure_reaps_process_that_exits_during_kill(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    class ExitedProcess:
+        pid = 123
+        returncode = None
+        waited = False
+
+        def kill(self) -> None:
+            raise ProcessLookupError
+
+        async def wait(self) -> int:
+            self.waited = True
+            return 0
+
+    process = ExitedProcess()
+
+    async def create_exec(*args: Any, **kwargs: Any) -> Any:
+        return process
+
+    def fail_after_launch(pid: int) -> None:
+        raise ValueError("launch failed")
+
+    monkeypatch.setattr(csd.asyncio, "create_subprocess_exec", create_exec)
+    with pytest.raises(ValueError, match="launch failed"):
+        asyncio.run(launch_sandbox(["prog"], tmp_path / "pipe", Envs({}), None, on_launched=fail_after_launch))
+    assert process.waited
+
+
 @pytest.mark.skipif(sys.platform == "win32", reason="the FIFO launch path and the pty forwarding are POSIX")
 class TestLaunchWithFifo:
     def test_the_process_is_returned(self, tmp_path: Path) -> None:
@@ -278,3 +305,40 @@ class TestFindFreePort:
                 find_free_port()
 
         assert isinstance(info.value.__cause__, OSError)
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="requires a FIFO")
+def test_cancelled_fifo_launch_reaps_child(tmp_path: Path) -> None:
+    async def scenario() -> None:
+        entered = asyncio.Event()
+        processes: list[asyncio.subprocess.Process] = []
+        original = asyncio.create_subprocess_exec
+
+        async def capture(*args: Any, **kwargs: Any) -> asyncio.subprocess.Process:
+            process = await original(*args, **kwargs)
+            processes.append(process)
+            return process
+
+        with patch.object(csd.asyncio, "create_subprocess_exec", capture):
+            task = asyncio.create_task(
+                launch_sandbox(
+                    [sys.executable, "-c", "import time; time.sleep(60)"],
+                    tmp_path / "blocked.fifo",
+                    Envs({}),
+                    None,  # type: ignore[arg-type]
+                    on_launched=lambda pid: entered.set(),
+                )
+            )
+            try:
+                await asyncio.wait_for(entered.wait(), 5)
+                task.cancel()
+                with pytest.raises(asyncio.CancelledError):
+                    await task
+                assert processes[0].returncode is not None
+            finally:
+                for process in processes:
+                    if process.returncode is None:
+                        process.kill()
+                    await process.wait()
+
+    asyncio.run(scenario())

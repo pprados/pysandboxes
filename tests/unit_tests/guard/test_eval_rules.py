@@ -131,6 +131,59 @@ def test_parse_scalar_accepts_digit_separators() -> None:
     assert parse_scalar("eval-max-iterations", "1_000_000") == 1_000_000
 
 
+@pytest.mark.parametrize(
+    "key",
+    [
+        "eval-timeout",
+        "eval-max-alloc",
+        "eval-max-iterations",
+        "eval-max-call-depth",
+        "eval-max-depth",
+        "eval-max-nodes",
+    ],
+)
+@pytest.mark.parametrize("value", ["0", "-1", "nan", "inf", "-inf"])
+def test_invalid_eval_limits_are_configuration_errors(key: str, value: str) -> None:
+    _, errors = _parse(f"{key}={value}")
+    assert errors
+
+
+@pytest.mark.parametrize("value", ["nan", "inf", "-inf", "0KB", "-1MB", "0.0001KB"])
+def test_invalid_suffixed_size_is_a_configuration_error(value: str) -> None:
+    _, errors = _parse(f"eval-max-alloc={value}")
+    assert errors
+
+
+@pytest.mark.parametrize("value", ["nanms", "infs", "-infm", "0s", "-1ms"])
+def test_invalid_suffixed_timeout_is_a_configuration_error(value: str) -> None:
+    _, errors = _parse(f"eval-timeout={value}")
+    assert errors
+
+
+def test_timeout_larger_than_thread_limit_is_rejected() -> None:
+    import threading
+
+    _, errors = _parse(f"eval-timeout={threading.TIMEOUT_MAX * 2}")
+    assert errors
+
+
+@pytest.mark.parametrize("profile", ["", " name", "name ", " "])
+def test_explicit_empty_or_padded_profile_is_rejected(profile: str) -> None:
+    _, errors = _parse(f"eval-call:{profile}=len")
+    assert errors
+
+
+def test_zero_leaked_threads_is_valid() -> None:
+    profiles, errors = _parse("eval-max-leaked-threads=0")
+    assert not errors
+    assert profiles[""].max_leaked_threads == 0
+
+
+def test_negative_leaked_threads_is_rejected() -> None:
+    _, errors = _parse("eval-max-leaked-threads=-1")
+    assert errors
+
+
 def test_parse_scalar_accepts_decimal_size_suffixes() -> None:
     assert parse_scalar("eval-max-alloc", "10MB") == 10_000_000
     assert parse_scalar("eval-max-alloc", "512KB") == 512_000

@@ -299,6 +299,8 @@ remote-result-guard=true
 #######################################################################################
 # QEMU (os-sandbox=qemu)
 # ======================
+# Custom images and offline images without a verified checksum sidecar require the environment
+# variable PYSANDBOXES_QEMU_IMAGE_SHA256, set to the trusted image digest. See wiki/qemu.md.
 #
 # qemu.use_kvm — Hardware acceleration
 #   true (default): pass -enable-kvm when /dev/kvm is usable; otherwise QEMU falls back

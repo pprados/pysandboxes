@@ -59,10 +59,17 @@ def test_a_command_string_runs_under_every_backend(os_sandbox: str, tmp_path: Pa
 def test_a_module_runs_with_its_arguments_under_every_backend(os_sandbox: str, tmp_path: Path) -> None:
     _skip_unavailable(os_sandbox)
 
-    done = _python_sb(os_sandbox, "python-import=*\n", ["-m", "timeit", "-n", "1", "-r", "1", "pass"], tmp_path)
+    done = _python_sb(os_sandbox, "python-import=*\n", ["-m", "calendar", "2026", "10"], tmp_path)
 
     assert done.returncode == 0, done.stderr
-    assert "1 loop, best of 1" in done.stdout
+    assert "October 2026" in done.stdout
+
+
+def test_a_module_cannot_compile_its_arguments_without_dynamic_code_permission(tmp_path: Path) -> None:
+    done = _python_sb("subprocess", "python-import=*\n", ["-m", "timeit", "-n", "1", "-r", "1", "pass"], tmp_path)
+
+    assert done.returncode != 0
+    assert "builtins.compile() is denied by the API guard" in done.stderr
 
 
 def test_a_module_already_imported_by_the_framework_runs_with_m(tmp_path: Path) -> None:

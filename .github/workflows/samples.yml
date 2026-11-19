@@ -67,7 +67,7 @@ jobs:
       SAMPLE_ATTEMPTS: "3"
 
     steps:
-    - uses: actions/checkout@v5
+    - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09  # v5.1.0
       with:
         token: ${{ secrets.GITHUB_TOKEN }}
 
@@ -75,7 +75,7 @@ jobs:
       run: sudo apt-get update && sudo apt-get install -y make build-essential
 
     - name: Set up Python ${{ matrix.python-version }}
-      uses: actions/setup-python@v6
+      uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1  # v6.3.0
       with:
         python-version: ${{ matrix.python-version }}
 
@@ -83,19 +83,12 @@ jobs:
       run: sudo apt-get install -y python3-dev
 
     - name: Install uv
-      shell: bash
-      run: |
-        UV_VERSION="0.8.17"
-        UV_BIN_DIR="$RUNNER_TEMP/uv_bin"
-        mkdir -p "$UV_BIN_DIR"
-
-        # Download binary Linux/x86_64
-        curl -LsSf https://astral.sh/uv/install.sh | sh -s --
-
-        echo "$UV_BIN_DIR" >> $GITHUB_PATH
+      uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2  # v10.3.3
+      with:
+        version: "0.11.16"
 
     - name: Check installation of uv
-      run: uv --version
+      run: test "$(uv --version)" = "uv 0.11.16"
 
     # The same preparation as integration.yml. Ubuntu 24.04 restricts unprivileged
     # user namespaces through AppArmor, which bwrap and unshare need; firejail only
@@ -148,7 +141,7 @@ jobs:
       QEMU_MICROVM_OPTIONAL_PATHS: /etc/ssl,/etc/ca-certificates,/usr/share/ca-certificates
       QEMU_MICROVM_EMPTY_PATHS: /etc/pki
     steps:
-    - uses: actions/checkout@v5
+    - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09  # v5.1.0
       with:
         token: ${{ secrets.GITHUB_TOKEN }}
     - name: Give the runner user /dev/kvm
@@ -163,10 +156,12 @@ jobs:
     - name: Install Python development headers
       run: sudo apt-get install -y python3-dev
     - name: Install uv
-      shell: bash
-      run: |
-        curl -LsSf https://astral.sh/uv/install.sh | sh
-        echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+      uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2  # v10.3.3
+      with:
+        version: "0.11.16"
+
+    - name: Check installation of uv
+      run: test "$(uv --version)" = "uv 0.11.16"
     - name: Install dependencies
       run: uv sync --group test
     - name: Fetch QEMU image and prepare matched direct-boot artifacts

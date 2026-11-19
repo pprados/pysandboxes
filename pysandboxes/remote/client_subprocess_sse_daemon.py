@@ -195,6 +195,7 @@ async def launch_sandbox(
             logger.debug("DEBUG_LAUNCH: wrote %s", run_sh.resolve())
         except:  # noqa: E722
             logger.debug("Can not write run.sh")
+    process: Process | None = None
     try:
 
         def preexec_fn() -> None:
@@ -229,12 +230,7 @@ async def launch_sandbox(
 
             # Notify caller before blocking on FIFO write (e.g., to start slirp4netns)
             if on_launched and process.pid is not None:
-                try:
-                    on_launched(process.pid)
-                except BaseException:
-                    process.kill()
-                    await process.wait()
-                    raise
+                on_launched(process.pid)
 
             # It's a good time for that
             gc.collect()
@@ -253,8 +249,15 @@ async def launch_sandbox(
             pipe_path.unlink()
             break
         return process
-    finally:
-        pass
+    except BaseException:
+        if process is not None:
+            if process.returncode is None:
+                try:
+                    process.kill()
+                except ProcessLookupError:
+                    pass
+            await process.wait()
+        raise
 
 
 def find_free_port() -> int:
@@ -520,7 +523,10 @@ class BaseSubProcessDaemon(BaseSSESandbox):
                     # ping loop giving up): nothing else ever kills it once this task ends.
                     logger.exception("watchdog: restart failed")
                     if self._process is not None:
-                        self._process.kill()
+                        try:
+                            self._process.kill()
+                        except ProcessLookupError:
+                            pass
                         await self._process.wait()
                         self._process = None
                     self._failure = "The sandbox process could not be restarted."
@@ -764,10 +770,10 @@ class BaseSubProcessDaemon(BaseSSESandbox):
 
         logger.debug("Call remote daemon_shutdown...")
         try:
-            if not self._is_started:
-                # Only a daemon that answered its first ping can answer this one. After a
-                # failed start there is nobody to ask, so asking only costs time.
-                logger.debug("Daemon never started; skip the remote daemon_shutdown")
+            if not self._is_started or self._failure:
+                # A failed start cannot answer, and a timed-out daemon must be killed
+                # without trusting another RPC to stop its execution.
+                logger.debug("Daemon unavailable; skip the remote daemon_shutdown")
             else:
                 try:
                     # The call is bounded by max_connect_retry and by nothing else. A guest
@@ -817,7 +823,12 @@ class BaseSubProcessDaemon(BaseSSESandbox):
             else:
                 logger.info("Kill the sandbox daemon (graceful_shutdown=%s)", graceful_shutdown)
                 if self._process:
-                    self._process.kill()
+                    try:
+                        self._process.kill()
+                    except ProcessLookupError:
+                        pass
+            if self._process and self._failure:
+                await self._process.wait()
             self._close_job_handle()
             self._process = None
             self._is_started = False

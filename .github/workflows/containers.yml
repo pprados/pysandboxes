@@ -38,7 +38,7 @@ jobs:
     name: containers (${{ matrix.suite }})
 
     steps:
-    - uses: actions/checkout@v5
+    - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09  # v5.1.0
       with:
         token: ${{ secrets.GITHUB_TOKEN }}
 
@@ -65,7 +65,7 @@ jobs:
       run: sudo apt-get update && sudo apt-get install -y make build-essential
 
     - name: Set up Python
-      uses: actions/setup-python@v6
+      uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1  # v6.3.0
       with:
         python-version: "3.13"
 
@@ -91,19 +91,12 @@ jobs:
         rm kubectl
 
     - name: Install uv
-      shell: bash
-      run: |
-        UV_VERSION="0.8.17"
-        UV_BIN_DIR="$RUNNER_TEMP/uv_bin"
-        mkdir -p "$UV_BIN_DIR"
-
-        # Download binary Linux/x86_64
-        curl -LsSf https://astral.sh/uv/install.sh | sh -s --
-
-        echo "$UV_BIN_DIR" >> $GITHUB_PATH
+      uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2  # v10.3.3
+      with:
+        version: "0.11.16"
 
     - name: Check installation of uv
-      run: uv --version
+      run: test "$(uv --version)" = "uv 0.11.16"
 
     - name: Install dependencies
       run: uv sync --group test

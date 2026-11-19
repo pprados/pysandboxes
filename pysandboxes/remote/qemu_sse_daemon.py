@@ -1300,7 +1300,10 @@ class QemuSSEDaemon(VMSSEDaemon):
         try:
             await super()._start(all_rules, envs=envs, log_level=log_level, init_fn=init_fn)
         except BaseException:
-            self._remove_stage_root()
+            try:
+                await asyncio.to_thread(self._dns_session.stop)
+            finally:
+                self._remove_stage_root()
             raise
 
     @override

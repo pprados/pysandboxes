@@ -174,6 +174,13 @@ def test_nested_bare_include_is_resolved_next_to_the_including_file(tmp_path: Pa
     assert [r.rule for r in rules] == ["env=DUMMY_KEY=abc"]
 
 
+def test_windows_separator_include_is_resolved_from_root_path(tmp_path: Path) -> None:
+    (tmp_path / "dir").mkdir()
+    (tmp_path / "dir" / "profile").write_text("env=DUMMY_KEY=abc\n")
+    rules = _parse_include(tmp_path, {tmp_path / "root"}, [ConfigLine('include "dir\\profile"', tmp_path / "root", 1)])
+    assert [r.rule for r in rules] == ["env=DUMMY_KEY=abc"]
+
+
 def test_self_include_through_a_relative_path_is_loaded_once(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.chdir(tmp_path)
     (tmp_path / "root.profile").write_text('include "./root.profile"\nos-sandbox=subprocess\nport=8000\n')

@@ -16,7 +16,8 @@ import sys
 import threading
 import uuid
 from collections.abc import Iterator, Mapping
-from typing import Any, Callable, cast
+from concurrent.futures import CancelledError as FutureCancelledError
+from typing import Any, Callable, NamedTuple, cast
 
 from .all_rules import AllRules
 from .base_daemon import BaseDaemon
@@ -167,6 +168,50 @@ def default_os_sandbox() -> str:
     return "landlock"
 
 
+class _PolicyFingerprint(NamedTuple):
+    rules: tuple[object, ...]
+    envs: frozenset[tuple[str, str]]
+    init_fn: SyncOrAsyncFunc | None
+    log_level: int
+    python_args: tuple[str, ...]
+
+
+def _freeze_policy(value: Any) -> Any:
+    """Snapshot parsed rule containers without retaining their mutable contents."""
+    if isinstance(value, Mapping):
+        return frozenset((_freeze_policy(key), _freeze_policy(item)) for key, item in value.items())
+    if isinstance(value, (list, tuple)):
+        return tuple(_freeze_policy(item) for item in value)
+    if isinstance(value, (set, frozenset)):
+        return frozenset(_freeze_policy(item) for item in value)
+    return value
+
+
+def _policy_fingerprint(
+    all_rules: AllRules,
+    envs: Environ,
+    log_level: int,
+    init_fn: SyncOrAsyncFunc | None,
+    python_args: list[str] | None,
+) -> _PolicyFingerprint:
+    # Raw config holds source locations; every parsed field, including protected config paths, is kept.
+    rules = tuple(_freeze_policy(value) for name, value in all_rules._asdict().items() if name != "config")
+    return _PolicyFingerprint(rules, frozenset(envs.items()), init_fn, log_level, tuple(python_args or ()))
+
+
+def _check_nested_policy(fingerprint: _PolicyFingerprint) -> None:
+    if (
+        _active_fingerprint is None
+        or getattr(_current_daemon, "_failure", None) is not None
+        or _active_fingerprint.init_fn is not fingerprint.init_fn
+        or _active_fingerprint != fingerprint
+    ):
+        raise SandBoxError("Cannot reuse an active daemon with a different sandbox policy")
+
+
+_active_fingerprint: _PolicyFingerprint | None = None
+
+
 # Singleton with the current daemon used by the sandbox
 _current_daemon: BaseDaemon | None = None
 # Number of times the daemon has been started. Used for reference counting.
@@ -221,6 +266,16 @@ def _kill_unstarted_sandbox(os_provider: BaseDaemon | None) -> None:
         pass
 
 
+async def _invalidate_daemon(daemon: BaseDaemon) -> None:
+    """Terminate a timed-out daemon while retaining its open context references."""
+    global _active_fingerprint
+    async with _async_start_lock:
+        if _current_daemon is daemon:
+            _active_fingerprint = None
+        daemon._accept_incoming = False
+        await daemon._shutdown(False)
+
+
 async def async_start_daemon(
     all_rules: AllRules,
     *,
@@ -228,13 +283,14 @@ async def async_start_daemon(
     log_level: int,
     init_fn: SyncOrAsyncFunc | None,
     python_args: list[str] | None = None,
+    _cancelled: threading.Event | None = None,
 ) -> BaseDaemon:
     """
     Core logic to asynchronously start a daemon.
 
     It ensures that only one daemon is started at a time using a lock.
-    If a daemon is already running, it increments a counter and returns
-    the existing instance.
+    If a daemon is already running with the same policy, it increments a counter
+    and returns the existing instance. A different policy is refused.
 
     Args:
         all_rules: The security rules for the sandbox.
@@ -247,12 +303,15 @@ async def async_start_daemon(
         The started daemon instance.
 
     Raises:
+        SandBoxError: If an active daemon has a different sandbox policy.
         ValueError: If the specified os_sandbox name is unknown.
     """
     assert all_rules.os_sandbox
     async with _async_start_lock:
-        global _current_daemon, _startup_counter, _starting_daemon
+        global _current_daemon, _startup_counter, _starting_daemon, _active_fingerprint
+        fingerprint = _policy_fingerprint(all_rules, envs, log_level, init_fn, python_args)
         if _current_daemon is not None:
+            _check_nested_policy(fingerprint)
             logger.info("Daemon already started")
             _startup_counter += 1
             return _current_daemon
@@ -261,6 +320,7 @@ async def async_start_daemon(
             raise ValueError(f"Unknown daemon name: {all_rules.os_sandbox}")
         check_provider_available(all_rules.os_sandbox)
         os_provider: BaseDaemon | None = None
+        started = False
         try:
             token = str(uuid.uuid4())
             os_provider = providers_factory[all_rules.os_sandbox](token, python_args=python_args)
@@ -271,15 +331,36 @@ async def async_start_daemon(
                 os_provider._result_data_only = all_rules.remote_result_data_only
             _starting_daemon = os_provider
             await os_provider._start(all_rules, envs=envs, log_level=log_level, init_fn=init_fn)
+            started = True
+            if _cancelled is not None and _cancelled.is_set():
+                raise asyncio.CancelledError
             _starting_daemon = None
-            _current_daemon = os_provider
             assert os_provider.is_started
+            _current_daemon = os_provider
+            _active_fingerprint = fingerprint
             _startup_counter += 1
             return os_provider
         except BaseException as e:
             _current_daemon = None
-            _starting_daemon = None
-            _kill_unstarted_sandbox(os_provider)
+            _active_fingerprint = None
+            try:
+                try:
+                    if os_provider is not None:
+                        os_provider._accept_incoming = False
+                        await os_provider._stop(0)
+                finally:
+                    _kill_unstarted_sandbox(os_provider)
+                    process = getattr(os_provider, "_process", None)
+                    if process is not None:
+                        await process.wait()
+                    if started and os_provider is not None:
+                        from .remote.base_sse_daemon import BaseSSESandbox
+
+                        if isinstance(os_provider, BaseSSESandbox):
+                            os_provider._failure = "The sandbox start was cancelled."
+                        await os_provider._shutdown(False)
+            finally:
+                _starting_daemon = None
             raise e
 
 
@@ -303,7 +384,9 @@ async def async_stop_daemon(max_pending: int = 0) -> None:
         await _current_daemon._stop(max_pending)
 
 
-async def async_shutdown_daemon(graceful_shutdown: bool = True) -> None:
+async def async_shutdown_daemon(
+    graceful_shutdown: bool = True, _retain_on_failure: bool = False, _defer_loop_reset: bool = False
+) -> bool:
     """
     Asynchronously shuts down the current daemon.
 
@@ -313,35 +396,47 @@ async def async_shutdown_daemon(graceful_shutdown: bool = True) -> None:
     Args:
         graceful_shutdown: If True, waits for pending tasks to complete.
     """
-    global _current_daemon, _startup_counter
+    global _current_daemon, _startup_counter, _active_fingerprint
     async with _async_start_lock:
         if not _current_daemon:
             logger.info("Daemon not started when daemon_shutdown")
             if _startup_counter <= 0:
                 raise ValueError("Daemon daemon_shutdown more times than started")
             _startup_counter -= 1
-            return
+            return False
 
         if _startup_counter > 1:  # pragma: no mutate
             _startup_counter -= 1
             logger.info("Daemon not shutting down because the startup counter > 1")
-            return
-        # Try a graceful shutdown. A failure here must not leave a dead daemon looking started: the
-        # `finally` wipes the global state clean either way, and the exception still propagates so the
-        # caller learns the shutdown did not complete.
+            return False
+        # The context manager retains a failed daemon for retry, but clears its policy fingerprint
+        # so no new context can reuse it. Other callers retain the original terminal cleanup behavior.
+        completed = False
         try:
             await _current_daemon._shutdown(graceful_shutdown)
             assert not _current_daemon.is_started
+            completed = True
         finally:
-            _current_daemon = None
-            _startup_counter = 0
-            # Give back the private event-loop thread a sync start_daemon() may have created, and any
-            # `none`-provider flag a failed `_shutdown` never got to clear: without this, a thread leaks
-            # forever, or is_in_sandbox() stays stuck true and every later `with sandboxes():` in this
-            # process believes it is a nested call and never starts a real daemon.
-            _reset_sandbox_loop()
+            _active_fingerprint = None
+            if completed or not _retain_on_failure:
+                _current_daemon = None
+                _startup_counter = 0
+                # Give back the private event-loop thread a sync start_daemon() may have created, and any
+                # `none`-provider flag a failed `_shutdown` never got to clear: without this, a thread leaks
+                # forever, or is_in_sandbox() stays stuck true and every later `with sandboxes():` in this
+                # process believes it is a nested call and never starts a real daemon.
+                if not _defer_loop_reset:
+                    _reset_sandbox_loop()
+            else:
+                _current_daemon._accept_incoming = False
             while is_in_sandbox():
                 set_is_in_sandbox(False)
+        return True
+
+
+def _reset_idle_sandbox_loop() -> None:
+    if _current_daemon is None and _starting_daemon is None:
+        _reset_sandbox_loop()
 
 
 def start_daemon(
@@ -370,6 +465,7 @@ def start_daemon(
 
     Raises:
         RuntimeError: If the daemon fails to start.
+        SandBoxError: If an active daemon has a different sandbox policy.
         ValueError: If the specified os_sandbox name is unknown.
     """
     assert all_rules.os_sandbox
@@ -377,7 +473,11 @@ def start_daemon(
 
     check_mixte_async_async()
     with _start_lock:
+        if _starting_daemon is not None:
+            raise SandBoxError("Previous daemon startup has not finished cancellation")
+        fingerprint = _policy_fingerprint(all_rules, envs, log_level, init_fn, python_args)
         if _current_daemon is not None:
+            _check_nested_policy(fingerprint)
             logger.info("Daemon already started")
             _startup_counter += 1
             return _current_daemon
@@ -388,6 +488,7 @@ def start_daemon(
 
         loop = get_sandbox_loop()
         start_event = threading.Event()
+        start_cancelled = threading.Event()
         start_failure: list[BaseException] = []
 
         async def _start_daemon_and_signal() -> None:
@@ -405,6 +506,7 @@ def start_daemon(
                     log_level=log_level,
                     init_fn=init_fn,
                     python_args=python_args,
+                    _cancelled=start_cancelled,
                 )
             except Exception as e:  # noqa: BLE001 — re-raised by the caller
                 start_failure.append(e)
@@ -424,17 +526,34 @@ def start_daemon(
             all_rules.os_sandbox,
             start_timeout,
         )
-        start_tasks: list[asyncio.Task[None]] = []
-        loop.call_soon_threadsafe(
-            lambda: start_tasks.append(loop.create_task(_start_daemon_and_signal(), name="Start daemon"))
-        )
+        start_future = asyncio.run_coroutine_threadsafe(_start_daemon_and_signal(), loop)
         if not start_event.wait(timeout=start_timeout):
-            # The start task is still running on the sandbox loop and would keep trying
-            # past this point, even counting a start nobody waits for: cancel it, and kill
-            # whatever it launched. This caller raises, the process exits, and with QEMU a
-            # whole VM was left behind.
-            loop.call_soon_threadsafe(lambda: [task.cancel() for task in start_tasks])
-            _kill_unstarted_sandbox(_starting_daemon)
+            start_cancelled.set()
+            start_future.cancel()
+            try:
+                start_future.result()
+            except FutureCancelledError:
+                pass
+            if not start_event.wait(timeout=TIMEOUT_FOR_STOP_DAEMON):
+                _kill_unstarted_sandbox(_starting_daemon)
+                raise RuntimeError("Daemon startup cancellation was not acknowledged; reuse is refused")
+            # Startup may have completed between the deadline and cancel().
+            if _current_daemon is not None:
+
+                async def purge_completed_start() -> None:
+                    assert _current_daemon is not None
+                    daemon = _current_daemon
+                    daemon._accept_incoming = False
+                    await daemon._stop(0)
+                    _kill_unstarted_sandbox(daemon)
+                    process = getattr(daemon, "_process", None)
+                    if process is not None:
+                        await process.wait()
+                    daemon._is_started = False
+                    await async_shutdown_daemon()
+
+                cleanup = asyncio.run_coroutine_threadsafe(purge_completed_start(), loop)
+                cleanup.result(timeout=TIMEOUT_FOR_STOP_DAEMON)
             raise RuntimeError(
                 f"Daemon failed to start within {start_timeout}s. "
                 "Check that unshare/slirp4netns are installed and the environment allows namespaces."

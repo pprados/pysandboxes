@@ -4,7 +4,7 @@ import pysandboxes
 from pysandboxes.tools import mixed_sync_and_async_error
 
 from .._env import NO_PROFILE_DNS_REASON, profile_hosts_resolvable
-from ..sample import async_forty_two, async_sanboxes, bridge_async_to_sync, config_path
+from ..sample import async_forty_two, async_sanboxes, bridge_async_to_sync, config_path, init_sandbox
 
 pytestmark = pytest.mark.skipif(not profile_hosts_resolvable(), reason=NO_PROFILE_DNS_REASON)
 
@@ -24,7 +24,7 @@ def test_run() -> None:
 def test_run_and_async_sanboxes() -> None:
     # An async method, call a async method with sandboxes resource manager.
     # `async_sanboxes` returns nothing, so `run()` must hand back exactly that.
-    assert pysandboxes.run(async_sanboxes(config_path), sandboxes_config=config_path) is None
+    assert pysandboxes.run(async_sanboxes(config_path), init_fn=init_sandbox, sandboxes_config=config_path) is None
 
 
 def test_run_and_sync_sanboxes() -> None:

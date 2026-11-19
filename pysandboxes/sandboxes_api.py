@@ -20,6 +20,7 @@ import logging
 import os
 import signal
 import threading
+from concurrent.futures import Future
 from pathlib import Path
 from types import FrameType
 from typing import (
@@ -32,7 +33,7 @@ from typing import (
     overload,
 )
 
-from ._os_sandbox import async_shutdown_daemon
+from ._os_sandbox import _reset_idle_sandbox_loop, async_shutdown_daemon
 from .base_daemon import BaseDaemon, FakeDaemon
 from .e import ConfigSyntaxError
 from .main_logger import log_level_from_env
@@ -194,6 +195,10 @@ class sandboxes:
     for managing sandbox processes. It handles daemon startup, configuration, and
     graceful shutdown.
 
+    A default termination signal received on the daemon's own event loop terminates the
+    process immediately. Asynchronous daemon cleanup cannot run before termination, so an
+    external sandbox process may need separate cleanup.
+
     Attributes:
         init_fn: Optional initialization function called when daemon starts.
         sandboxes_config: Path to sandbox configuration file.
@@ -235,6 +240,8 @@ class sandboxes:
         "_signals",
         "_daemon",
         "_lock",
+        "_stop_future",
+        "_stop_waiters",
     )
 
     def _register_signals_handlers(self) -> None:
@@ -257,8 +264,9 @@ class sandboxes:
             ) -> Any | int | signal.Handlers:
                 """
                 Handles termination signals for the parent process.
-                Restores the previous handler, then applies it. A default disposition
-                first stops the daemon, then lets the signal terminate the process.
+                Restores the previous handler, then applies it. With a default disposition,
+                stop the daemon before termination when its event loop can run independently.
+                On that same loop, terminate immediately; asynchronous daemon cleanup cannot run.
                 """
                 # Iterate through all child processes and send them SIGTERM
                 logger.debug("with sandboxes(): Catch signal %s.", signum)
@@ -276,9 +284,17 @@ class sandboxes:
                     else:
                         return handler(signum, frame)
                 elif handler == signal.SIG_DFL:
-                    if self._owns_a_real_daemon():
-                        asyncio.run_coroutine_threadsafe(self._stop_daemon(), get_sandbox_loop()).result()
-                    signal.raise_signal(signum)
+                    try:
+                        if self._owns_a_real_daemon():
+                            loop = get_sandbox_loop()
+                            try:
+                                running_loop = asyncio.get_running_loop()
+                            except RuntimeError:
+                                running_loop = None
+                            if running_loop is not loop:
+                                asyncio.run_coroutine_threadsafe(self._stop_daemon(), loop).result()
+                    finally:
+                        signal.raise_signal(signum)
                 return None
 
             for s in self._signals.keys():
@@ -290,9 +306,8 @@ class sandboxes:
             if threading.current_thread() is threading.main_thread():  # pragma: no mutate
                 for s, h in self._signals.items():
                     signal.signal(s, h)
-            else:
-                logging.info("Impossible to remove signals")
-                pass
+            elif self._signals:
+                raise RuntimeError("Signal handlers must be restored on the main thread")
             self._signals.clear()
 
     def __init__(
@@ -340,6 +355,8 @@ class sandboxes:
 
         self._daemon: BaseDaemon | None = None
         self._lock = threading.Lock()
+        self._stop_future: Future[bool] | None = None
+        self._stop_waiters = 0
 
     def _owns_a_real_daemon(self) -> bool:
         """Whether `self._daemon` is a real provider this instance started and must stop.
@@ -401,19 +418,53 @@ class sandboxes:
         """
         Stop the sandbox daemon.
         """
-        self._unregister_signals_handlers()
-        if self._owns_a_real_daemon():
-            asyncio.run_coroutine_threadsafe(self._stop_daemon(), get_sandbox_loop()).result()
-        self._daemon = None
+        try:
+            self._unregister_signals_handlers()
+        finally:
+            if self._owns_a_real_daemon():
+                asyncio.run_coroutine_threadsafe(self._stop_daemon(), get_sandbox_loop()).result()
+            self._daemon = None
         return
 
     async def _stop_daemon(self) -> bool:
         # Not guarded by is_started: a restart clears it until the new sandbox is ready, and leaving then would
         # leave that sandbox running.
-        if self._daemon:
-            self._daemon = None
-            await async_shutdown_daemon(self.graceful_shutdown)
-            logger.debug("daemon stopped")
+        with self._lock:
+            owner = self._stop_future is None and self._daemon is not None
+            if owner:
+                self._stop_future = Future()
+            future = self._stop_future
+            if future is not None:
+                self._stop_waiters += 1
+        if future is None:
+            return True
+        try:
+            if owner:
+                try:
+                    terminal = await async_shutdown_daemon(self.graceful_shutdown, True, True)
+                except BaseException as exc:
+                    future.set_exception(exc)
+                    raise
+                else:
+                    self._daemon = None
+                    future.set_result(terminal)
+                    logger.debug("daemon stopped")
+            else:
+                await asyncio.shield(asyncio.wrap_future(future))
+        finally:
+            with self._lock:
+                self._stop_waiters -= 1
+                last = self._stop_waiters == 0
+                if last:
+                    self._stop_future = None
+            if (
+                last
+                and future.done()
+                and not future.cancelled()
+                and future.exception() is None
+                and future.result() is True
+            ):
+                asyncio.get_running_loop().call_soon(_reset_idle_sandbox_loop)
         return True
 
     # ── asynchronous API ───────────────────────────────
@@ -463,10 +514,12 @@ class sandboxes:
         """
         Stop the sandbox daemon.
         """
-        self._unregister_signals_handlers()
-        if self._owns_a_real_daemon():
-            await self._stop_daemon()
-        self._daemon = None
+        try:
+            self._unregister_signals_handlers()
+        finally:
+            if self._owns_a_real_daemon():
+                await self._stop_daemon()
+            self._daemon = None
         return False
 
 

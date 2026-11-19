@@ -249,17 +249,6 @@ def get_download_url(path: Path) -> str | None:
     return get_standard_download_url()
 
 
-_WARNED_ONCE: set[str] = set()
-
-
-def _warn_once(key: str, message: str) -> None:
-    """Log ``message`` the first time ``key`` is seen in this process, silently after that."""
-    if key in _WARNED_ONCE:
-        return
-    _WARNED_ONCE.add(key)
-    logger.warning(message)
-
-
 def _checksums_candidates_for_host(host: str) -> list[tuple[str, str]]:
     """Return the (algorithm, filename) pairs to try for a checksums file next to the image."""
     known = _CHECKSUMS_BY_HOST.get(host)
@@ -350,16 +339,21 @@ def _sidecar_path(path: Path) -> Path:
     return path.with_name(path.name + ".sha256")
 
 
-def _write_sidecar(path: Path, algorithm: str, digest: str) -> None:
+def _write_sidecar(path: Path, algorithm: str, digest: str, *, upstream: bool = False) -> None:
     """Record the verified digest, size and mtime of path so a later reuse skips re-hashing."""
     try:
         stat = path.stat()
-        _sidecar_path(path).write_text(f"{algorithm}:{digest}:{stat.st_size}:{stat.st_mtime_ns}\n", encoding="utf-8")
+        suffix = ":upstream-v2" if upstream else ""
+        _sidecar_path(path).write_text(
+            f"{algorithm}:{digest}:{stat.st_size}:{stat.st_mtime_ns}{suffix}\n", encoding="utf-8"
+        )
     except OSError as e:
         logger.warning("Could not write checksum sidecar for %s: %s", path, e)
 
 
-def _sidecar_matches(path: Path) -> bool:
+def _sidecar_matches(
+    path: Path, expected_checksum: tuple[str, str] | None = None, *, require_upstream: bool = False
+) -> bool:
     """Return True if path's size and mtime still match its checksum sidecar.
 
     A cache hit only needs this cheap comparison; the digest itself was verified when the
@@ -367,7 +361,11 @@ def _sidecar_matches(path: Path) -> bool:
     """
     try:
         parts = _sidecar_path(path).read_text(encoding="utf-8").strip().split(":")
-        if len(parts) != 4:
+        if len(parts) not in (4, 5):
+            return False
+        if require_upstream and (len(parts) != 5 or parts[4] != "upstream-v2"):
+            return False
+        if expected_checksum is not None and (parts[0], parts[1].lower()) != expected_checksum:
             return False
         stat = path.stat()
         return int(parts[2]) == stat.st_size and int(parts[3]) == stat.st_mtime_ns
@@ -416,12 +414,11 @@ def _hash_file(path: Path, algorithm: str) -> str:
     return digest.hexdigest().lower()
 
 
-def verify_cached_image(path: Path, *, url: str | None = None) -> str:
+def verify_cached_image(path: Path, *, url: str | None = None, expected_checksum: tuple[str, str] | None = None) -> str:
     """Verify one cached image against its upstream checksum, writing its sidecar on a match.
 
     Returns ``"verified"``, ``"mismatch"``, or ``"unavailable"`` (no URL could be derived for
-    this filename, or no checksums file could be fetched for it) -- the same "nothing to verify
-    against" case :func:`ensure_image` already treats as non-fatal for a cached file. Never
+    this filename, or no checksums file could be fetched for it). Never
     raises for a network condition, never downloads anything, and never modifies or removes the
     image itself, whatever the outcome.
 
@@ -429,18 +426,20 @@ def verify_cached_image(path: Path, *, url: str | None = None) -> str:
         path: The cached image to verify. Hashed in place, in chunks: never fully loaded.
         url: The upstream URL to check it against, overriding the one its own filename would
             otherwise resolve to.
+        expected_checksum: An explicitly pinned algorithm and digest, used without a network request.
     """
     resolved_url = url or _upstream_url_for_cached_name(path.name)
-    if resolved_url is None:
-        return "unavailable"
-    expected = _neighbor_checksum(resolved_url)
+    expected = expected_checksum or (_neighbor_checksum(resolved_url) if resolved_url else None)
     if expected is None:
         return "unavailable"
     algorithm, expected_hex = expected
     actual_hex = _hash_file(path, algorithm)
     if actual_hex != expected_hex.strip().lower():
         return "mismatch"
-    _write_sidecar(path, algorithm, actual_hex)
+    if expected_checksum is None:
+        _write_sidecar(path, algorithm, actual_hex, upstream=True)
+    else:
+        _write_sidecar(path, algorithm, actual_hex)
     return "verified"
 
 
@@ -586,15 +585,14 @@ def ensure_image(path: Path) -> Path:
     """Return path if the image file exists and is trusted; otherwise try to download it.
 
     A cached image with a matching checksum sidecar (see _write_sidecar) is accepted on a
-    cheap size/mtime check, no re-hash. One without a sidecar is accepted as-is (no
-    retroactive verification) with a one-time warning. One whose sidecar no longer matches
+    cheap size/mtime check, no re-hash. One without a sidecar is verified against its
+    upstream checksum or a pinned digest. One whose sidecar no longer matches
     is re-downloaded and re-verified, overwriting it.
 
     If the file is missing (or was rejected above), get_download_url(path) is used; when a
     URL is available the image is downloaded to path. A standard (Debian/Ubuntu) URL must
     verify against a checksums file found beside it or the download is refused; a custom
-    PYSANDBOXES_QEMU_IMAGE_URL/_BASE_URL verifies against PYSANDBOXES_QEMU_IMAGE_SHA256 or a
-    neighbor checksums file when either is available, and otherwise downloads with a warning.
+    PYSANDBOXES_QEMU_IMAGE_URL/_BASE_URL requires PYSANDBOXES_QEMU_IMAGE_SHA256.
 
     Args:
         path: Path to the image file (typically from get_default_image_path()).
@@ -606,30 +604,58 @@ def ensure_image(path: Path) -> Path:
         FileNotFoundError: If the image does not exist and no download URL is set.
         OSError: If download or checksum verification fails.
     """
+    custom_url = bool(os.environ.get(ENV_VM_IMAGE_URL, "").strip() or os.environ.get(ENV_VM_IMAGE_BASE_URL, "").strip())
+    pinned = os.environ.get(ENV_VM_IMAGE_SHA256, "").strip()
     if path.is_file():
+        if not pinned and (custom_url or _upstream_url_for_cached_name(path.name) is None):
+            raise OSError(f"Set {ENV_VM_IMAGE_SHA256} to the trusted SHA-256 digest for cached image {path}")
         if _sidecar_path(path).is_file():
             if _sidecar_matches(path):
-                return path
+                if not pinned and _sidecar_matches(path, require_upstream=True):
+                    return path
+                if pinned and _sidecar_matches(path, ("sha256", pinned.lower())):
+                    return path
+                expected = ("sha256", pinned.lower()) if pinned else None
+                outcome = verify_cached_image(path, expected_checksum=expected)
+                if outcome == "verified":
+                    return path
+                if outcome == "mismatch":
+                    raise OSError(f"Checksum mismatch for cached image {path}; refusing to use it")
+                raise OSError(
+                    f"Cannot verify cached image {path}. Run python -m pysandboxes.remote.qemu_fetch_image "
+                    f"--migrate-cache when upstream checksums are available, or set {ENV_VM_IMAGE_SHA256}."
+                )
             logger.warning("Cached image %s no longer matches its checksum sidecar; re-downloading it", path)
         else:
-            _warn_once(f"no-sidecar:{path}", f"Using cached image {path} without a checksum sidecar: not verified")
-            return path
+            expected = ("sha256", pinned.lower()) if pinned else None
+            url = None if custom_url else _upstream_url_for_cached_name(path.name)
+            outcome = (
+                verify_cached_image(path, url=url, expected_checksum=expected) if expected or url else "unavailable"
+            )
+            if outcome == "verified":
+                return path
+            if outcome == "mismatch":
+                raise OSError(f"Checksum mismatch for cached image {path}; refusing to use it")
+            raise OSError(
+                f"Cannot verify cached image {path}. Run python -m pysandboxes.remote.qemu_fetch_image --migrate-cache "
+                f"when upstream checksums are available, or set {ENV_VM_IMAGE_SHA256} to its trusted SHA-256 digest."
+            )
     url = get_download_url(path)
     if url:
-        custom_url = bool(
-            os.environ.get(ENV_VM_IMAGE_URL, "").strip() or os.environ.get(ENV_VM_IMAGE_BASE_URL, "").strip()
-        )
+        if custom_url and not pinned:
+            raise OSError(f"Set {ENV_VM_IMAGE_SHA256} to the trusted SHA-256 digest for custom image {url}")
         expected = _resolve_expected_checksum(url)
         if expected is None:
-            if not custom_url:
-                raise OSError(
-                    f"No checksum could be verified for the standard image at {url}; refusing to download it "
-                    f"unverified. Set {ENV_VM_IMAGE_SHA256} or place the image manually."
-                )
-            _warn_once(f"unverified:{url}", f"{url}: image not verified (no checksum found)")
+            raise OSError(
+                f"No checksum could be verified for the standard image at {url}; refusing to download it "
+                f"unverified. Set {ENV_VM_IMAGE_SHA256} to a trusted digest."
+            )
         download_image(path, url, expected_checksum=expected)
         if expected is not None:
-            _write_sidecar(path, *expected)
+            if not custom_url and not pinned:
+                _write_sidecar(path, *expected, upstream=True)
+            else:
+                _write_sidecar(path, *expected)
         return path
     dir_path = path.parent
     msg = (

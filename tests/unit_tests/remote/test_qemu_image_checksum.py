@@ -49,7 +49,7 @@ class _Handler(http.server.BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
-    def log_message(self, *args: object) -> None:
+    def log_message(self, format: str, *args: object) -> None:
         pass
 
 
@@ -223,7 +223,6 @@ class TestEnsureImageChecksum:
         monkeypatch.delenv(qemu_image.ENV_VM_IMAGE_URL, raising=False)
         monkeypatch.delenv(qemu_image.ENV_VM_IMAGE_BASE_URL, raising=False)
         monkeypatch.delenv(qemu_image.ENV_VM_IMAGE_SHA256, raising=False)
-        qemu_image._WARNED_ONCE.clear()
 
     def test_a_standard_url_without_a_checksums_file_is_refused(
         self, server: Any, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
@@ -236,21 +235,17 @@ class TestEnsureImageChecksum:
 
         assert not (tmp_path / "vm.img").exists()
 
-    def test_a_custom_url_without_a_checksums_file_is_accepted_with_one_warning(
+    def test_a_custom_url_without_a_pinned_checksum_is_refused(
         self,
         server: Any,
         tmp_path: Path,
         monkeypatch: pytest.MonkeyPatch,
-        caplog: pytest.LogCaptureFixture,
     ) -> None:
         server.serve("/vm.img", b"hello world")
         monkeypatch.setenv(qemu_image.ENV_VM_IMAGE_URL, server.url("/vm.img"))
 
-        with caplog.at_level("WARNING"):
-            path = qemu_image.ensure_image(tmp_path / "vm.img")
-
-        assert path.read_bytes() == b"hello world"
-        assert "image not verified" in caplog.text
+        with pytest.raises(OSError, match=qemu_image.ENV_VM_IMAGE_SHA256):
+            qemu_image.ensure_image(tmp_path / "vm.img")
 
     def test_the_pinned_env_checksum_accepts_a_matching_digest(
         self, server: Any, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
@@ -299,16 +294,101 @@ class TestEnsureImageChecksum:
         assert qemu_image.ensure_image(image).read_bytes() == b"hello world"
         assert (tmp_path / "vm.img.sha256").is_file()
 
-    def test_a_cached_image_without_a_sidecar_is_accepted_with_one_warning(
-        self, tmp_path: Path, caplog: pytest.LogCaptureFixture
+    def test_a_cached_sidecar_does_not_override_a_new_pinned_digest(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         image = tmp_path / "vm.img"
-        image.write_bytes(b"whatever was there before this feature existed")
+        image.write_bytes(b"old image")
+        qemu_image._write_sidecar(image, "sha256", hashlib.sha256(b"old image").hexdigest())
+        monkeypatch.setenv(qemu_image.ENV_VM_IMAGE_SHA256, "0" * 64)
+        with pytest.raises(OSError, match="[Cc]hecksum mismatch"):
+            qemu_image.ensure_image(image)
 
-        with caplog.at_level("WARNING"):
+    @pytest.mark.parametrize("matches", [False, True])
+    def test_legacy_sidecar_for_standard_name_requires_upstream_verification(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, matches: bool
+    ) -> None:
+        image = tmp_path / "debian-12-generic-amd64.qcow2"
+        image.write_bytes(b"old custom image")
+        stat = image.stat()
+        digest = hashlib.sha256(image.read_bytes()).hexdigest()
+        qemu_image._sidecar_path(image).write_text(
+            f"sha256:{digest}:{stat.st_size}:{stat.st_mtime_ns}\n", encoding="utf-8"
+        )
+        upstream_digest = digest if matches else "0" * 64
+        monkeypatch.setattr(qemu_image, "_neighbor_checksum", lambda url: ("sha256", upstream_digest))
+        if matches:
             assert qemu_image.ensure_image(image) == image
+        else:
+            with pytest.raises(OSError, match="[Cc]hecksum mismatch"):
+                qemu_image.ensure_image(image)
 
-        assert "without a checksum sidecar" in caplog.text
+    @pytest.mark.parametrize("custom_url", [False, True])
+    def test_a_legacy_custom_sidecar_without_a_pin_is_refused(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, custom_url: bool
+    ) -> None:
+        image = tmp_path / ("debian-12-generic-amd64.qcow2" if custom_url else "custom.img")
+        image.write_bytes(b"custom image")
+        qemu_image._write_sidecar(image, "sha256", hashlib.sha256(b"custom image").hexdigest())
+        if custom_url:
+            monkeypatch.setenv(qemu_image.ENV_VM_IMAGE_URL, "https://example.com/image")
+        with pytest.raises(OSError, match=qemu_image.ENV_VM_IMAGE_SHA256):
+            qemu_image.ensure_image(image)
+        monkeypatch.setenv(qemu_image.ENV_VM_IMAGE_SHA256, hashlib.sha256(b"custom image").hexdigest())
+        assert qemu_image.ensure_image(image) == image
+
+    def test_a_custom_cached_image_without_a_sidecar_or_digest_is_refused(self, tmp_path: Path) -> None:
+        image = tmp_path / "vm.img"
+        image.write_bytes(b"whatever was there before this feature existed")
+        with pytest.raises(OSError, match=qemu_image.ENV_VM_IMAGE_SHA256):
+            qemu_image.ensure_image(image)
+
+    def test_custom_cached_image_with_pinned_digest_is_verified(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        image = tmp_path / "vm.img"
+        image.write_bytes(b"custom image")
+        monkeypatch.setenv(qemu_image.ENV_VM_IMAGE_SHA256, hashlib.sha256(b"custom image").hexdigest())
+        assert qemu_image.ensure_image(image) == image
+        assert qemu_image._sidecar_path(image).is_file()
+
+    def test_cached_image_with_wrong_pinned_digest_is_refused(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        image = tmp_path / "vm.img"
+        image.write_bytes(b"custom image")
+        monkeypatch.setenv(qemu_image.ENV_VM_IMAGE_SHA256, "0" * 64)
+        with pytest.raises(OSError, match="[Cc]hecksum mismatch"):
+            qemu_image.ensure_image(image)
+        assert image.read_bytes() == b"custom image"
+
+    def test_standard_cached_image_is_verified_against_its_own_upstream(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        image = tmp_path / "debian-12-generic-amd64.qcow2"
+        image.write_bytes(b"standard image")
+        digest = hashlib.sha512(b"standard image").hexdigest()
+        monkeypatch.setattr(qemu_image, "_neighbor_checksum", lambda url: ("sha512", digest))
+        assert qemu_image.ensure_image(image) == image
+        assert qemu_image._sidecar_path(image).is_file()
+
+    def test_standard_cached_image_is_refused_offline(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        image = tmp_path / "debian-12-generic-amd64.qcow2"
+        image.write_bytes(b"standard image")
+        monkeypatch.setattr(qemu_image, "_neighbor_checksum", lambda url: None)
+        with pytest.raises(OSError, match="migrate-cache"):
+            qemu_image.ensure_image(image)
+
+    def test_standard_cached_image_mismatching_upstream_is_preserved_and_refused(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        image = tmp_path / "debian-12-generic-amd64.qcow2"
+        image.write_bytes(b"old image")
+        monkeypatch.setattr(qemu_image, "_neighbor_checksum", lambda url: ("sha256", "0" * 64))
+        with pytest.raises(OSError, match="[Cc]hecksum mismatch"):
+            qemu_image.ensure_image(image)
+        assert image.read_bytes() == b"old image"
+        assert not qemu_image._sidecar_path(image).exists()
 
 
 class TestUpstreamUrlForCachedName:
