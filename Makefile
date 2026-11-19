@@ -512,7 +512,7 @@ all-tests: unit-tests integration-tests container-tests sample-tests
 ########################
 
 # Define a variable for Python and notebook files.
-PYTHON_FILES=pysandboxes/ tests/
+PYTHON_FILES=pysandboxes/ tests/ python-sb/ samples/quick-demo/app/
 lint_diff format_diff: PYTHON_FILES=$(shell git diff --name-only --diff-filter=d develop -- '*.py' '*.ipynb')
 
 # lint only checks: it must never rewrite the sources, otherwise `ruff format --check`
@@ -535,6 +535,15 @@ lint lint_diff:
 		uvx ruff format --check $$FILES; \
 		uvx ruff check $$FILES; \
 	fi
+
+## Lint every sample with the tools in its locked environment.
+sample-lint:
+	@unset VIRTUAL_ENV; status=0; \
+	$(foreach s,$(SAMPLES), \
+		echo "== samples/$(s)-demo"; \
+		uv run --locked --project samples/$(s)-demo --only-group dev ruff check samples/$(s)-demo || status=1; \
+		uv run --locked --project samples/$(s)-demo --only-group dev ruff format --check --exclude '*.md' samples/$(s)-demo || status=1;) \
+	exit $$status
 
 claude-lint: lint
 	claude -p 'you are a linter. please look at the changes vs. main and report any issues related to typos. report the filename and line number on one line, and a description of the issue on the second line. do not return any other text.'
@@ -596,7 +605,7 @@ PIP_AUDIT_IGNORE_google-adk = --ignore-vuln CVE-2026-114603
 ## Report the runtime dependencies with a known security vulnerability, samples included; the test and dev groups
 ## are reported, without failing, by pip-audit-all
 pip-audit:
-	@unset VIRTUAL_ENV; status=0; \
+	@unset VIRTUAL_ENV; set -o pipefail; status=0; \
 	echo "== pysandboxes"; \
 	uv export $(EXPORT_AUDIT) --no-dev --no-default-groups | uv run pip-audit -r /dev/stdin || status=1; \
 	$(foreach s,$(SAMPLES), \
@@ -604,6 +613,13 @@ pip-audit:
 		uv export $(EXPORT_AUDIT) --frozen --no-dev --project samples/$(s)-demo --no-emit-package pysandboxes \
 			| uv run pip-audit --no-deps --disable-pip $(PIP_AUDIT_IGNORE_$(s)) -r /dev/stdin || status=1;) \
 	exit $$status
+
+# Build and release tools share this locked group with the release build. No advisory is currently allowlisted.
+PIP_AUDIT_IGNORE_release =
+pip-audit-release:
+	@unset VIRTUAL_ENV; set -o pipefail; \
+	uv export $(EXPORT_AUDIT) --frozen --only-group release \
+		| uv run --locked --group release pip-audit --no-deps --disable-pip $(PIP_AUDIT_IGNORE_release) -r /dev/stdin
 
 ## Report the vulnerabilities of every dependency, dev included (never fails)
 pip-audit-all:
@@ -977,7 +993,7 @@ lock: uv.lock
 # format is not a prerequisite: it rewrites the sources, which would make the
 # `ruff format --check` inside lint pass unconditionally.
 ## Validate the code
-validate: uv.lock lint spell_check pip-audit-all pip-audit unit-tests provider-smoke-tests quick-demo-gif
+validate: uv.lock lint sample-lint spell_check pip-audit-all pip-audit pip-audit-release unit-tests provider-smoke-tests quick-demo-gif
 
 # quick-demo.gif is recorded from these files. A change to their content records it again: a hash, kept in
 # git, is compared rather than the dates, which a clone or a pull resets.

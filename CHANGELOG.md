@@ -25,6 +25,8 @@
 
 ### Added
 
+- Invalid evaluation limits and malformed profile names are rejected, and evaluation timers are cleaned up on interruption.
+
 - Sandbox timeouts stop unfinished calls and reap their processes before the daemon can be reused.
 
 - Nested sandbox contexts now refuse a different policy instead of silently reusing the active daemon.

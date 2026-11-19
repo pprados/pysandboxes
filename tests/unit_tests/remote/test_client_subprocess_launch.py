@@ -63,6 +63,33 @@ class _Launch:
         return asyncio.run(asyncio.wait_for(scenario(), 10))
 
 
+def test_launch_failure_reaps_process_that_exits_during_kill(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    class ExitedProcess:
+        pid = 123
+        returncode = None
+        waited = False
+
+        def kill(self) -> None:
+            raise ProcessLookupError
+
+        async def wait(self) -> int:
+            self.waited = True
+            return 0
+
+    process = ExitedProcess()
+
+    async def create_exec(*args: Any, **kwargs: Any) -> Any:
+        return process
+
+    def fail_after_launch(pid: int) -> None:
+        raise ValueError("launch failed")
+
+    monkeypatch.setattr(csd.asyncio, "create_subprocess_exec", create_exec)
+    with pytest.raises(ValueError, match="launch failed"):
+        asyncio.run(launch_sandbox(["prog"], tmp_path / "pipe", Envs({}), None, on_launched=fail_after_launch))
+    assert process.waited
+
+
 @pytest.mark.skipif(sys.platform == "win32", reason="the FIFO launch path and the pty forwarding are POSIX")
 class TestLaunchWithFifo:
     def test_the_process_is_returned(self, tmp_path: Path) -> None:

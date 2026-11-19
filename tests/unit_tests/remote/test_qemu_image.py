@@ -1,5 +1,6 @@
 """Unit tests for pysandboxes.remote.qemu_image module."""
 
+import hashlib
 import tempfile
 from pathlib import Path
 
@@ -8,6 +9,7 @@ import pytest
 from pysandboxes.remote.qemu_image import (
     DEBIAN_CLOUD_BASE,
     ENV_VM_IMAGE_BASE_URL,
+    ENV_VM_IMAGE_SHA256,
     ENV_VM_IMAGE_URL,
     ENV_VM_IMAGES_DIR,
     PYTHON_VERSION_TO_UBUNTU_IMAGE,
@@ -203,10 +205,11 @@ class TestGetDownloadUrl:
 class TestEnsureImage:
     """Tests for ensure_image."""
 
-    def test_returns_path_when_file_exists(self) -> None:
+    def test_returns_path_when_file_exists(self, monkeypatch: pytest.MonkeyPatch) -> None:
         with tempfile.TemporaryDirectory() as d:
             image = Path(d) / "existing.qcow2"
             image.write_bytes(b"fake")
+            monkeypatch.setenv(ENV_VM_IMAGE_SHA256, hashlib.sha256(b"fake").hexdigest())
             assert ensure_image(image) == image
 
     def test_raises_when_missing_and_no_download_url(self, monkeypatch: pytest.MonkeyPatch) -> None:

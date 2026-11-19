@@ -343,6 +343,28 @@ def test_sigterm_inside_sandboxes_stops_the_daemon_then_kills_the_process() -> N
     assert "survived" not in result.stdout
 
 
+@pytest.mark.skipif(sys.platform == "win32", reason="Windows has no SIGTERM delivery to a process")
+def test_sigterm_on_async_sandbox_loop_terminates_without_yielding() -> None:
+    script = """
+import asyncio, os, signal
+from unittest.mock import AsyncMock, Mock, patch
+from pysandboxes.sandboxes_api import sandboxes
+
+async def main():
+    shutdown = AsyncMock(side_effect=lambda *_: print("stopped", flush=True))
+    with patch("pysandboxes._os_sandbox.async_start_daemon", AsyncMock(return_value=Mock())):
+        with patch("pysandboxes.sandboxes_api.async_shutdown_daemon", shutdown):
+            async with sandboxes(os_sandbox="subprocess"):
+                os.kill(os.getpid(), signal.SIGTERM)
+                os._exit(0)
+
+asyncio.run(main())
+"""
+    result = subprocess.run([sys.executable, "-c", script], capture_output=True, text=True, timeout=3)
+    assert result.returncode == -signal.SIGTERM, result.stderr
+    assert "stopped" not in result.stdout
+
+
 def test_a_failed_enter_restores_the_signal_handlers(tmp_path: Path) -> None:
     config = tmp_path / ".py-sandboxes"
     config.write_text("not a directive\n")

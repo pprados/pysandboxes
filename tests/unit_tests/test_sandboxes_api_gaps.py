@@ -14,7 +14,10 @@ from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
 
+from pysandboxes import _os_sandbox
 from pysandboxes.base_daemon import FakeDaemon
+from pysandboxes.e import SandBoxError
+from pysandboxes.private_loop import _reset_sandbox_loop, get_sandbox_loop
 from pysandboxes.sandboxes_api import sandbox, sandboxes
 
 
@@ -72,6 +75,66 @@ def test_stopping_a_daemon_that_is_being_restarted_still_shuts_it_down() -> None
     assert manager._daemon is None
 
 
+def test_shutdown_failure_can_retry_without_reusing_daemon(monkeypatch: pytest.MonkeyPatch) -> None:
+    async def scenario() -> None:
+        daemon = FakeDaemon("token")
+        daemon._is_started = True
+        daemon._accept_incoming = True
+        shutdown = AsyncMock(side_effect=[RuntimeError("failed"), None])
+        monkeypatch.setattr(daemon, "_shutdown", shutdown)
+        monkeypatch.setattr(_os_sandbox, "_current_daemon", daemon)
+        monkeypatch.setattr(_os_sandbox, "_startup_counter", 1)
+        monkeypatch.setattr(_os_sandbox, "_reset_sandbox_loop", lambda: None)
+        manager = sandboxes()
+        manager._daemon = daemon
+        with pytest.raises(RuntimeError, match="failed"):
+            await manager._stop_daemon()
+        assert manager._daemon is daemon
+        assert _os_sandbox._current_daemon is daemon
+        assert _os_sandbox._active_fingerprint is None
+        assert not daemon._accept_incoming
+        with pytest.raises(SandBoxError, match="Cannot reuse an active daemon"):
+            _os_sandbox._check_nested_policy(Mock())
+        daemon._is_started = False
+        await manager._stop_daemon()
+        assert shutdown.await_count == 2
+        assert manager._daemon is None
+
+    asyncio.run(scenario())
+
+
+def test_concurrent_shutdown_completes_on_owned_loop(monkeypatch: pytest.MonkeyPatch) -> None:
+    loop = get_sandbox_loop()
+    entered = threading.Event()
+    release = asyncio.Event()
+    daemon = FakeDaemon("token")
+    daemon._is_started = True
+
+    async def shutdown(graceful: bool) -> None:
+        entered.set()
+        await release.wait()
+        daemon._is_started = False
+
+    monkeypatch.setattr(daemon, "_shutdown", shutdown)
+    monkeypatch.setattr(_os_sandbox, "_current_daemon", daemon)
+    monkeypatch.setattr(_os_sandbox, "_startup_counter", 1)
+    manager = sandboxes()
+    manager._daemon = daemon
+    try:
+        first = asyncio.run_coroutine_threadsafe(manager._stop_daemon(), loop)
+        assert entered.wait(2)
+        second = asyncio.run_coroutine_threadsafe(manager._stop_daemon(), loop)
+        asyncio.run_coroutine_threadsafe(asyncio.sleep(0), loop).result(2)
+        assert not second.done()
+        loop.call_soon_threadsafe(release.set)
+        assert first.result(2)
+        assert second.result(2)
+    finally:
+        if loop.is_running():
+            loop.call_soon_threadsafe(release.set)
+        _reset_sandbox_loop()
+
+
 def test_signal_handlers_are_restored_from_the_main_thread() -> None:
     manager = sandboxes()
     manager._signals = {signal.SIGTERM: signal.SIG_DFL}
@@ -83,21 +146,51 @@ def test_signal_handlers_are_restored_from_the_main_thread() -> None:
     assert manager._signals == {}
 
 
-def test_signal_handlers_are_left_alone_from_a_worker_thread() -> None:
+def test_signal_handlers_are_preserved_when_exit_occurs_on_a_worker_thread() -> None:
     manager = sandboxes()
     manager._signals = {signal.SIGTERM: signal.SIG_DFL}
     install = Mock()
+    errors: list[Exception] = []
 
     def run() -> None:
         with patch("pysandboxes.sandboxes_api.signal.signal", install):
-            manager._unregister_signals_handlers()
+            try:
+                manager._unregister_signals_handlers()
+            except RuntimeError as exc:
+                errors.append(exc)
 
     worker = threading.Thread(target=run)
     worker.start()
     worker.join()
 
     install.assert_not_called()
-    assert manager._signals == {}
+    assert len(errors) == 1
+    assert manager._signals == {signal.SIGTERM: signal.SIG_DFL}
+
+
+def test_worker_thread_exit_stops_daemon_despite_signal_affinity_error() -> None:
+    manager = sandboxes()
+    manager._signals = {signal.SIGTERM: signal.SIG_DFL}
+    manager._daemon = Mock()
+    errors: list[Exception] = []
+
+    def exit_context() -> None:
+        try:
+            manager.__exit__(None, None, None)
+        except RuntimeError as exc:
+            errors.append(exc)
+
+    with (
+        patch("pysandboxes.sandboxes_api.get_sandbox_loop"),
+        patch("pysandboxes.sandboxes_api.asyncio.run_coroutine_threadsafe") as run_threadsafe,
+        patch.object(sandboxes, "_stop_daemon", Mock()),
+    ):
+        worker = threading.Thread(target=exit_context)
+        worker.start()
+        worker.join()
+    assert len(errors) == 1
+    run_threadsafe.assert_called_once()
+    assert manager._signals == {signal.SIGTERM: signal.SIG_DFL}
 
 
 def test_registering_from_a_worker_thread_installs_nothing() -> None:
@@ -133,6 +226,18 @@ def test_a_signal_nobody_registered_is_left_to_its_own_handler() -> None:
         manager._signals.clear()
 
         assert handler(signal.SIGTERM, None) is not None
+
+
+def test_default_signal_is_raised_if_daemon_loop_lookup_fails() -> None:
+    with _installed_handler(signal.SIG_DFL) as (manager, handler, _):
+        manager._daemon = Mock()
+        with (
+            patch("pysandboxes.sandboxes_api.get_sandbox_loop", side_effect=RuntimeError("loop failed")),
+            patch("pysandboxes.sandboxes_api.signal.raise_signal") as raise_signal,
+            pytest.raises(RuntimeError, match="loop failed"),
+        ):
+            handler(signal.SIGTERM, None)
+    raise_signal.assert_called_once_with(signal.SIGTERM)
 
 
 def test_a_signal_calls_the_previous_python_handler_from_the_main_thread() -> None:
@@ -174,6 +279,21 @@ def test_a_default_disposition_stops_the_daemon_outside_the_sandbox_then_raises_
 
     assert run_threadsafe.called is (not nested)
     assert get_loop.called is (not nested)
+    raise_signal.assert_called_once_with(signal.SIGTERM)
+
+
+def test_default_signal_is_raised_when_shutdown_fails() -> None:
+    with _installed_handler(signal.SIG_DFL) as (manager, handler, _):
+        manager._daemon = Mock()
+        with (
+            patch("pysandboxes.sandboxes_api.get_sandbox_loop"),
+            patch("pysandboxes.sandboxes_api.asyncio.run_coroutine_threadsafe") as run_threadsafe,
+            patch.object(sandboxes, "_stop_daemon", Mock()),
+            patch("pysandboxes.sandboxes_api.signal.raise_signal") as raise_signal,
+        ):
+            run_threadsafe.return_value.result.side_effect = RuntimeError("shutdown failed")
+            with pytest.raises(RuntimeError, match="shutdown failed"):
+                handler(signal.SIGTERM, None)
     raise_signal.assert_called_once_with(signal.SIGTERM)
 
 

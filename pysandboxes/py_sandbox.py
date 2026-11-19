@@ -215,7 +215,9 @@ def _parse_include(
             # is not, so the include was dropped without a word.
             raw_filename = match[2]
             filename = Path(raw_filename)
-            if "/" not in raw_filename:
+            if "\\" in raw_filename and not filename.is_absolute():
+                filename = root_path / Path(raw_filename.replace("\\", "/"))
+            elif "/" not in raw_filename and "\\" not in raw_filename:
                 filename = root_path / filename
             try:
                 filename = guard_envs.expanduser(filename).absolute()

@@ -116,9 +116,8 @@ def test_an_augmented_slice_still_works() -> None:
 
 def test_a_leaked_worker_that_finished_no_longer_counts() -> None:
     _activate(max_leaked_threads=1)
-    finished = threading.Thread(target=lambda: None)
-    finished.start()
-    finished.join()
+    finished = threading.Event()
+    finished.set()
     guard_eval._leaked.append(finished)
     assert leaked_threads() == 0
     assert guarded_eval("1 + 1") == 2

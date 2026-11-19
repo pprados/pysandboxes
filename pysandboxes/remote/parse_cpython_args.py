@@ -175,7 +175,7 @@ def parse_python_cmd_line(
 
     parser = argparse.ArgumentParser(
         prog="python-sb",
-        description="Run a Python program in a SANBOX.",
+        description="Run a Python program in a SANDBOX.",
         add_help=False,  # We'll add -h manually for full control
         formatter_class=CustomHelpFormatter,
     )

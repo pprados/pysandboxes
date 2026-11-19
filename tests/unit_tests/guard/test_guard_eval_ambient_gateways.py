@@ -8,14 +8,15 @@
 trusted. Calling one of them directly, with no `eval-*` rule declared and no
 `python-api=ALLOW:dynamic-code` grant, used to run the application's own source unguarded; see
 `wiki/weaknesses.md`. The integration tests below pin the fix behaviourally (the dangerous
-`exec`/`compile` must not have run, not merely "an exception was raised": `runsource` catches
-`RuleApiPermissionError` the same broad way it catches a real `SyntaxError`). The pure tests pin
+`exec`/`compile` must not have run, not merely "an exception was raised": from Python 3.13
+`runsource` catches `RuleApiPermissionError` the same broad way it catches a real `SyntaxError`). The pure tests pin
 the walk itself against a synthetic frame chain, independent of any guard activation.
 """
 
 import ast
 import builtins
 import code
+import contextlib
 import importlib.abc
 import importlib.machinery
 import inspect
@@ -290,11 +291,10 @@ def test_get_code_called_directly_does_not_run_its_argument(
 
 
 def test_runsource_called_directly_does_not_run_its_argument(_armed_with_no_eval_rule_at_all: None) -> None:
-    """`runsource` catches `Exception` broadly to report a syntax error, the same way it would
-    a real one: the refusal never reaches the caller as an exception, only as the absence of the
-    effect `exec` would have had."""
+    """From Python 3.13 `runsource` reports the refusal like a syntax error, so it never reaches the caller;
+    before, `codeop` lets it through as an exception. Either way the code does not run."""
     interp = code.InteractiveInterpreter()
-    with user_code():
+    with user_code(), contextlib.suppress(RuleApiPermissionError):
         interp.runsource("MARKER = 1")
     assert "MARKER" not in interp.locals
 

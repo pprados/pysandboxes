@@ -12,6 +12,8 @@ import ast
 import builtins
 import difflib
 import logging
+import math
+import threading
 from datetime import date, datetime, time, timedelta
 from typing import Any, NamedTuple
 
@@ -162,14 +164,28 @@ def parse_scalar(key: str, value: str) -> int | float | str:
     if key in _TIME_KEYS:
         for suffix in ("ms", "s", "m"):
             if raw.endswith(suffix):
-                return float(raw[: -len(suffix)]) * _TIME_SUFFIX[suffix]
-        return float(raw)
-    if key in _SIZE_KEYS:
+                result = float(raw[: -len(suffix)]) * _TIME_SUFFIX[suffix]
+                break
+        else:
+            result = float(raw)
+        if not math.isfinite(result) or result <= 0 or result > threading.TIMEOUT_MAX - 1:
+            raise ValueError(f"{key}: value must be positive, finite, and within the thread timeout limit.")
+        return result
+    elif key in _SIZE_KEYS:
         for suffix, factor in _SIZE_SUFFIX.items():
             if raw.upper().endswith(suffix):
-                return int(float(raw[: -len(suffix)]) * factor)
-        return int(raw)
-    return int(raw)
+                try:
+                    count = int(float(raw[: -len(suffix)]) * factor)
+                except OverflowError as err:
+                    raise ValueError(f"{key}: value must be finite.") from err
+                break
+        else:
+            count = int(raw)
+    else:
+        count = int(raw)
+    if count < 0 or (count == 0 and key != "eval-max-leaked-threads"):
+        raise ValueError(f"{key}: value must be {'non-negative' if key == 'eval-max-leaked-threads' else 'positive'}.")
+    return count
 
 
 SYNTAX_GROUPS: dict[str, tuple[str, ...]] = {
@@ -448,7 +464,11 @@ def parse_rules(
             others.append(rule)
             continue
         key_part, _, value = rule.rule.partition("=")
-        key, _, profile = key_part.strip().partition(":")
+        key, separator, profile = key_part.lstrip().partition(":")
+        if separator and (not profile or profile != profile.strip()):
+            _add_error(errors, rule, "profile name must be nonempty and have no surrounding whitespace.")
+            continue
+        key = key.strip()
         value = value.strip()
         acc = accumulators.setdefault(profile, _Accumulator())
         if key in LIST_KEYS:

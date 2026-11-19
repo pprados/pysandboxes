@@ -6,11 +6,11 @@
 # Nightly on develop, TCG included, started by nightly-trigger.yml; called by release.yml, TCG left out, for a tag
 # whose commit no nightly proved.
 # .github/scripts/find-nightly-gate.sh reuses a nightly by reading the names of these jobs: keep the ids
-# integration, samples, containers and cross-os, and the run name Nightly.
+# integration, samples, containers and cross-os, and the run name Nightly full matrix.
 name: Full Gate
 
-# Titled Nightly only for the full nightly: the reuse lookup trusts that title.
-run-name: ${{ inputs.nightly == true && inputs.exclude-tcg != true && 'Nightly' || 'Full Gate' }}
+# The reuse lookup trusts this title only for the full VM sample matrix with TCG enabled.
+run-name: ${{ inputs.nightly == true && inputs.exclude-tcg != true && inputs.vm-sample-python-versions == '["3.11", "3.12", "3.13", "3.14"]' && 'Nightly full matrix' || 'Full Gate' }}
 
 on:
   workflow_dispatch:

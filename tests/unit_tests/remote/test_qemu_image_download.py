@@ -2,6 +2,7 @@
 # License: Apache V2
 """Download of the QEMU guest image: URL checks, progress reports, partial files and failure reporting."""
 
+import hashlib
 import io
 from pathlib import Path
 from typing import Any
@@ -306,6 +307,9 @@ class TestEnsureImage:
     ) -> None:
         image = tmp_path / "vm.img"
         image.write_text("x")
+        digest = hashlib.sha256(b"x").hexdigest()
+        qemu_image._write_sidecar(image, "sha256", digest)
+        monkeypatch.setenv(qemu_image.ENV_VM_IMAGE_SHA256, digest)
         monkeypatch.setattr(qemu_image, "get_download_url", lambda path: pytest.fail("no lookup expected"))
 
         assert qemu_image.ensure_image(image) == image
@@ -314,7 +318,7 @@ class TestEnsureImage:
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         calls: list[tuple[Path, str, tuple[str, str] | None]] = []
-        sidecars: list[Path] = []
+        sidecars: list[tuple[Path, bool]] = []
         monkeypatch.setattr(qemu_image, "get_download_url", lambda path: "https://h/v")
         monkeypatch.setattr(qemu_image, "_resolve_expected_checksum", lambda url: ("sha256", "abc"))
         monkeypatch.setattr(
@@ -322,11 +326,15 @@ class TestEnsureImage:
             "download_image",
             lambda path, url, *, expected_checksum=None: calls.append((path, url, expected_checksum)),
         )
-        monkeypatch.setattr(qemu_image, "_write_sidecar", lambda path, algorithm, digest: sidecars.append(path))
+        monkeypatch.setattr(
+            qemu_image,
+            "_write_sidecar",
+            lambda path, algorithm, digest, *, upstream=False: sidecars.append((path, upstream)),
+        )
 
         assert qemu_image.ensure_image(tmp_path / "vm.img") == tmp_path / "vm.img"
         assert calls == [(tmp_path / "vm.img", "https://h/v", ("sha256", "abc"))]
-        assert sidecars == [tmp_path / "vm.img"]
+        assert sidecars == [(tmp_path / "vm.img", True)]
 
     def test_without_a_url_the_error_says_how_to_provide_the_image(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch

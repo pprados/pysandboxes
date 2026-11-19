@@ -8,6 +8,7 @@ there deleted the files the running guest serves over 9p: every import the guest
 made later failed with ``No module named ...``.
 """
 
+import asyncio
 import logging
 from pathlib import Path
 from typing import Any
@@ -18,6 +19,7 @@ import pytest
 from pysandboxes.all_rules import AllRules
 from pysandboxes.immutable_dict import ImmutableDict
 from pysandboxes.remote.qemu_sse_daemon import QemuSSEDaemon
+from pysandboxes.remote.vm_sse_daemon import VMSSEDaemon
 from pysandboxes.sb_types import Envs
 
 
@@ -76,3 +78,15 @@ async def test_a_failed_start_leaves_no_staged_tree_behind() -> None:
             await daemon._start(_rules(), envs={}, log_level=logging.INFO, init_fn=None)
 
     assert not staged[0].exists()
+
+
+async def test_cancelled_start_stops_runtime_dns() -> None:
+    daemon = QemuSSEDaemon("token")
+
+    async def cancelled_start(self: Any, *args: Any, **kwargs: Any) -> None:
+        raise asyncio.CancelledError
+
+    with patch.object(VMSSEDaemon, "_start", cancelled_start), patch.object(daemon._dns_session, "stop") as stop:
+        with pytest.raises(asyncio.CancelledError):
+            await daemon._start(_rules(), envs={}, log_level=logging.INFO, init_fn=None)
+    stop.assert_called_once()

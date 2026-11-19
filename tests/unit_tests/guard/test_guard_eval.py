@@ -6,11 +6,13 @@ import builtins
 import logging
 import os
 import pathlib
+import signal
 import sysconfig
 import threading
 import time
 import types
 from typing import Any, Callable, Iterator, cast
+from unittest.mock import MagicMock
 
 import pytest  # type: ignore[import-untyped]
 
@@ -54,6 +56,106 @@ from pysandboxes.sb_types import ConfigLine
 
 def _names(*allowed: str) -> NameSet:
     return NameSet(allow=frozenset(allowed), allow_patterns=(), deny=frozenset(), deny_patterns=())
+
+
+@pytest.mark.parametrize("error", [ValueError, KeyboardInterrupt])
+def test_worker_join_failure_cancels_watchdog(monkeypatch: pytest.MonkeyPatch, error: type[BaseException]) -> None:
+    watchdog = MagicMock(spec=threading.Timer)
+    worker = MagicMock(spec=threading.Thread)
+    worker.join.side_effect = error
+    worker.is_alive.return_value = False
+    monkeypatch.setattr(guard_eval, "_leaked", [])
+    monkeypatch.setattr(guard_eval.threading, "Thread", lambda **kwargs: worker)
+    monkeypatch.setattr(guard_eval.threading, "Timer", lambda *args, **kwargs: watchdog)
+    monkeypatch.setattr(guard_eval, "_start_unguarded", lambda thread: None)
+    monkeypatch.setattr(guard_eval, "_inline", False)
+    with pytest.raises(error):
+        guard_eval.run_guarded(
+            "1", DEFAULT_RULES._replace(syntax=_names(*CORE_NODES)), mode="eval", namespace={}, source_ref="<test>"
+        )
+    watchdog.cancel.assert_called_once()
+
+
+def test_join_interruption_tracks_and_interrupts_real_worker(monkeypatch: pytest.MonkeyPatch) -> None:
+    from pysandboxes.eval_runtime import EvalState
+
+    started = threading.Event()
+    release = threading.Event()
+    real_join = threading.Thread.join
+    workers: list[threading.Thread] = []
+
+    def blocked_worker(*args: Any) -> None:
+        started.set()
+        release.wait(5)
+
+    def interrupted_join(worker: threading.Thread, timeout: float | None = None) -> None:
+        workers.append(worker)
+        assert started.wait(2)
+        raise KeyboardInterrupt
+
+    monkeypatch.setattr(guard_eval, "_worker", blocked_worker)
+    monkeypatch.setattr(threading.Thread, "join", interrupted_join)
+    monkeypatch.setattr(threading.Thread, "is_alive", lambda _: False)
+    state = EvalState(DEFAULT_RULES)
+    try:
+        with pytest.raises(KeyboardInterrupt):
+            guard_eval._run_in_worker_thread(None, "eval", {}, state, {}, DEFAULT_RULES, "<test>")
+        assert state.interrupted
+        assert leaked_threads() == 1
+    finally:
+        release.set()
+        for worker in workers:
+            real_join(worker, 2)
+        leaked_threads()
+
+
+@pytest.mark.skipif(not hasattr(signal, "setitimer"), reason="requires POSIX interval timers")
+def test_signal_during_join_tracks_live_worker(monkeypatch: pytest.MonkeyPatch) -> None:
+    from pysandboxes.eval_runtime import EvalState
+
+    started = threading.Event()
+    release = threading.Event()
+    finished = threading.Event()
+
+    def blocked_worker(*args: Any) -> None:
+        started.set()
+        try:
+            release.wait(5)
+        finally:
+            finished.set()
+
+    def interrupt(_signal: int, _frame: Any) -> None:
+        raise KeyboardInterrupt
+
+    monkeypatch.setattr(guard_eval, "_worker", blocked_worker)
+    old_handler = signal.signal(signal.SIGALRM, interrupt)
+    state = EvalState(DEFAULT_RULES)
+    try:
+        signal.setitimer(signal.ITIMER_REAL, 0.2)
+        with pytest.raises(KeyboardInterrupt):
+            guard_eval._run_in_worker_thread(None, "eval", {}, state, {}, DEFAULT_RULES, "<test>")
+        assert started.is_set()
+        assert state.interrupted
+        assert leaked_threads() == 1
+    finally:
+        signal.setitimer(signal.ITIMER_REAL, 0)
+        signal.signal(signal.SIGALRM, old_handler)
+        release.set()
+        assert finished.wait(2)
+        leaked_threads()
+
+
+def test_zero_leak_limit_allows_execution_without_leaks(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(guard_eval, "leaked_threads", lambda: 0)
+    rules = DEFAULT_RULES._replace(declared=True, max_leaked_threads=0, syntax=_names(*CORE_NODES))
+    assert guard_eval.run_guarded("1", rules, mode="eval", namespace={}, source_ref="<test>") == 1
+
+
+def test_zero_leak_limit_refuses_execution_with_a_leak(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(guard_eval, "leaked_threads", lambda: 1)
+    rules = DEFAULT_RULES._replace(max_leaked_threads=0)
+    with pytest.raises(EvalInterrupted, match="eval-max-leaked-threads"):
+        guard_eval.run_guarded("1", rules, mode="eval", namespace={}, source_ref="<test>")
 
 
 def _frame_with(filename: str) -> types.FrameType:

@@ -320,6 +320,7 @@ async def async_start_daemon(
             raise ValueError(f"Unknown daemon name: {all_rules.os_sandbox}")
         check_provider_available(all_rules.os_sandbox)
         os_provider: BaseDaemon | None = None
+        started = False
         try:
             token = str(uuid.uuid4())
             os_provider = providers_factory[all_rules.os_sandbox](token, python_args=python_args)
@@ -330,6 +331,7 @@ async def async_start_daemon(
                 os_provider._result_data_only = all_rules.remote_result_data_only
             _starting_daemon = os_provider
             await os_provider._start(all_rules, envs=envs, log_level=log_level, init_fn=init_fn)
+            started = True
             if _cancelled is not None and _cancelled.is_set():
                 raise asyncio.CancelledError
             _starting_daemon = None
@@ -341,14 +343,22 @@ async def async_start_daemon(
         except BaseException as e:
             _current_daemon = None
             _active_fingerprint = None
-            if os_provider is not None:
-                os_provider._accept_incoming = False
-                await os_provider._stop(0)
-            _kill_unstarted_sandbox(os_provider)
-            process = getattr(os_provider, "_process", None)
             try:
-                if process is not None:
-                    await process.wait()
+                try:
+                    if os_provider is not None:
+                        os_provider._accept_incoming = False
+                        await os_provider._stop(0)
+                finally:
+                    _kill_unstarted_sandbox(os_provider)
+                    process = getattr(os_provider, "_process", None)
+                    if process is not None:
+                        await process.wait()
+                    if started and os_provider is not None:
+                        from .remote.base_sse_daemon import BaseSSESandbox
+
+                        if isinstance(os_provider, BaseSSESandbox):
+                            os_provider._failure = "The sandbox start was cancelled."
+                        await os_provider._shutdown(False)
             finally:
                 _starting_daemon = None
             raise e
@@ -374,7 +384,9 @@ async def async_stop_daemon(max_pending: int = 0) -> None:
         await _current_daemon._stop(max_pending)
 
 
-async def async_shutdown_daemon(graceful_shutdown: bool = True) -> None:
+async def async_shutdown_daemon(
+    graceful_shutdown: bool = True, _retain_on_failure: bool = False, _defer_loop_reset: bool = False
+) -> bool:
     """
     Asynchronously shuts down the current daemon.
 
@@ -391,29 +403,40 @@ async def async_shutdown_daemon(graceful_shutdown: bool = True) -> None:
             if _startup_counter <= 0:
                 raise ValueError("Daemon daemon_shutdown more times than started")
             _startup_counter -= 1
-            return
+            return False
 
         if _startup_counter > 1:  # pragma: no mutate
             _startup_counter -= 1
             logger.info("Daemon not shutting down because the startup counter > 1")
-            return
-        # Try a graceful shutdown. A failure here must not leave a dead daemon looking started: the
-        # `finally` wipes the global state clean either way, and the exception still propagates so the
-        # caller learns the shutdown did not complete.
+            return False
+        # The context manager retains a failed daemon for retry, but clears its policy fingerprint
+        # so no new context can reuse it. Other callers retain the original terminal cleanup behavior.
+        completed = False
         try:
             await _current_daemon._shutdown(graceful_shutdown)
             assert not _current_daemon.is_started
+            completed = True
         finally:
-            _current_daemon = None
             _active_fingerprint = None
-            _startup_counter = 0
-            # Give back the private event-loop thread a sync start_daemon() may have created, and any
-            # `none`-provider flag a failed `_shutdown` never got to clear: without this, a thread leaks
-            # forever, or is_in_sandbox() stays stuck true and every later `with sandboxes():` in this
-            # process believes it is a nested call and never starts a real daemon.
-            _reset_sandbox_loop()
+            if completed or not _retain_on_failure:
+                _current_daemon = None
+                _startup_counter = 0
+                # Give back the private event-loop thread a sync start_daemon() may have created, and any
+                # `none`-provider flag a failed `_shutdown` never got to clear: without this, a thread leaks
+                # forever, or is_in_sandbox() stays stuck true and every later `with sandboxes():` in this
+                # process believes it is a nested call and never starts a real daemon.
+                if not _defer_loop_reset:
+                    _reset_sandbox_loop()
+            else:
+                _current_daemon._accept_incoming = False
             while is_in_sandbox():
                 set_is_in_sandbox(False)
+        return True
+
+
+def _reset_idle_sandbox_loop() -> None:
+    if _current_daemon is None and _starting_daemon is None:
+        _reset_sandbox_loop()
 
 
 def start_daemon(

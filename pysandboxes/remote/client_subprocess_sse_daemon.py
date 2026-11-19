@@ -252,7 +252,10 @@ async def launch_sandbox(
     except BaseException:
         if process is not None:
             if process.returncode is None:
-                process.kill()
+                try:
+                    process.kill()
+                except ProcessLookupError:
+                    pass
             await process.wait()
         raise
 
@@ -520,7 +523,10 @@ class BaseSubProcessDaemon(BaseSSESandbox):
                     # ping loop giving up): nothing else ever kills it once this task ends.
                     logger.exception("watchdog: restart failed")
                     if self._process is not None:
-                        self._process.kill()
+                        try:
+                            self._process.kill()
+                        except ProcessLookupError:
+                            pass
                         await self._process.wait()
                         self._process = None
                     self._failure = "The sandbox process could not be restarted."
@@ -817,7 +823,10 @@ class BaseSubProcessDaemon(BaseSSESandbox):
             else:
                 logger.info("Kill the sandbox daemon (graceful_shutdown=%s)", graceful_shutdown)
                 if self._process:
-                    self._process.kill()
+                    try:
+                        self._process.kill()
+                    except ProcessLookupError:
+                        pass
             if self._process and self._failure:
                 await self._process.wait()
             self._close_job_handle()

@@ -22,7 +22,9 @@ esac
 """
 
 
-def _run(id_: int, sha: str = SHA, event: str = "workflow_dispatch", title: str = "Nightly") -> dict[str, object]:
+def _run(
+    id_: int, sha: str = SHA, event: str = "workflow_dispatch", title: str = "Nightly full matrix"
+) -> dict[str, object]:
     return {
         "databaseId": id_,
         "url": f"https://example/runs/{id_}",
@@ -129,8 +131,8 @@ def test_one_failed_windows_job_prevents_reuse(fake: Path) -> None:
 
 @pytest.mark.parametrize(
     "run",
-    [_run(7, sha="b" * 40), _run(7, event="schedule"), _run(7, title="Full Gate")],
-    ids=["commit", "event", "title"],
+    [_run(7, sha="b" * 40), _run(7, event="schedule"), _run(7, title="Full Gate"), _run(7, title="Nightly")],
+    ids=["commit", "event", "partial matrix", "legacy title"],
 )
 def test_a_run_of_another_commit_event_or_title_is_not_reused_even_if_listed(
     fake: Path, run: dict[str, object]

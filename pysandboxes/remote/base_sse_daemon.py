@@ -6,7 +6,6 @@ import logging
 import socket
 import sys
 import threading
-from concurrent.futures import CancelledError as FutureCancelledError
 from concurrent.futures import TimeoutError as FutureTimeoutError
 from datetime import timedelta
 from typing import Any, Callable, Dict, cast
@@ -351,7 +350,9 @@ class BaseSSESandbox(BaseDaemon):
         rpc_timeout = rpc_call_timeout(TIMEOUT_FOR_RPC_CALL)
         try:
             return future.result(timeout=rpc_timeout)
-        except FutureTimeoutError:
+        except FutureTimeoutError as error:
+            if future.done() and not future.cancelled() and future.exception() is error:
+                raise
             from pysandboxes._os_sandbox import _invalidate_daemon
 
             self._failure = "The sandbox is unavailable after an RPC timeout."
@@ -359,7 +360,7 @@ class BaseSSESandbox(BaseDaemon):
             future.cancel()
             try:
                 future.result()
-            except FutureCancelledError:
+            except BaseException:
                 pass
             # Cancelling the concurrent future is not acknowledgement from its coroutine,
             # and even client cleanup cannot prove that the remote function stopped.

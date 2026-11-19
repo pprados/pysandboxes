@@ -1,5 +1,5 @@
 import threading
-from typing import Iterator
+from typing import Generator, Iterator, cast
 
 from pysandboxes.guard_envs import LearnEnviron
 
@@ -256,7 +256,7 @@ def test_a_scan_nested_inside_another_does_not_corrupt_its_bookkeeping() -> None
     envs = LearnEnviron()  # Reset singleton
     envs._keys_used.clear()
 
-    outer = iter(envs)
+    outer = cast(Generator[str, None, None], iter(envs))
     try:
         first = next(outer)
         _ = envs[first]  # an immediate read-back of the outer scan: learns nothing by itself
