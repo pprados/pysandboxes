@@ -596,12 +596,6 @@ PIP_AUDIT_IGNORE_crewai = --ignore-vuln PYSEC-2026-311 --ignore-vuln PYSEC-2026-
 	--ignore-vuln PYSEC-2026-3814 --ignore-vuln PYSEC-2026-3815 \
 	--ignore-vuln CVE-2026-59951 --ignore-vuln PYSEC-2026-4321
 
-# google-adk, up to 2.13.0, pins opentelemetry-api<=1.44, before the CVE-2026-114603 fix (1.45.1): no release of
-# google-adk can take it. The advisory is a regular-expression slowdown in TraceState.from_header, reached by
-# parsing an inbound W3C `tracestate` header. The sample is a command-line tool: it serves no HTTP and reads none.
-# Drop this ignore once google-adk allows opentelemetry-api>=1.45.1, then relock the sample:
-#   uv lock --project samples/google-adk-demo --upgrade-package opentelemetry-api
-PIP_AUDIT_IGNORE_google-adk = --ignore-vuln CVE-2026-114603
 ## Report the runtime dependencies with a known security vulnerability, samples included; the test and dev groups
 ## are reported, without failing, by pip-audit-all
 pip-audit:
