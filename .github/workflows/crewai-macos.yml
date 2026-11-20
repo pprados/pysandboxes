@@ -30,7 +30,7 @@ jobs:
         version: "0.11.16"
 
     - name: Check installation of uv
-      run: test "$(uv --version)" = "uv 0.11.16"
+      run: test "$(uv --version | cut -d' ' -f2)" = "0.11.16"
 
     - name: Install CrewAI sample dependencies
       run: make -C samples/crewai-demo init

@@ -2,14 +2,16 @@
 # License: Apache V2
 """Check uv installation in the CI and release workflows."""
 
-from pathlib import Path
 import re
+import subprocess
+from pathlib import Path
 
 import pytest
 import yaml
 
 WORKFLOWS = Path(__file__).parents[2] / ".github" / "workflows"
 ACTION = "astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2"
+UV_CHECK = 'test "$(uv --version | cut -d\' \' -f2)" = "0.11.16"'
 
 
 @pytest.mark.parametrize(
@@ -38,8 +40,22 @@ def test_uv_installations_are_pinned_and_verified(filename: str, expected_instal
             installations += 1
             assert step.get("uses") == ACTION
             assert step.get("with", {}).get("version") == "0.11.16"
-            assert steps[index + 1].get("run") == 'test "$(uv --version)" = "uv 0.11.16"'
+            assert steps[index + 1].get("run") == UV_CHECK
     assert installations == expected_installations
+
+
+@pytest.mark.parametrize(
+    ("printed", "accepted"),
+    [("uv 0.11.16 (1a2b3c4d5 2026-11-01 x86_64-unknown-linux-gnu)", True), ("uv 0.13.7 (1a2b3c4d5 2026-11-01)", False)],
+)
+def test_uv_check_reads_the_version_uv_really_prints(tmp_path: Path, printed: str, accepted: bool) -> None:
+    fake_uv = tmp_path / "uv"
+    fake_uv.write_text(f"#!/bin/sh\necho '{printed}'\n")
+    fake_uv.chmod(0o755)
+    result = subprocess.run(
+        ["sh", "-c", UV_CHECK], env={"PATH": f"{tmp_path}:/usr/bin:/bin"}, check=False, capture_output=True
+    )
+    assert (result.returncode == 0) is accepted
 
 
 def test_all_workflows_avoid_unpinned_uv_installers() -> None:

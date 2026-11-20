@@ -56,7 +56,7 @@ jobs:
         version: "0.11.16"
 
     - name: Check installation of uv
-      run: test "$(uv --version)" = "uv 0.11.16"
+      run: test "$(uv --version | cut -d' ' -f2)" = "0.11.16"
 
     - name: Install GNU utilities on macOS
       if: ${{ matrix.os == 'macos-latest' }}
