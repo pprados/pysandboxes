@@ -312,6 +312,14 @@ def _closed(fd: int) -> bool:
 
 
 class TestWatcher:
+    def test_ipv6_is_never_asked_of_slirp4netns_unless_the_caller_has_an_ipv6_firewall(self, watcher: Any) -> None:
+        watcher(child_pid=1234)
+        watcher(child_pid=1234, enable_ipv6=True)
+
+        without, with_ipv6 = (call["args"] for call in watcher.launched)
+        assert "-6" not in without
+        assert with_ipv6[:5] == ["slirp4netns", "-c", "-m", "1500", "-6"]
+
     def test_slirp4netns_is_launched_for_the_given_pid_with_the_readiness_pipe(self, watcher: Any) -> None:
         read_end, write_end = watcher(child_pid=1234)
 
@@ -545,6 +553,7 @@ class TestWatcherEntryPoint:
             "timeout": 7,
             "provider": "sandbox",
             "on_crash": None,
+            "enable_ipv6": False,
         }
 
     def test_the_default_timeout_is_thirty_seconds(self, monkeypatch: pytest.MonkeyPatch) -> None:

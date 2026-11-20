@@ -35,7 +35,7 @@ from ..e import SandBoxError
 from ..guard_files import FSExposeRule, IgnoreRule, is_special_file
 from ..immutable_dict import ImmutableDict
 from ..main_logger import ErrorMsg
-from ..netfilter import rule_to_netfilter, runtime_netfilter
+from ..netfilter import rule_to_netfilter, runtime_netfilter, runtime_netfilter6
 from ..override_compat import override
 from ..sb_types import Args, ConfigLines, Envs
 from ..tools import (
@@ -60,6 +60,7 @@ from .parameters import (
     TIMEOUT_FOR_PING,
 )
 from .runtime_dns import RuntimeDnsSession
+from .ipv6_route import wait_default_route
 from .slirp4netns_common import (
     SLIRP_DNS,
     SLIRP_GW,
@@ -116,16 +117,19 @@ def _sandbox_pid(bwrap_pid: int, timeout: float = NETFILTER_TIMEOUT) -> int:
     raise SandBoxError(f"bwrap (pid {bwrap_pid}) never started a child in its own network namespace")
 
 
-def _apply_netfilter_from_host(sandbox_pid: int, netfilter_rules: tuple[str, ...]) -> None:
-    """Load the iptables rules into the sandbox network namespace, from the host.
+def _apply_netfilter_from_host(
+    sandbox_pid: int, netfilter_rules: tuple[str, ...], restore_name: str = "iptables-restore"
+) -> None:
+    """Load the iptables rules (``ip6tables-restore`` for the IPv6 ones) into the sandbox network namespace, from the
+    host.
 
     The sandbox holds no capability, so it cannot load them, nor flush them afterwards. The host enters the user
     namespace bwrap created, where its uid is mapped to root, and the network namespace that user namespace owns.
     """
     nsenter = which_command("nsenter")
-    restore = which_command("iptables-restore")
+    restore = which_command(restore_name)
     if nsenter is None or restore is None:
-        raise SandBoxError("bwrap network filtering needs nsenter and iptables-restore on the host")
+        raise SandBoxError(f"bwrap network filtering needs nsenter and {restore_name} on the host")
     r = subprocess.run(
         [str(nsenter), "-t", str(sandbox_pid), "-U", "-n", "--preserve-credentials", str(restore), "--noflush"],
         input="\n".join(netfilter_rules).encode(),
@@ -135,8 +139,7 @@ def _apply_netfilter_from_host(sandbox_pid: int, netfilter_rules: tuple[str, ...
     )
     if r.returncode != 0:
         raise SandBoxError(
-            f"iptables-restore failed in the bwrap sandbox ({r.returncode}): "
-            f"{r.stderr.decode(errors='replace').strip()}"
+            f"{restore_name} failed in the bwrap sandbox ({r.returncode}): {r.stderr.decode(errors='replace').strip()}"
         )
 
 
@@ -348,6 +351,10 @@ class BWrapSSEDaemon(BaseSubProcessDaemon):
         netfilter_rules = self._build_netfilter_rules(
             all_rules, process_config.port, self._dns_session.start(all_rules)
         )
+        ipv6 = all_rules.net_resolve == "runtime" and all(
+            which_command(tool) for tool in ("ip6tables", "ip6tables-restore")
+        )
+        netfilter6_rules = tuple(runtime_netfilter6(all_rules.socket_rules)) if ipv6 else ()
         self._stop_previous_slirp()
         # Fresh event for the watcher started below: _stop_previous_slirp sets the one above for
         # good, so an unrelated exit of the new slirp4netns must not be read against it.
@@ -362,7 +369,9 @@ class BWrapSSEDaemon(BaseSubProcessDaemon):
             try:
                 sandbox_pid = _sandbox_pid(pid)
                 _apply_netfilter_from_host(sandbox_pid, netfilter_rules)
-                self._dns_session.attach(sandbox_pid)
+                if ipv6:
+                    _apply_netfilter_from_host(sandbox_pid, netfilter6_rules, "ip6tables-restore")
+                self._dns_session.attach(sandbox_pid, ipv6)
                 threading.Thread(
                     target=slirp_run_watcher,
                     args=(self._slirp_shutdown_event, slirp_pipe_w, api_socket),
@@ -370,12 +379,15 @@ class BWrapSSEDaemon(BaseSubProcessDaemon):
                         "child_pid": sandbox_pid,
                         "process_holder": self._slirp_process_holder,
                         "timeout": SLIRP_WATCHER_TIMEOUT,
+                        "enable_ipv6": ipv6,
                     },
                     daemon=True,
                 ).start()
                 slirp_started = True
                 if not _slirp_ready(slirp_pipe_r, SLIRP_WATCHER_TIMEOUT):
                     raise SandBoxError("slirp4netns never brought up the bwrap sandbox network")
+                if ipv6 and not wait_default_route(sandbox_pid):
+                    logger.warning("No IPv6 default route in the bwrap sandbox: it stays without IPv6")
             except Exception:
                 self._dns_session.stop()
                 self._slirp_shutdown_event.set()

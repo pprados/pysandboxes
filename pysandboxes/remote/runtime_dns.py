@@ -14,7 +14,7 @@ import os
 import socket
 import struct
 import threading
-from ipaddress import IPv4Address
+from ipaddress import IPv4Address, IPv6Address
 from typing import Sequence
 
 from ..all_rules import AllRules
@@ -48,7 +48,7 @@ class _DeferredEnforcer:
             self._enforcer.revoke(ip, rule)
 
 
-def _forward_tcp(servers: Sequence[IPv4Address], port: int, timeout: float, packet: bytes) -> bytes:
+def _forward_tcp(servers: Sequence[IPv4Address | IPv6Address], port: int, timeout: float, packet: bytes) -> bytes:
     """Ask the first resolver of ``servers`` that answers; raise ``OSError`` when none does."""
     last: Exception = OSError("no resolver of the host is known")
     for server in servers:
@@ -78,7 +78,7 @@ class RuntimeDns:
     def __init__(
         self,
         rules: tuple[NameRule, ...],
-        upstream_servers: Sequence[IPv4Address],
+        upstream_servers: Sequence[IPv4Address | IPv6Address],
         *,
         upstream_port: int = UPSTREAM_PORT,
         upstream_timeout: float = UPSTREAM_TIMEOUT,
@@ -169,9 +169,9 @@ class RuntimeDnsSession:
         for tool in () if self._join == "guest" else (self._join, "iptables"):
             if not which_command(tool):
                 raise SandBoxError(f"net-resolve=runtime needs {tool} on the host.")
-        servers = [ip for ip in get_upstream_dns() if isinstance(ip, IPv4Address)]
+        servers = list(get_upstream_dns())
         if not servers:
-            raise SandBoxError("net-resolve=runtime found no IPv4 resolver on the host to forward the names to.")
+            raise SandBoxError("net-resolve=runtime found no resolver on the host to forward the names to.")
         self._dns = RuntimeDns(all_rules.name_rules, servers, host=bind_host)
         return self._dns.start()
 
@@ -180,8 +180,12 @@ class RuntimeDnsSession:
         if self._dns is not None:
             self._dns.attach(NetnsIptablesEnforcer.via_guest(port, token))
 
-    def attach(self, pid: int) -> None:
-        """Let the resolver open addresses in the network namespace held by ``pid``, once that namespace exists."""
+    def attach(self, pid: int, ipv6: bool = False) -> None:
+        """Let the resolver open addresses in the network namespace held by ``pid``, once that namespace exists.
+
+        ``ipv6`` is for a namespace whose IPv6 firewall is loaded: the IPv6 addresses of an answer are then opened
+        with ``ip6tables``. Without it they are not, and the sandbox has no IPv6 route to reach them.
+        """
         if self._dns is None:
             return
         joiner, iptables = which_command(self._join), which_command("iptables")
@@ -189,8 +193,15 @@ class RuntimeDnsSession:
             raise SandBoxError(f"net-resolve=runtime needs {self._join} and iptables on the host.")
         if self._join == "firejail":
             self._dns.attach(NetnsIptablesEnforcer.via_firejail(pid, str(joiner), str(iptables)))
-        else:
-            self._dns.attach(NetnsIptablesEnforcer(pid, str(joiner), str(iptables)))
+            return
+        ip6tables = which_command("ip6tables") if ipv6 else None
+        if ipv6 and ip6tables is None:
+            raise SandBoxError("net-resolve=runtime with IPv6 needs ip6tables on the host.")
+        self._dns.attach(
+            NetnsIptablesEnforcer(
+                pid, str(joiner), str(iptables), ip6tables=None if ip6tables is None else str(ip6tables)
+            )
+        )
 
     def stop(self) -> None:
         dns, self._dns = self._dns, None

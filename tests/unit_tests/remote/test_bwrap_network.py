@@ -221,3 +221,66 @@ def test_a_profile_with_net_rules_refuses_to_start_when_a_network_tool_is_missin
             BWrapSSEDaemon("token").get_launch_params_for_python_sb(
                 _with_socket_rule(), 0, "t", "", tmp_path / "pipe", tmp_path
             )
+
+
+def _runtime_launch(tmp_path: Path, tools: dict[str, str | None]) -> tuple[dict[str, Any], MagicMock]:
+    rules = _with_socket_rule()._replace(net_resolve="runtime")
+    daemon = BWrapSSEDaemon("token")
+    daemon._dns_session = MagicMock()
+    daemon._dns_session.start.return_value = 5353
+    with patch("pysandboxes.remote.bwrap_sse_daemon.which_command", side_effect=lambda t: tools.get(t, "/usr/bin/t")):
+        params = daemon.get_launch_params_for_python_sb(rules, 0, "t", "", tmp_path / "pipe", tmp_path)
+    return params, daemon._dns_session
+
+
+waits: list[Any] = []
+
+
+def _run_launched(params: dict[str, Any]) -> tuple[list[tuple[Any, ...]], list[dict[str, Any]]]:
+    loads: list[tuple[Any, ...]] = []
+    watchers: list[dict[str, Any]] = []
+
+    def thread(**kw: Any) -> MagicMock:
+        watchers.append(kw.get("kwargs", {}))
+        return MagicMock()
+
+    with (
+        patch.object(bwrap_mod, "_sandbox_pid", return_value=4242),
+        patch.object(bwrap_mod, "_apply_netfilter_from_host", side_effect=lambda *a: loads.append(a)),
+        patch.object(bwrap_mod.threading, "Thread", side_effect=thread),
+        patch.object(bwrap_mod, "_slirp_ready", return_value=True),
+        patch.object(bwrap_mod, "wait_default_route", return_value=True) as wait,
+    ):
+        params["on_launched"](1000)
+    waits.extend(wait.call_args_list)
+    return loads, watchers
+
+
+@pytest.fixture(autouse=True)
+def _no_waits() -> None:
+    waits.clear()
+
+
+def test_runtime_dns_opens_ipv6_with_its_own_firewall_when_ip6tables_is_there(tmp_path: Path) -> None:
+    params, session = _runtime_launch(tmp_path, {})
+    loads, watchers = _run_launched(params)
+    assert [a[2:] for a in loads] == [(), ("ip6tables-restore",)]
+    assert any("LEARNED" in line for line in loads[1][1])
+    assert watchers[0]["enable_ipv6"] is True
+    session.attach.assert_called_once_with(4242, True)
+    assert waits[-1].args == (4242,)
+
+
+def test_runtime_dns_stays_ipv4_only_without_ip6tables(tmp_path: Path) -> None:
+    params, session = _runtime_launch(tmp_path, {"ip6tables": None})
+    loads, watchers = _run_launched(params)
+    assert len(loads) == 1
+    assert watchers[0]["enable_ipv6"] is False
+    session.attach.assert_called_once_with(4242, False)
+    assert not waits
+
+
+def test_a_sandbox_without_runtime_dns_never_enables_ipv6(tmp_path: Path) -> None:
+    loads, watchers = _run_launched(_filter_launch(tmp_path))
+    assert len(loads) == 1
+    assert watchers[0]["enable_ipv6"] is False

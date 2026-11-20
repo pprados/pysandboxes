@@ -272,6 +272,7 @@ class TestOnProcessLaunched:
                 "timeout": usd.SLIRP_WATCHER_TIMEOUT,
                 "provider": "unshare",
                 "on_crash": daemon._on_slirp_crash,
+                "enable_ipv6": False,
             }
             assert watcher["daemon"] is True
             assert watcher["started"] is True

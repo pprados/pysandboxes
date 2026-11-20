@@ -22,10 +22,11 @@ import subprocess
 import sys
 import tempfile
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 from pysandboxes.config import DEBUG
+from pysandboxes.remote.ipv6_route import ROUTE_TIMEOUT, wait_default_route
 
 SLIRP_INTERFACE = "tap0"
 # slirp4netns -c uses 10.0.2.0/24; gateway 10.0.2.2, optional tap IP 10.0.2.15 if not set by -c
@@ -47,6 +48,9 @@ def _debug_log() -> None:
     )
 
 
+IP6TABLES_RESTORE = "/usr/sbin/ip6tables-restore"
+
+
 @dataclass
 class UnshareSetupConfig:
     """Configuration passed from the daemon to the setup process via JSON."""
@@ -66,6 +70,9 @@ class UnshareSetupConfig:
     chroot_dir: str
     # False when the profile sets `unshare.proc=none`: the sandbox then runs without a /proc.
     mount_proc: bool = True
+    # The IPv6 ruleset. Empty keeps the sandbox IPv4 only: the daemon asks slirp4netns for an IPv6 route only
+    # when it passes a ruleset here.
+    netfilter6_rules: list[str] = field(default_factory=list)
 
     def to_json(self) -> str:
         return json.dumps(
@@ -81,6 +88,7 @@ class UnshareSetupConfig:
                 "sandbox_envs": self.sandbox_envs,
                 "chroot_dir": self.chroot_dir,
                 "mount_proc": self.mount_proc,
+                "netfilter6_rules": self.netfilter6_rules,
             }
         )
 
@@ -99,6 +107,7 @@ class UnshareSetupConfig:
             sandbox_envs=d.get("sandbox_envs", {}),
             chroot_dir=d["chroot_dir"],
             mount_proc=d.get("mount_proc", True),
+            netfilter6_rules=d.get("netfilter6_rules", []),
         )
 
 
@@ -314,6 +323,16 @@ def main() -> None:
             text=True,
             check=True,
         )
+    if config.netfilter6_rules:
+        logger.debug("Apply ip6tables rules:")
+        subprocess.run(
+            [IP6TABLES_RESTORE],
+            input="\n".join(config.netfilter6_rules),
+            text=True,
+            check=True,
+        )
+        if not wait_default_route():
+            logger.warning("No IPv6 default route after %ss: the sandbox stays without IPv6", ROUTE_TIMEOUT)
 
     # --- D. Create chroot root ---
     logger.debug("Create chroot root:")

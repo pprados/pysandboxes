@@ -77,8 +77,41 @@ def test_a_failed_delete_raises_after_trying_every_rule() -> None:
     assert len(run.calls) == 2
 
 
-def test_ipv6_is_skipped_because_the_sandbox_has_no_ipv6_route() -> None:
+def test_ipv6_is_skipped_when_the_namespace_has_no_ipv6_firewall() -> None:
     run = Recorder()
     enforcer(run).allow(ip_address("2001:db8::1"), NameRule(True, "example.com"), 300)
     enforcer(run).revoke(ip_address("2001:db8::1"), NameRule(True, "example.com"))
     assert run.calls == []
+
+
+PREFIX6 = ["/usr/bin/nsenter", "-t", "4242", "-U", "-n", "--preserve-credentials", "/usr/sbin/ip6tables"]
+
+
+def enforcer6(run: Recorder) -> NetnsIptablesEnforcer:
+    return NetnsIptablesEnforcer(4242, "/usr/bin/nsenter", "/usr/sbin/iptables", run, ip6tables="/usr/sbin/ip6tables")
+
+
+def test_an_ipv6_address_is_opened_with_ip6tables_and_an_ipv4_one_still_with_iptables() -> None:
+    run = Recorder()
+    rule = NameRule(True, "example.com", ("tcp",), ((443, 443),))
+    enforcer6(run).allow(ip_address("2001:db8::1"), rule, 300)
+    enforcer6(run).allow(ip_address("192.0.2.7"), rule, 300)
+    assert run.calls == [
+        PREFIX6 + ["-A", "LEARNED", "-d", "2001:db8::1", "-p", "tcp", "--dport", "443", "-j", "ACCEPT"],
+        PREFIX + ["-A", "LEARNED", "-d", "192.0.2.7", "-p", "tcp", "--dport", "443", "-j", "ACCEPT"],
+    ]
+
+
+def test_an_ipv6_address_is_revoked_with_ip6tables() -> None:
+    run = Recorder()
+    rule = NameRule(True, "example.com", ("tcp",), ((443, 443),))
+    enforcer6(run).revoke(ip_address("2001:db8::1"), rule)
+    assert run.calls == [
+        PREFIX6 + ["-D", "LEARNED", "-d", "2001:db8::1", "-p", "tcp", "--dport", "443", "-j", "ACCEPT"]
+    ]
+
+
+def test_a_failed_ipv6_append_raises_instead_of_answering_with_an_address_that_stays_closed() -> None:
+    run = Recorder(fail_on=1)
+    with pytest.raises(OSError, match="iptables"):
+        enforcer6(run).allow(ip_address("2001:db8::1"), NameRule(True, "example.com", ("tcp",)), 300)

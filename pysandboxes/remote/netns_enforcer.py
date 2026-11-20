@@ -28,8 +28,17 @@ class NetnsIptablesEnforcer:
     same port of the same address each own a copy, so revoking one leaves the other open.
     """
 
-    def __init__(self, pid: int, nsenter: str, iptables: str, run: Callable[[list[str]], int] = _run) -> None:
-        self._prefix = [nsenter, "-t", str(pid), "-U", "-n", "--preserve-credentials", iptables]
+    def __init__(
+        self,
+        pid: int,
+        nsenter: str,
+        iptables: str,
+        run: Callable[[list[str]], int] = _run,
+        ip6tables: str | None = None,
+    ) -> None:
+        join = [nsenter, "-t", str(pid), "-U", "-n", "--preserve-credentials"]
+        self._prefix = [*join, iptables]
+        self._prefix6 = [*join, ip6tables] if ip6tables else None
         self._run = run
 
     @classmethod
@@ -56,20 +65,26 @@ class NetnsIptablesEnforcer:
         ] or [[]]
         return [["LEARNED", "-d", str(ip), "-p", kind, *port, "-j", "ACCEPT"] for kind in rule.kinds for port in ports]
 
+    def _command(self, ip: IPAddress) -> list[str] | None:
+        """The ``iptables`` or ``ip6tables`` command of the family of ``ip``; ``None`` for an unfiltered family."""
+        return self._prefix if isinstance(ip, IPv4Address) else self._prefix6
+
     def allow(self, ip: IPAddress, rule: NameRule, ttl: int) -> None:
-        if not isinstance(ip, IPv4Address):
+        prefix = self._command(ip)
+        if prefix is None:
             return
         done: list[list[str]] = []
         for spec in self._specs(ip, rule):
-            if self._run([*self._prefix, "-A", *spec]) != 0:
+            if self._run([*prefix, "-A", *spec]) != 0:
                 for added in done:
-                    self._run([*self._prefix, "-D", *added])
+                    self._run([*prefix, "-D", *added])
                 raise OSError(f"iptables -A {' '.join(spec)} failed in the sandbox network namespace")
             done.append(spec)
 
     def revoke(self, ip: IPAddress, rule: NameRule) -> None:
-        if not isinstance(ip, IPv4Address):
+        prefix = self._command(ip)
+        if prefix is None:
             return
-        failed = [spec for spec in self._specs(ip, rule) if self._run([*self._prefix, "-D", *spec]) != 0]
+        failed = [spec for spec in self._specs(ip, rule) if self._run([*prefix, "-D", *spec]) != 0]
         if failed:
             raise OSError(f"iptables -D {' '.join(failed[0])} failed in the sandbox network namespace")

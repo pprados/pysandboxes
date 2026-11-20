@@ -35,7 +35,8 @@ from ..tools import Environ, follow_links_executable
 from .client_subprocess_sse_daemon import BaseSubProcessDaemon, get_log_formatter, use_rich_handler
 from .daemon_parameters import DaemonParameters
 from .gvisor_bundle import build_oci_spec, exposures, mask_targets
-from .gvisor_launch import launcher_script, netfilter_rules, runtime_netfilter_rules
+from .gvisor_launch import launcher_script, netfilter_rules, runtime_netfilter6_rules, runtime_netfilter_rules
+from .ipv6_route import wait_default_route
 from .runtime_dns import RuntimeDnsSession
 from .slirp4netns_common import SLIRP_DNS, SLIRP_WATCHER_TIMEOUT
 from .slirp4netns_common import extract_port_forwards as slirp_extract_port_forwards
@@ -106,6 +107,7 @@ class GVisorSSEDaemon(BaseSubProcessDaemon):
         "_api_socket",
         "_ports_spec",
         "_dns_session",
+        "_ipv6",
     )
 
     @classmethod
@@ -168,6 +170,7 @@ class GVisorSSEDaemon(BaseSubProcessDaemon):
         self._api_socket: str = ""
         self._ports_spec: str = ""
         self._dns_session = RuntimeDnsSession()
+        self._ipv6 = False
 
     @override
     def parse_rules(
@@ -296,6 +299,12 @@ class GVisorSSEDaemon(BaseSubProcessDaemon):
             else runtime_netfilter_rules(all_rules, self.port, resolver_port)
         )
         (work / "rules").write_text("\n".join(rules) + "\n")
+        ip6tables_restore = which_command("ip6tables-restore")
+        self._ipv6 = bool(
+            resolver_port is not None and ip6tables_restore is not None and which_command("ip6tables") is not None
+        )
+        if self._ipv6:
+            (work / "rules6").write_text("\n".join(runtime_netfilter6_rules(all_rules)) + "\n")
         self._api_socket = slirp_make_api_socket_path()
 
         runsc_argv = [
@@ -319,6 +328,8 @@ class GVisorSSEDaemon(BaseSubProcessDaemon):
             ip=str(tools["ip"]),
             iptables_restore=str(tools["iptables-restore"]),
             runsc_argv=runsc_argv,
+            ip6tables_restore=str(ip6tables_restore) if self._ipv6 else None,
+            rules6_file=str(work / "rules6") if self._ipv6 else None,
         )
         args: Args = ["unshare", "--user", "--map-root-user", "--net", "--", "sh", "-c", script, "gvisor-launcher"]
         return args, {"PATH": _HOST_PATH}
@@ -336,7 +347,7 @@ class GVisorSSEDaemon(BaseSubProcessDaemon):
         read_fd, write_fd = os.pipe()
         try:
             wait_for_private_netns(pid)
-            self._dns_session.attach(pid)
+            self._dns_session.attach(pid, self._ipv6)
             threading.Thread(
                 target=slirp_run_watcher,
                 args=(self._slirp_shutdown_event, write_fd, self._api_socket),
@@ -346,11 +357,14 @@ class GVisorSSEDaemon(BaseSubProcessDaemon):
                     "timeout": SLIRP_WATCHER_TIMEOUT,
                     "provider": "gvisor",
                     "on_crash": self._on_slirp_crash,
+                    "enable_ipv6": self._ipv6,
                 },
                 daemon=True,
             ).start()
             if not _slirp_ready(read_fd, SLIRP_WATCHER_TIMEOUT):
                 raise SandBoxError("slirp4netns never brought up the gvisor sandbox network")
+            if self._ipv6 and not wait_default_route(pid):
+                logger.warning("No IPv6 default route in the gvisor sandbox: it stays without IPv6")
         except BaseException:
             self._dns_session.stop()
             self._slirp_shutdown_event.set()

@@ -17,7 +17,7 @@ from pathlib import Path
 from pysandboxes.all_rules import AllRules, EmptyRules
 from pysandboxes.guard_socket import SocketRules
 from pysandboxes.guard_socket import parse_rules as parse_socket_rules
-from pysandboxes.remote.gvisor_launch import launcher_script, netfilter_rules
+from pysandboxes.remote.gvisor_launch import launcher_script, netfilter_rules, runtime_netfilter6_rules
 from pysandboxes.sb_types import ConfigLine
 
 
@@ -241,3 +241,36 @@ class TestLauncherScript:
         assert launcher.start().wait(timeout=10) == 0
 
         assert launcher.calls()[-1].startswith("runsc run --bundle /b config=PAYLOAD")
+
+
+def _script(**extra: str) -> list[str]:
+    return launcher_script(
+        ready_file="/r",
+        config_fifo="/f",
+        config_copy="/c",
+        rules_file="/rules",
+        spec_file="/spec",
+        python="/py",
+        ip="/ip",
+        iptables_restore="/iptables-restore",
+        runsc_argv=["/runsc", "run"],
+        **extra,
+    ).splitlines()
+
+
+class TestIpv6:
+    def test_the_ipv6_ruleset_has_a_learned_chain_and_no_resolver(self) -> None:
+        rules = runtime_netfilter6_rules(EmptyRules)
+
+        assert ":LEARNED - [0:0]" in rules and rules.count("COMMIT") == 1
+        assert not any("--dport 53" in r for r in rules)
+
+    def test_the_ipv6_filter_is_loaded_after_the_ipv4_one_and_before_the_guest(self) -> None:
+        lines = _script(ip6tables_restore="/ip6tables-restore", rules6_file="/rules6")
+
+        v4 = lines.index("/iptables-restore < /rules || exit 98")
+        v6 = lines.index("/ip6tables-restore < /rules6 || exit 95")
+        assert v4 < v6 < len(lines) - 1
+
+    def test_without_ipv6_no_ip6tables_is_run(self) -> None:
+        assert not any("ip6tables" in line for line in _script())

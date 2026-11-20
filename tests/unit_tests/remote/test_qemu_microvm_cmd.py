@@ -25,7 +25,7 @@ def test_microvm_command_and_capacity(monkeypatch: pytest.MonkeyPatch) -> None:
     instance._resolver_port = None
     cmd = instance._machine_command(rules, assets, 1234)
     probe.assert_called_once_with(cmd[0], ["-enable-kvm"])
-    assert "user,id=net0,hostfwd=tcp:127.0.0.1:1234-:1234" in cmd
+    assert "user,id=net0,ipv6=off,hostfwd=tcp:127.0.0.1:1234-:1234" in cmd
     accel.assert_called_once()
     assert "-enable-kvm" in cmd
     assert "microvm,acpi=off,pcie=off,rtc=off" in cmd
@@ -152,7 +152,7 @@ def test_microvm_forwards_the_channel_to_the_unix_socket_the_host_hands_down(mon
 
     cmd = instance._machine_command(EmptyRules, assets, 1234)
 
-    assert "user,id=net0,hostfwd=unix:/tmp/pysb_x/s-:1234" in cmd
+    assert "user,id=net0,ipv6=off,hostfwd=unix:/tmp/pysb_x/s-:1234" in cmd
 
 
 def test_microvm_forwards_the_control_port_of_the_guest_with_runtime_dns(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -167,7 +167,7 @@ def test_microvm_forwards_the_control_port_of_the_guest_with_runtime_dns(monkeyp
 
     cmd = instance._machine_command(EmptyRules, assets, 1234)
 
-    assert "user,id=net0,hostfwd=tcp:127.0.0.1:1234-:1234,hostfwd=tcp:127.0.0.1:40000-:40000" in cmd
+    assert "user,id=net0,ipv6=off,hostfwd=tcp:127.0.0.1:1234-:1234,hostfwd=tcp:127.0.0.1:40000-:40000" in cmd
 
 
 def test_capacity_probe_uses_launch_acceleration(monkeypatch: pytest.MonkeyPatch) -> None:

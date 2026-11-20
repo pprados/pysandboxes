@@ -55,7 +55,7 @@ def test_a_pinned_profile_starts_no_resolver(host: type[FakeDns]) -> None:
     assert host.instances == []
 
 
-def test_a_runtime_profile_starts_the_resolver_on_the_rules_and_the_ipv4_resolvers_of_the_host(
+def test_a_runtime_profile_starts_the_resolver_on_the_rules_and_every_resolver_of_the_host(
     host: type[FakeDns], monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.setattr(rd, "get_upstream_dns", lambda: [UPSTREAM, ip_address("2001:db8::53")])
@@ -64,7 +64,7 @@ def test_a_runtime_profile_starts_the_resolver_on_the_rules_and_the_ipv4_resolve
     port = session.start(RUNTIME)
 
     assert port == 15353 and session.running
-    assert host.instances[0].rules == NAMES and host.instances[0].servers == [UPSTREAM]
+    assert host.instances[0].rules == NAMES and host.instances[0].servers == [UPSTREAM, ip_address("2001:db8::53")]
 
 
 @pytest.mark.parametrize("missing", ["nsenter", "iptables"])
@@ -79,15 +79,51 @@ def test_a_runtime_profile_needs_nsenter_and_iptables_on_the_host(
     assert host.instances == []
 
 
-def test_a_host_with_no_ipv4_resolver_is_an_error_not_a_silent_servfail(
+def test_a_host_with_no_resolver_is_an_error_not_a_silent_servfail(
     host: type[FakeDns], monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    monkeypatch.setattr(rd, "get_upstream_dns", lambda: [ip_address("2001:db8::53")])
+    monkeypatch.setattr(rd, "get_upstream_dns", lambda: [])
 
-    with pytest.raises(SandBoxError, match="no IPv4 resolver"):
+    with pytest.raises(SandBoxError, match="no resolver"):
         RuntimeDnsSession().start(RUNTIME)
 
     assert host.instances == []
+
+
+def test_an_ipv6_only_host_resolver_is_enough(host: type[FakeDns], monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(rd, "get_upstream_dns", lambda: [ip_address("2001:db8::53")])
+
+    RuntimeDnsSession().start(RUNTIME)
+
+    assert host.instances[0].servers == [ip_address("2001:db8::53")]
+
+
+def test_an_ipv4_namespace_gets_an_enforcer_that_opens_no_ipv6_address(host: type[FakeDns]) -> None:
+    session = RuntimeDnsSession()
+    session.start(RUNTIME)
+
+    session.attach(4242)
+
+    assert host.instances[0].enforcer._prefix6 is None
+
+
+def test_an_ipv6_namespace_gets_an_enforcer_that_opens_ipv6_addresses_with_ip6tables(host: type[FakeDns]) -> None:
+    session = RuntimeDnsSession()
+    session.start(RUNTIME)
+
+    session.attach(4242, ipv6=True)
+
+    assert host.instances[0].enforcer._prefix6[-1] == "/usr/bin/ip6tables"
+    assert host.instances[0].enforcer._prefix[-1] == "/usr/bin/iptables"
+
+
+def test_an_ipv6_namespace_needs_ip6tables_on_the_host(host: type[FakeDns], monkeypatch: pytest.MonkeyPatch) -> None:
+    session = RuntimeDnsSession()
+    session.start(RUNTIME)
+    monkeypatch.setattr(rd, "which_command", lambda name: None if name == "ip6tables" else Path("/usr/bin") / name)
+
+    with pytest.raises(SandBoxError, match="ip6tables"):
+        session.attach(4242, ipv6=True)
 
 
 def test_a_restart_stops_the_previous_resolver_before_starting_another(host: type[FakeDns]) -> None:

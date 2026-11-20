@@ -198,3 +198,38 @@ def runtime_netfilter(
         for proto in ("udp", "tcp")
     ]
     return filter_table + nat + ["COMMIT"]
+
+
+def runtime_netfilter6(socket_rules: SocketRules) -> List[str]:
+    """The IPv6 ruleset of ``net-resolve=runtime``: the static IPv6 rules, plus the ``LEARNED`` chain.
+
+    The names still travel over IPv4 (the sandbox keeps asking the slirp4netns DNS), so no resolver is opened here:
+    a resolver the program names itself, over IPv6, meets the default ``DROP``. slirp4netns configures the interface
+    from a router advertisement, so the neighbour and router discovery messages (ICMPv6 133 to 136) are accepted;
+    without them no address and no default route would ever exist. The addresses the resolver learns are added to
+    ``LEARNED``, jumped to after every static rule: a static ``DENY`` keeps its precedence over a name.
+
+    post: __return__.count('COMMIT') == 1
+    """
+    base = rule_to_netfilter(socket_rules, [], is_ipv6=True)
+    established = base.index("-A OUTPUT -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT") + 1
+    chain = base.index(":OUTPUT DROP [0:0]") + 1
+    discovery = [
+        "-A INPUT -p ipv6-icmp --icmpv6-type 134 -j ACCEPT",
+        "-A INPUT -p ipv6-icmp --icmpv6-type 135 -j ACCEPT",
+        "-A INPUT -p ipv6-icmp --icmpv6-type 136 -j ACCEPT",
+        "-A OUTPUT -p ipv6-icmp --icmpv6-type 133 -j ACCEPT",
+        "-A OUTPUT -p ipv6-icmp --icmpv6-type 135 -j ACCEPT",
+        "-A OUTPUT -p ipv6-icmp --icmpv6-type 136 -j ACCEPT",
+    ]
+    return (
+        base[:chain]
+        + [":LEARNED - [0:0]"]
+        + base[chain:established]
+        + discovery
+        + base[established:-1]
+        + [
+            "-A OUTPUT -j LEARNED",
+            "COMMIT",
+        ]
+    )

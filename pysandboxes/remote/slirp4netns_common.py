@@ -166,6 +166,7 @@ def run_slirp_watcher(
     timeout: int = SLIRP_WATCHER_TIMEOUT,
     provider: str = "sandbox",
     on_crash: Callable[[int], None] | None = None,
+    enable_ipv6: bool = False,
 ) -> None:
     """Background thread: run slirp4netns for the sandbox network namespace.
 
@@ -173,6 +174,9 @@ def run_slirp_watcher(
     after unshare starts) must be provided. Signals readiness by writing to
     pipe_w. Puts the Popen instance in process_holder[0] when started so the
     daemon can kill it on shutdown.
+
+    ``enable_ipv6`` gives the namespace an IPv6 address and route (slirp4netns ``-6``, experimental). Pass it only when
+    the namespace has an IPv6 firewall loaded: without one, IPv6 traffic would leave unfiltered.
 
     ``on_crash`` is called with the exit code when slirp4netns dies on its own, outside
     ``shutdown_event``: the sandbox network is down for good from that point, and nothing
@@ -189,6 +193,7 @@ def run_slirp_watcher(
             timeout=timeout,
             provider=provider,
             on_crash=on_crash,
+            enable_ipv6=enable_ipv6,
         )
     finally:
         remove_slirp_temp_files(pid_file, api_socket)
@@ -205,6 +210,7 @@ def _run_slirp_watcher(
     timeout: int = SLIRP_WATCHER_TIMEOUT,
     provider: str = "sandbox",
     on_crash: Callable[[int], None] | None = None,
+    enable_ipv6: bool = False,
 ) -> None:
     """Body of :func:`run_slirp_watcher`, which owns the temporary files it leaves."""
     if child_pid is not None:
@@ -241,6 +247,7 @@ def _run_slirp_watcher(
             "-c",
             "-m",
             "1500",
+            *(["-6"] if enable_ipv6 else []),
             "-r",
             str(pipe_w),
             "--api-socket",

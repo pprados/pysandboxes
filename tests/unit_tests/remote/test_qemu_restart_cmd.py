@@ -68,7 +68,7 @@ def test_pc_command_preserves_disks_devices_and_mount_order(
             "-serial",
             "stdio",
             "-nic",
-            "user,hostfwd=tcp:127.0.0.1:4242-:4242,model=virtio-net-pci",
+            "user,ipv6=off,hostfwd=tcp:127.0.0.1:4242-:4242,model=virtio-net-pci",
             "-virtfs",
             f"local,path={readonly},id=pysb_0,security_model=mapped-xattr,mount_tag=pysb_0,readonly=on",
             "-virtfs",

@@ -6,7 +6,7 @@ import shlex
 from ipaddress import IPv4Address
 
 from ..all_rules import AllRules
-from ..netfilter import rule_to_netfilter, runtime_netfilter
+from ..netfilter import rule_to_netfilter, runtime_netfilter, runtime_netfilter6
 from .slirp4netns_common import SLIRP_DNS, SLIRP_GW
 
 
@@ -37,6 +37,14 @@ def runtime_netfilter_rules(all_rules: AllRules, port: int, resolver_port: int) 
     return (*rules[:index], daemon, *rules[index:])
 
 
+def runtime_netfilter6_rules(all_rules: AllRules) -> tuple[str, ...]:
+    """Return the ``ip6tables-restore`` input of ``net-resolve=runtime``: the IPv6 ruleset with its ``LEARNED`` chain.
+
+    post: __return__.count('COMMIT') == 1 and ':LEARNED - [0:0]' in __return__
+    """
+    return tuple(runtime_netfilter6(all_rules.socket_rules))
+
+
 # Also makes stdin blocking: runsc gives the guest the host flag, and a parent that set it breaks the guest's reads.
 _APPEND_GUEST_ARGS = (
     "import json, os, sys\n"
@@ -59,6 +67,8 @@ def launcher_script(
     ip: str,
     iptables_restore: str,
     runsc_argv: list[str],
+    ip6tables_restore: str | None = None,
+    rules6_file: str | None = None,
 ) -> str:
     """Return the ``sh -c`` script that holds the guest back until the network is filtered, then starts it.
 
@@ -73,18 +83,21 @@ def launcher_script(
     pre: all(p.startswith('/') for p in (ready_file, config_fifo, config_copy, rules_file, spec_file, python, ip))
     pre: iptables_restore.startswith('/')
     pre: len(runsc_argv) > 0 and runsc_argv[0].startswith('/')
+    pre: (ip6tables_restore is None) == (rules6_file is None)
     post: __return__.splitlines()[0] == 'umask 077'
     post: __return__.splitlines()[-1].startswith('exec ')
     post: __return__.index('until [ -e') < __return__.index('exit 98') < __return__.rindex('exec ')
     """
     q = shlex.quote
     rewrite = f"{q(python)} -I -c {q(_APPEND_GUEST_ARGS)} {q(spec_file)} {q(config_fifo)} {q(config_copy)}"
+    ipv6 = [f"{q(ip6tables_restore)} < {q(rules6_file)} || exit 95"] if ip6tables_restore and rules6_file else []
     return "\n".join(
         [
             "umask 077",
             f"until [ -e {q(ready_file)} ]; do sleep 0.05; done",
             f"{q(ip)} link set lo up || exit 97",
             f"{q(iptables_restore)} < {q(rules_file)} || exit 98",
+            *ipv6,
             f"cat {q(config_fifo)} > {q(config_copy)} || exit 99",
             f'{rewrite} "$@" || exit 96',
             "exec " + " ".join(q(arg) for arg in runsc_argv),

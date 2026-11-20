@@ -39,7 +39,7 @@ from ..guard_files import FSExposeRule, IgnoreRule
 from ..guard_socket import Action, Direction, SocketRule
 from ..immutable_dict import ImmutableDict
 from ..main_logger import ErrorMsg, pysandboxes_logger
-from ..netfilter import rule_to_netfilter, runtime_netfilter
+from ..netfilter import rule_to_netfilter, runtime_netfilter, runtime_netfilter6
 from ..override_compat import override
 from ..private_loop import sandbox_loop
 from ..sb_types import Args, ConfigLine, ConfigLines
@@ -103,7 +103,7 @@ from .tools import (
 from .tools import (
     resolve_ignore_paths as _resolve_ignore_paths,
 )
-from .unshare_setup import UnshareSetupConfig
+from .unshare_setup import IP6TABLES_RESTORE, UnshareSetupConfig
 
 logger = logging.getLogger(__name__)
 
@@ -142,6 +142,7 @@ class UnshareSSEDaemon(BaseSubProcessDaemon):
         "_slirp_process_holder",
         "_slirp_shutdown_event",
         "_dns_session",
+        "_ipv6",
     )
 
     @classmethod
@@ -183,6 +184,7 @@ class UnshareSSEDaemon(BaseSubProcessDaemon):
         self._slirp_process_holder: list[subprocess.Popen[bytes] | None] = [None]
         self._slirp_shutdown_event: threading.Event = threading.Event()
         self._dns_session = RuntimeDnsSession()
+        self._ipv6 = False
 
     @override
     def parse_rules(
@@ -269,11 +271,18 @@ class UnshareSSEDaemon(BaseSubProcessDaemon):
         # when the daemon runs inside a container (e.g. podman).
         slirp_dns = IPv4Address(SLIRP_DNS)
         runtime = all_rules.net_resolve == "runtime"
+        net_filter6: list[str] = []
         if runtime:
             if resolver_port is None:
                 raise SandBoxError("net-resolve=runtime needs the resolver port: the filtering resolver is not up.")
             dns_servers = [slirp_dns]
             net_filter4 = runtime_netfilter(all_rules.socket_rules, resolver_port, IPv4Address(SLIRP_GW), slirp_dns)
+            # IPv6 is all or nothing: slirp4netns gets no IPv6 route unless the namespace filters it as well.
+            if (
+                all(which_command(tool) for tool in ("ip6tables", "ip6tables-restore"))
+                and Path(IP6TABLES_RESTORE).is_file()
+            ):
+                net_filter6 = runtime_netfilter6(all_rules.socket_rules)
         else:
             dns_servers = [ip for ip in get_upstream_dns() if isinstance(ip, IPv4Address)]
             if not dns_servers or os.path.exists("/.dockerenv") or os.path.exists("/run/.containerenv"):
@@ -351,6 +360,7 @@ class UnshareSSEDaemon(BaseSubProcessDaemon):
             mounts_rw=[(m[0], m[1]) for m in mounts if m[2]],
             named_pipe=str(pipe_path),
             netfilter_rules=net_filter4,
+            netfilter6_rules=net_filter6,
             current_dir=current_dir,
             ignore_paths=ignore_paths,
             # The setup stage runs with the host environment, on purpose; this is what
@@ -359,6 +369,7 @@ class UnshareSSEDaemon(BaseSubProcessDaemon):
             chroot_dir=chroot_dir,
             mount_proc=all_rules.os_sandbox_params.get("proc", "mount") != "none",
         )
+        self._ipv6 = bool(net_filter6)
         return config, dns_servers
 
     def _get_unshare_flags(self, all_rules: AllRules, envs: Environ) -> list[str]:
@@ -523,7 +534,7 @@ class UnshareSSEDaemon(BaseSubProcessDaemon):
 
         # Write PID for slirp4netns watcher
         Path(self._slirp_pid_file_for_watcher).write_text(str(process_pid))
-        self._dns_session.attach(process_pid)
+        self._dns_session.attach(process_pid, self._ipv6)
 
         # Start slirp4netns watcher (shared helper)
         logger.debug("start slirp4netns watcher...")
@@ -540,6 +551,7 @@ class UnshareSSEDaemon(BaseSubProcessDaemon):
                 "timeout": SLIRP_WATCHER_TIMEOUT,
                 "provider": "unshare",
                 "on_crash": self._on_slirp_crash,
+                "enable_ipv6": self._ipv6,
             },
             daemon=True,
         ).start()
@@ -874,7 +886,7 @@ class UnshareSSEDaemon(BaseSubProcessDaemon):
             assert process.pid is not None
             Path(pid_file).write_text(str(process.pid))
             # Before any sandboxed code runs: it starts only once the FIFO below is written
-            self._dns_session.attach(process.pid)
+            self._dns_session.attach(process.pid, self._ipv6)
             logger.debug(
                 "_launch: wrote pid %d to pidfile, starting slirp_watcher pipe_w=%d",
                 process.pid,
@@ -895,6 +907,7 @@ class UnshareSSEDaemon(BaseSubProcessDaemon):
                     "timeout": SLIRP_WATCHER_TIMEOUT,
                     "provider": "unshare",
                     "on_crash": self._on_slirp_crash,
+                    "enable_ipv6": self._ipv6,
                 },
                 daemon=True,
             ).start()

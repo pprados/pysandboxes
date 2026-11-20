@@ -25,6 +25,9 @@
 
 ### Added
 
+- `unshare`, `bwrap`, `gvisor`: `net-resolve=runtime` now opens the IPv6 addresses of an allowed name (its `AAAA` answers) as well as the IPv4 ones, through an `ip6tables` firewall loaded with the sandbox; without `ip6tables` the sandbox stays IPv4 only, and the host resolvers may now be IPv6.
+- `qemu`, `qemu-microvm`: the guest has no IPv6 (`ipv6=off` on the user network), so a program cannot reach an address that the IPv4-only firewall of the guest does not filter.
+
 - Invalid evaluation limits and malformed profile names are rejected, and evaluation timers are cleaned up on interruption.
 
 - Sandbox timeouts stop unfinished calls and reap their processes before the daemon can be reused.

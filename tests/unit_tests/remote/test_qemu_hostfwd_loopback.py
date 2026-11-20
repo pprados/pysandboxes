@@ -66,3 +66,7 @@ def test_hostfwd_can_listen_on_a_unix_socket_instead(tmp_path: Path) -> None:
 
 def test_the_guest_still_needs_its_tcp_rule_behind_a_unix_forward() -> None:
     assert QemuSSEDaemon.endpoint_handed_down is False
+
+
+def test_the_guest_has_no_ipv6_since_only_the_ipv4_rules_reach_its_firewall(tmp_path: Path) -> None:
+    assert "ipv6=off" in _nic(tmp_path, QemuSSEDaemon("token")).split(",")

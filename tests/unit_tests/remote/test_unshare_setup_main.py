@@ -371,6 +371,41 @@ class TestFirewall:
 
         assert "/usr/sbin/iptables-restore" not in harness.inputs
 
+    def test_the_ipv6_rules_are_loaded_with_ip6tables_restore(
+        self, harness: _Run, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
+        config = _config(harness.root, dns_servers=["10.0.2.3"], netfilter_rules=["*filter", "COMMIT"])
+        config.netfilter6_rules = ["*filter", ":LEARNED - [0:0]", "COMMIT"]
+        waited: list[bool] = []
+
+        def wait() -> bool:
+            waited.append(True)
+            return True
+
+        monkeypatch.setattr(unshare_setup, "wait_default_route", wait)
+
+        _main(harness, monkeypatch, tmp_path, config, "prog")
+
+        assert harness.inputs["/usr/sbin/ip6tables-restore"] == "*filter\n:LEARNED - [0:0]\nCOMMIT"
+        assert waited == [True]
+
+    def test_without_ipv6_rules_ip6tables_restore_is_never_run(
+        self, harness: _Run, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
+        config = _config(harness.root, dns_servers=["10.0.2.3"], netfilter_rules=["*filter", "COMMIT"])
+
+        monkeypatch.setattr(unshare_setup, "wait_default_route", lambda: pytest.fail("no IPv6, nothing to wait for"))
+
+        _main(harness, monkeypatch, tmp_path, config, "prog")
+
+        assert "/usr/sbin/ip6tables-restore" not in harness.inputs
+
+    def test_the_ipv6_rules_survive_the_json_trip_and_default_to_none(self, tmp_path: Path) -> None:
+        config = _config(tmp_path)
+        assert UnshareSetupConfig.from_json(config.to_json()).netfilter6_rules == []
+        config.netfilter6_rules = ["*filter", "COMMIT"]
+        assert UnshareSetupConfig.from_json(config.to_json()).netfilter6_rules == ["*filter", "COMMIT"]
+
 
 class TestMounts:
     def test_the_current_directory_is_writable_and_user_mounts_follow_their_mode(

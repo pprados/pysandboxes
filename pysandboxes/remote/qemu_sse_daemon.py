@@ -1379,7 +1379,7 @@ class QemuSSEDaemon(VMSSEDaemon):
             forward += f",hostfwd=tcp:127.0.0.1:{self._control_port}-:{self._control_port}"
         net = [
             "-nic",
-            f"user,hostfwd={forward},model=virtio-net-pci",
+            f"user,ipv6=off,hostfwd={forward},model=virtio-net-pci",
         ]
 
         virtfs_args: Args = []
@@ -1763,7 +1763,7 @@ class QemuMicrovmSSEDaemon(QemuSSEDaemon):
             "-device",
             "scsi-cd,drive=cidata,bus=scsi0.0,channel=0,scsi-id=1,lun=0",
             "-netdev",
-            f"user,id=net0,hostfwd={forward}",
+            f"user,id=net0,ipv6=off,hostfwd={forward}",
             "-device",
             "virtio-net-device,netdev=net0",
         ]
