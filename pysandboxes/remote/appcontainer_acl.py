@@ -281,6 +281,8 @@ def _win32_apis() -> tuple[Any, Any]:
     kernel32.CreateFileW.restype = pointer
     kernel32.GetFinalPathNameByHandleW.argtypes = (pointer, ctypes.c_wchar_p, dword, dword)
     kernel32.GetFinalPathNameByHandleW.restype = dword
+    kernel32.GetLongPathNameW.argtypes = (ctypes.c_wchar_p, ctypes.c_wchar_p, dword)
+    kernel32.GetLongPathNameW.restype = dword
     kernel32.GetFileInformationByHandle.argtypes = (pointer, ctypes.POINTER(_ByHandleFileInformation))
     kernel32.CloseHandle.argtypes = (pointer,)
     kernel32.LocalFree.argtypes = (pointer,)
@@ -344,7 +346,11 @@ def _verified_handle(path: Path) -> Iterator[Any]:
         final_path = buffer.value
         if final_path.startswith("\\\\?\\"):
             final_path = final_path[4:]
-        if os.path.normcase(final_path) != os.path.normcase(str(path)):
+        # GetFinalPathNameByHandleW never returns an 8.3 short name (RUNNER~1), but a planned path may carry one
+        long_path = ctypes.create_unicode_buffer(32768)
+        if not kernel32.GetLongPathNameW(str(path), long_path, len(long_path)):
+            _check_call(0)
+        if os.path.normcase(final_path) != os.path.normcase(long_path.value):
             raise OSError(
                 f"Refusing an ACL change: {path} now resolves to {final_path}, a different object than the one "
                 "planned (possible path-substitution attack)"

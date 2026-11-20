@@ -2,6 +2,7 @@
 # License: Apache V2
 """The DACL helpers of the AppContainer provider, against the real Windows security API."""
 
+import ctypes
 import subprocess
 import sys
 from pathlib import Path
@@ -71,6 +72,21 @@ def test_a_plain_directory_is_granted_normally(tmp_path: Path) -> None:
     appcontainer_acl._grant_dacl(plain, _ALL_APPLICATION_PACKAGES, appcontainer_acl._READ_EXECUTE, False)
 
     assert appcontainer_acl._has_allow_ace(plain, (_ALL_APPLICATION_PACKAGES,), appcontainer_acl._READ_EXECUTE)
+
+
+def test_a_planned_path_with_a_short_name_is_granted_like_its_long_form(tmp_path: Path) -> None:
+    """A profile name over eight characters puts ``RUNNER~1``-style names in %TEMP%: same directory, not a swap."""
+    long_dir = tmp_path / "a_directory_with_a_long_name"
+    long_dir.mkdir()
+    buffer = ctypes.create_unicode_buffer(32768)
+    ctypes.__dict__["WinDLL"]("kernel32").GetShortPathNameW(str(long_dir), buffer, len(buffer))
+    short_dir = Path(buffer.value)
+    if short_dir.name == long_dir.name:
+        pytest.skip("8.3 short names are disabled on this volume")
+
+    appcontainer_acl._grant_dacl(short_dir, _ALL_APPLICATION_PACKAGES, appcontainer_acl._READ_EXECUTE, False)
+
+    assert appcontainer_acl._has_allow_ace(long_dir, (_ALL_APPLICATION_PACKAGES,), appcontainer_acl._READ_EXECUTE)
 
 
 _PACKAGE = "S-1-15-2-1"
