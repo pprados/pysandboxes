@@ -1,6 +1,6 @@
 # Copyright (c) 2026, Philippe PRADOS
 # License: Apache V2
-"""`net-resolve=runtime` over IPv6 under `unshare`, `bwrap` and `gvisor`: the `AAAA` of an allowed name opens its address.
+"""`net-resolve=runtime` over IPv6 under `unshare`, `bwrap` and `gvisor`: the `AAAA` of an allowed name opens it.
 
 Same two layers as ``test_unshare_runtime_dns``: ``kernel`` (Python guard off, only ``ip6tables`` refuses) and
 ``guard`` (both layers judge). The names still travel over IPv4; only the learned address is IPv6. The host needs no
