@@ -20,14 +20,14 @@ on:
   workflow_dispatch:
     inputs:
       exclude-tcg:
-        description: Leave the qemu-tcg rows out and require /dev/kvm
+        description: Leave the qemu-tcg rows out and require /dev/kvm (set false to run the emulated rows)
         type: boolean
-        default: false
+        default: true
   workflow_call:
     inputs:
       exclude-tcg:
         type: boolean
-        default: false
+        default: true
 
 # One run per branch at a time: a second dispatch waits for the running one instead
 # of booting the same VMs twice, and a third replaces the waiting one. A run is

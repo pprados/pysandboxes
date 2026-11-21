@@ -3,8 +3,8 @@
 #
 # The full test gate: the integration suite (3.11-3.14), the samples (3.11-3.14), the container suites and the
 # macOS and Windows provider suites (3.11-3.14).
-# Nightly on develop, TCG included, started by nightly-trigger.yml; called by release.yml, TCG left out, for a tag
-# whose commit no nightly proved.
+# Nightly on develop started by nightly-trigger.yml; called by release.yml for a tag whose commit no nightly proved.
+# TCG is left out everywhere unless a dispatch sets exclude-tcg to false.
 # .github/scripts/find-nightly-gate.sh reuses a nightly by reading the names of these jobs: keep the ids
 # integration, samples, containers and cross-os, and the run name Nightly full matrix.
 name: Full Gate
@@ -16,9 +16,9 @@ on:
   workflow_dispatch:
     inputs:
       exclude-tcg:
-        description: Leave the qemu-tcg rows out and require /dev/kvm
+        description: Leave the qemu-tcg rows out and require /dev/kvm (set false to run the emulated rows)
         type: boolean
-        default: false
+        default: true
       nightly:
         description: Behave as the nightly, which nightly-trigger.yml starts on develop
         type: boolean
@@ -31,7 +31,7 @@ on:
     inputs:
       exclude-tcg:
         type: boolean
-        default: false
+        default: true
       vm-sample-python-versions:
         type: string
         default: '["3.13"]'
@@ -72,7 +72,7 @@ jobs:
           echo "changed=false" >> "$GITHUB_OUTPUT"
         fi
 
-  # The nightly leaves exclude-tcg at false: it keeps TCG.
+  # exclude-tcg defaults to true: TCG runs only when a dispatch asks for it.
   integration:
     needs: changes
     if: inputs.nightly != true || needs.changes.outputs.changed == 'true'

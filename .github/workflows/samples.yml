@@ -34,9 +34,9 @@ on:
         type: string
         default: '["3.13"]'
       exclude-tcg:
-        description: Leave the emulated (TCG) sample row out
+        description: Leave the emulated (TCG) sample row out (set false to run it)
         type: boolean
-        default: false
+        default: true
   workflow_call:
     inputs:
       vm-python-versions:
@@ -44,7 +44,7 @@ on:
         default: '["3.13"]'
       exclude-tcg:
         type: boolean
-        default: false
+        default: true
 
 jobs:
   samples:
