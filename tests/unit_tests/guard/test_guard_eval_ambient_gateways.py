@@ -138,13 +138,22 @@ def test_a_bare_string_tag_is_not_mistaken_for_a_frozen_module() -> None:
 # ----------------------------------------------------------- framework's own `-m` dispatch
 
 
+@pytest.fixture
+def framework_root(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> str:
+    """A package root outside `site-packages`: an installed wheel puts the real one under a vendor segment, where
+    every frame is ambient and a synthetic chain cannot tell a gateway from the application's call site."""
+    root = str((tmp_path / "pysandboxes").resolve())
+    monkeypatch.setattr(guard_eval, "_FRAMEWORK_ROOT", root)
+    return root
+
+
 def _pysandboxes_file(*parts: str) -> str:
-    """An absolute path to a real file under the pysandboxes package, for a frame that must
+    """An absolute path under the (fixture) pysandboxes package root, for a frame that must
     resolve against `_FRAMEWORK_ROOT` the same way a genuine one does."""
-    return str(Path(guard_eval.__file__).resolve().parent.joinpath(*parts))
+    return str(Path(guard_eval._FRAMEWORK_ROOT).joinpath(*parts))
 
 
-def test_the_m_dispatch_chain_through_python_in_sb_and_main_sandbox_stays_ambient() -> None:
+def test_the_m_dispatch_chain_through_python_in_sb_and_main_sandbox_stays_ambient(framework_root: str) -> None:
     """Pins the fix for the regression commit `02723db7` introduced: `_python_module` calls
     `runpy.run_module` directly instead of the frame-less C-level `-m` dispatch a plain
     `python -m pkg.mod` performs, so the entry module's `_compile_bytecode`/`marshal.loads` read
@@ -173,6 +182,7 @@ def test_the_m_dispatch_chain_through_python_in_sb_and_main_sandbox_stays_ambien
 
 
 def test_the_m_dispatch_chain_is_denied_once_the_framework_gateway_table_is_emptied(
+    framework_root: str,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Negative control for the fix itself, not only for its scope: the exact chain the test
@@ -209,7 +219,7 @@ def test_the_m_dispatch_chain_is_denied_once_the_framework_gateway_table_is_empt
     assert not is_ambient(frame)
 
 
-def test_a_different_python_in_sb_function_is_not_treated_as_the_m_dispatch_gateway() -> None:
+def test_a_different_python_in_sb_function_is_not_treated_as_the_m_dispatch_gateway(framework_root: str) -> None:
     """Negative control: the exemption is scoped to the exact `-m` dispatch frames, not every
     function in `python_in_sb.py`. `_python_script`/`_python_command` already launch the user's
     code through the raw, unwrapped `exec`/`compile` captured before patching -- by design, never
@@ -222,7 +232,7 @@ def test_a_different_python_in_sb_function_is_not_treated_as_the_m_dispatch_gate
     assert not is_ambient(frame)
 
 
-def test_a_non_dispatch_frame_under_the_package_root_is_still_judged_on_its_own() -> None:
+def test_a_non_dispatch_frame_under_the_package_root_is_still_judged_on_its_own(framework_root: str) -> None:
     """`_framework_key(filename) is not None` alone must never be enough to keep climbing past a
     frame; only together with the exact `(key, qualname)` match. The frame handed to `is_ambient`
     is `_python_script` (under the package root, not one of the five dispatch qualnames); above
@@ -235,7 +245,7 @@ def test_a_non_dispatch_frame_under_the_package_root_is_still_judged_on_its_own(
     assert not is_ambient(frame)
 
 
-def test_the_m_dispatch_gateway_keeps_climbing_past_itself_instead_of_concluding_there() -> None:
+def test_the_m_dispatch_gateway_keeps_climbing_past_itself_instead_of_concluding_there(framework_root: str) -> None:
     """A dispatch frame only forwards the climb to whoever is above it; it is never itself the
     answer. Stacking a frame above it that is unambiguously the application's own call site (an
     arbitrary non-stdlib path) must still be reached and judged, not skipped by concluding ambient
