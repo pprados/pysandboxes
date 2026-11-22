@@ -21,68 +21,64 @@
 `unshare` provider, with `--privileged` for Docker.
 
 
-## [0.0.0] - 202X-XX-XX
+## [0.13.0] - 2026-11-22
 
 ### Added
 
-- `unshare`, `bwrap`, `gvisor`: `net-resolve=runtime` now opens the IPv6 addresses of an allowed name (its `AAAA` answers) as well as the IPv4 ones, through an `ip6tables` firewall loaded with the sandbox; without `ip6tables` the sandbox stays IPv4 only, and the host resolvers may now be IPv6.
-- `qemu`, `qemu-microvm`: the guest has no IPv6 (`ipv6=off` on the user network), so a program cannot reach an address that the IPv4-only firewall of the guest does not filter.
+- `unshare`, `bwrap`, `gvisor`: `net-resolve=runtime` now opens the IPv6 addresses of an allowed name as well as the IPv4 ones; without `ip6tables` the sandbox stays IPv4 only, and the host resolvers may now be IPv6.
+
+### Changed
+
+- `qemu`, `qemu-microvm`: the guest no longer has IPv6, so a program cannot reach an address that the guest's IPv4-only firewall does not filter.
 
 ### Fixed
 
 - Invalid evaluation limits and malformed profile names are rejected, and evaluation timers are cleaned up on interruption.
-
-- Sandbox timeouts stop unfinished calls and reap their processes before the daemon can be reused.
-
-- Nested sandbox contexts now refuse a different policy instead of silently reusing the active daemon.
-
-- `unshare` and `gvisor`: a `slirp4netns` crash (or an external kill) outside a deliberate shutdown is now detected and logged, and fails the sandbox closed with a clear message instead of leaving every later call to retry or hang against a network that is down for good.
-- `smolvm`: a symlinked path already present in the guest image no longer stops the guest's init script under `set -e`; the link is now forced into place instead.
-- `qemu-microvm`: the cached kernel/initrd pair extracted from the guest image now gets a checksum sidecar, like the image download does, so a corrupted or tampered cache entry is re-extracted instead of trusted as-is.
-- `with sandboxes():` no longer leaks a background thread running an idle event loop forever after the block exits, when it started with no event loop already running.
-- `with sandboxes(os_sandbox="none"):` (and the signal handler it installs) now actually stop the daemon on exit instead of believing, from that point on, that every later `with sandboxes():` in the same process is a nested call and never starting a real one.
-- A daemon whose shutdown fails is no longer mistaken for one still running: the next `with sandboxes():` now starts a real new daemon instead of reusing the dead one, and the original failure still reaches the caller.
-- Reject `port=` values above 65535 at config parsing instead of letting the sandbox daemon crash later with an opaque `OverflowError` from `socket.bind()`.
-- A corrupted or hostile `ImmutableDict` pickle stream with a non-hashable key now raises `ValueError` like every other malformed stream, instead of `TypeError`.
-- `sandbox-exec`: an `ignore=` pattern with a literal `^` in a `[...]` character class (e.g. `[^abc]`, fnmatch's literal class, not a regex negation) is now translated to a Seatbelt regex that denies that class, instead of one that Seatbelt reads as negated and denies the opposite set of names.
-- `sandbox-exec`: an `ignore=` pattern with a character-class range (e.g. `[a-z]`, `[!a-z]`) or a literal `-` at either end of a class (e.g. `[-abc]`, `[abc-]`) is now translated to match fnmatch's semantics, instead of a trailing `-` making the whole Seatbelt profile fail to compile ("unterminated bracket expression") and every file access under that os-sandbox fail with it.
-- `net-resolve=runtime`: a host name whose first resolution attempt needed the socket's own type to succeed is now learned and opened like any other allowed name, instead of being refused by the default policy.
-- The network guard now refuses `bind()`, `connect()`, `connect_ex()` and `sendto()` on an `AF_PACKET` (and similarly-shaped) address with a clean refusal instead of resolving its interface name as a hostname or crashing on its socket type.
-- `net-resolve=runtime`'s filtering DNS resolver now honors a client's own EDNS0 buffer size instead of always truncating a UDP answer over 512 bytes, so a resolver-aware program no longer pays for a needless TCP retry.
-- `eval-max-alloc` now also refuses an integer multiplication (`a * b`) in evaluated source whose result would exceed it, and reports every such refusal, including the pre-existing `**` and `<<` ones, without converting the oversized operand to decimal, which used to raise `ValueError` instead of the refusal itself once past CPython's own int-to-str digit limit.
-- A `case Cls(name=binding):` keyword attribute pattern in evaluated source is now checked against `eval-attribute`/`eval-magic` and the non-overridable frame-capture deny, closing the route `gi_frame`, `__class__` and any other attribute took around `__sb_getattr__` through the `MATCH_CLASS` opcode's own, unguarded `getattr`.
-- `locals()` in evaluated source is now refused like `globals()`, instead of handing back the live namespace: evaluated code rebinding `locals()["__sb_tick__"]` used to silence every later tick, defeating `eval-max-iterations` and leaving only the cooperative timeout standing.
-- `unshare`: the host's real `/etc/resolv.conf` and `/etc/hosts` are now bind-mounted read-only into the sandbox instead of writable, closing a route for sandboxed code to rewrite the host's DNS configuration through the shared inode of a bind mount.
-- `firejail`: an `ignore=` pattern now hides every matching file under the current directory instead of only a literal path at the jail's root, so `sub/.env` is blacklisted like `.env` is.
-- `firejail`: a `firejail.net=`, `firejail.seccomp=`, `firejail.seccomp.keep=` or `firejail.seccomp.block=` value containing `=` is no longer truncated at the first one.
-- `firejail`: a non-loopback upstream DNS resolver no longer pulls every loopback resolver back into `--dns` once found, since the host's own loopback is unreachable from inside the jail's network namespace.
-- `bwrap`, `unshare`, `firejail`, `sandbox-exec`, `gvisor` and `smolvm`: a path exposed both `expose-ro` and `expose-rw` now ends up read-write, the broader right (`expose-rw`) winning, instead of read-only.
-- `qemu` and `qemu-microvm`: the guest working directory is now shell-quoted in the bootstrap script instead of interpolated raw into `cd "..."`, closing a shell-injection route for a mount path containing a quote or a newline.
-- `qemu`: a redirect from `https://` to `http://` while downloading the guest image is now refused instead of silently followed.
-- Two `env=` rules giving the same exact variable different values are now rejected at parse time with a clear error, instead of the last one silently winning.
-- Learning mode no longer mistakes a read-back of a paused `os.environ` iteration for a real use when another iteration is nested inside it; only variables the code actually reads are now learned.
-- `bwrap`, `unshare`, `firejail`, `qemu` and `qemu-microvm`: an `ignore=` pattern now also hides a match under every `expose-ro=`/`expose-rw=` path, not only under the current directory, matching `gvisor` and `smolvm`.
-- `qemu` and `qemu-microvm`: a host path or image path containing a comma is now escaped before being placed in a `-virtfs`/`-fsdev`/`-drive` argument, instead of letting the comma start an unintended QEMU sub-option (e.g. turning a read-only mount writable); an unknown `qemu.virtfs_security_model` value now falls back to the default instead of being forwarded as-is.
-- `qemu`: the downloaded guest image is now hashed while it streams to disk and verified against a checksums file fetched next to it (or `PYSANDBOXES_QEMU_IMAGE_SHA256` for a custom URL), refusing a standard Debian/Ubuntu download outright when no digest is available, retrying once on a mismatch, and checking the byte count against `Content-Length` even without a checksum; a verified cached image gets a `.sha256` sidecar so a later run only re-checks its size and mtime instead of re-hashing it.
-- The subprocess-based daemon (`subprocess`, `landlock`, `bwrap`, `firejail`, `unshare`) now kills its sandbox process on every failure of the remote shutdown call, instead of an unnamed one always raising an `AssertionError` and leaving the process running; a restart that fails after already launching a new process now kills it too, instead of leaking it; a failed start now removes the private Unix-socket directory it had created, instead of leaving it behind; the sandbox process is now asked to die with its launcher, through `PR_SET_PDEATHSIG` on Linux.
-- A single `print()` or write far above the SSE line budget is now split into several ordered `stdout`/`stderr` events instead of refusing the whole call, or letting one oversized line through to the parent's HTTP reader, which refused it opaquely; the final message no longer repeats the already-streamed output.
-- `qemu.start_timeout` now rejects `nan` and `inf` like `PYSANDBOXES_RPC_TIMEOUT` already does, instead of waiting on a value that can never be reached.
-- `os-sandbox=none` now runs the sandbox's `init_fn`, like every other provider.
-- The result channel's `data-only` mode now refuses a cyclic `OrderedDict`, `Counter` or `deque`, instead of letting it through unchecked because the three are also listed as opaque value types.
-- The sandbox daemon's own graceful-shutdown delay no longer blocks the event loop for its duration.
-- `python-sb`: a leading `--` before the script name on the sandboxed command line is no longer passed through as if it were the script itself.
-- `qemu` and `qemu-microvm`: the guest-side helper that applies a learned firewall address now listens only on the guest's user-mode-network address instead of every guest interface.
-- A loader built directly with `importlib.util.spec_from_file_location`/`module_from_spec` and run with `exec_module`, including under a forged spec name such as `"pysandboxes"`, no longer runs as a module in the user's own code without ever being judged by a `python-import=` rule.
-- `eval-*`: calling a stdlib entry point that forwards caller-supplied source to `compile`/`exec`/`eval` directly, such as `importlib.abc.InspectLoader.source_to_code`, `SourceFileLoader.get_code`, `code.InteractiveInterpreter.runsource`, `timeit.timeit` or `runpy.run_path`, no longer runs that source unguarded with no `eval-*` rule declared and no `python-api=ALLOW:dynamic-code` grant, instead of being mistaken for the library's own code generation.
-- `marshal.loads`/`marshal.load` are now refused like `eval`/`exec`/`compile` when called directly with no `eval-*` rule declared and no `python-api=ALLOW:dynamic-code` grant, instead of rebuilding and handing back a runnable code object unguarded.
-- `appcontainer`: the sandboxed process's Job Object now also restricts `DISPLAYSETTINGS`, completing the UI lockdown instead of leaving the host's display configuration reachable.
-- `zipimport.zipimporter.load_module`, called directly in the user's own code, no longer execs a zip member without ever being judged by a `python-import=` rule.
-- `eval-*`: a positional `case C(x):` pattern against anything but one of the eleven builtin types CPython's `MATCH_CLASS` opcode special-cases (`bool`, `bytearray`, `bytes`, `dict`, `float`, `frozenset`, `int`, `list`, `set`, `str`, `tuple`) is now refused instead of reading `C.__match_args__`'s attributes unguarded, past `eval-attribute` and even the non-overridable frame-capture deny; the keyword form `case C(attr=x):` is unaffected.
-- `gvisor` and `bwrap` now reserve their slirp4netns API socket path through the same helper `unshare` uses, instead of each duplicating the create-then-unlink dance inline.
-- `appcontainer`: a path's ACL is now granted or revoked on a verified, held-open handle instead of by name, closing a race where a junction or symlink swapped in after planning could redirect the change to another object.
-- Running a program with `-m` under any OS provider no longer denies `marshal.loads`/`builtins.compile` on the entry module's own bytecode cache with no `python-api=ALLOW:dynamic-code` grant declared, a regression that broke every `-m` launch.
-- `appcontainer`: a venv resynced since its last run (`uv sync`, a reinstalled editable package, a rebuilt `.venv`) now gets its interpreter tree re-scanned for the AppContainer grant instead of reusing a cache keyed only on the venv's own path, which could leave a newly written file, notably an editable install's own `.pth`, without the read access needed to import it; this could make an editable install's own module fail to import under `appcontainer` whenever the sandboxed program's working directory happened not to be the project root (a `-m` launch from the project root masked it, since Python then finds the package through its own directory on `sys.path` regardless of the `.pth` file).
-- `qemu`: `python -m pysandboxes.remote.qemu_fetch_image --migrate-cache` now verifies a cached image downloaded before the checksum feature existed against its own upstream checksums and writes its sidecar on a match, instead of leaving it unverified for good.
+- Sandbox timeouts stop unfinished calls and clean up their processes before the sandbox can be reused.
+- Nested sandbox contexts now refuse a different policy instead of silently reusing the active sandbox.
+- `unshare`, `gvisor`: a network helper crash is now detected, logged and fails the sandbox closed with a clear message instead of leaving later calls to hang.
+- `smolvm`: a link already present in the guest image no longer stops the guest from starting.
+- `qemu-microvm`: a corrupted or tampered cached kernel is now detected and re-extracted instead of trusted.
+- `with sandboxes():` no longer leaks a background thread after the block exits.
+- `with sandboxes(os_sandbox="none"):` now really stops the sandbox on exit, so later sandboxes in the same process start properly.
+- A sandbox whose shutdown fails is no longer mistaken for one still running; the next one starts fresh and the original failure is still reported.
+- `port=` values above 65535 are rejected when the configuration is read instead of crashing the sandbox later.
+- A corrupted or hostile serialized immutable dictionary now raises the same error as any other malformed input.
+- `sandbox-exec`: `ignore=` patterns with character classes, ranges or a literal `^` or `-` now hide exactly the matching names instead of the opposite set or breaking every file access.
+- `net-resolve=runtime`: some allowed host names that were wrongly refused are now learned and opened like any other.
+- The network guard now cleanly refuses low-level packet addresses instead of misreading them or crashing.
+- `net-resolve=runtime`: the filtering DNS resolver no longer truncates large answers needlessly, avoiding useless retries.
+- `eval-max-alloc` now also refuses oversized multiplications and reports every refusal cleanly instead of failing with an unrelated error on huge numbers.
+- Evaluated code can no longer reach forbidden attributes through keyword or positional class patterns in `match` statements.
+- `locals()` in evaluated code is now refused like `globals()`, so evaluated code can no longer disable the iteration limit.
+- `unshare`: the host's DNS configuration is now exposed read-only to the sandbox, so sandboxed code can no longer rewrite it.
+- `firejail`: an `ignore=` pattern now hides matching files in every subdirectory, not only at the top level.
+- `firejail`: network and system-call filtering options containing `=` are no longer truncated.
+- `firejail`: unreachable local DNS resolvers are no longer passed to the jail.
+- `bwrap`, `unshare`, `firejail`, `sandbox-exec`, `gvisor`, `smolvm`: a path exposed both read-only and read-write now ends up read-write.
+- `qemu`, `qemu-microvm`: a mount path containing a quote or a newline can no longer inject shell commands into the guest.
+- `qemu`: an insecure redirect while downloading the guest image is now refused.
+- Two `env=` rules giving the same variable different values are now rejected with a clear error.
+- Learning mode now learns only the environment variables the code actually reads.
+- `bwrap`, `unshare`, `firejail`, `qemu`, `qemu-microvm`: an `ignore=` pattern now also hides matches under every exposed path, like `gvisor` and `smolvm`.
+- `qemu`, `qemu-microvm`: a path containing a comma can no longer alter the virtual machine's options, such as turning a read-only mount writable, and an unknown file-sharing security setting now falls back to the default.
+- `qemu`: the downloaded guest image is now verified against its published checksum and size, retried once on a mismatch, and checked cheaply on later runs.
+- `qemu`: a command now verifies images cached before checksum support existed instead of leaving them unverified.
+- Sandbox processes are now always stopped when shutdown, restart or start fails, and no longer leave temporary files or orphan processes behind.
+- A single very large output is now streamed in several ordered parts instead of failing the whole call, and is no longer repeated in the final result.
+- `qemu.start_timeout` now rejects infinite and invalid values.
+- `os-sandbox=none` now runs the sandbox's initialization function, like every other provider.
+- The `data-only` result mode now refuses cyclic ordered dictionaries, counters and deques.
+- The sandbox's graceful shutdown no longer blocks other work while it waits.
+- `python-sb`: a leading `--` before the script name is no longer mistaken for the script.
+- `qemu`, `qemu-microvm`: the guest helper that applies learned firewall addresses now listens only on the internal network.
+- Modules loaded by hand from a file or a zip archive are now judged by `python-import=` rules.
+- Standard-library helpers that compile or run source code are now guarded by `eval-*` rules instead of running that code unchecked.
+- Rebuilding code objects from serialized bytecode is now refused like `eval`/`exec` unless dynamic code is allowed.
+- `appcontainer`: the sandboxed process can no longer change the host's display settings.
+- `appcontainer`: permission changes can no longer be redirected to another file by swapping in a link, including when the path uses short Windows names.
+- Running a program with `-m` under any OS provider works again.
+- `appcontainer`: a virtual environment changed since its last run is now re-granted, so editable installs import correctly.
 
 ## [0.12.0] - 2026-11-13
 
