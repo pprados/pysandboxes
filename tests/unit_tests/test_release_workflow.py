@@ -115,6 +115,14 @@ def test_the_push_checks_cover_the_commit_below_a_documentation_only_release_com
     assert '.github/scripts/checked-commits.sh "$SHA"' in job["steps"][1]["run"]
 
 
+def test_the_validation_installs_the_binaries_of_the_provider_smoke_tests() -> None:
+    steps = _jobs()["validate"]["steps"]
+    install = next(step for step in steps if step.get("name") == "Install the provider binaries")
+    assert "bubblewrap slirp4netns iptables iproute2" in install["run"]
+    assert "apparmor_restrict_unprivileged_userns=0" in install["run"]
+    assert steps.index(install) < next(i for i, step in enumerate(steps) if step.get("name") == "Validate")
+
+
 def test_the_build_waits_for_the_light_gate() -> None:
     assert _needs(_jobs()["build"]) >= {"verify", "push-checks", "validate"}
 

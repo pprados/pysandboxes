@@ -108,6 +108,12 @@ jobs:
     - name: Check installation of uv
       run: test "$(uv --version | cut -d' ' -f2)" = "0.11.16"
 
+    # make validate runs provider-smoke-tests, which fails on a skipped unshare row (see test.yml).
+    - name: Install the provider binaries
+      run: |
+        sudo apt-get install -y bubblewrap slirp4netns iptables iproute2
+        sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0 || true
+
     - name: Install dependencies
       run: uv sync --locked --group dev --group test --group lint
 
