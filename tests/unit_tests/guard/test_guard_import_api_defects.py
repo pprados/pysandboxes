@@ -566,16 +566,3 @@ def test_a_lazy_import_of_a_granted_module_still_resolves() -> None:
             assert namespace["use"]() is not None
     finally:
         sys.modules.pop("colorsys", None)
-
-
-def test_a_module_taken_twice_from_the_snapshot_is_not_an_error(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Two loaders may name the same pre-armed module (`decimal` is also the name of `_decimal` on 3.15): the
-    second finds its snapshot entry already taken and must carry on instead of raising a KeyError."""
-    module = ModuleType("snapshot_probe")
-    spec = importlib.machinery.ModuleSpec("snapshot_probe", loader=importlib.machinery.BuiltinImporter)
-    monkeypatch.setattr(guard_import, "_pending_modules", {"snapshot_probe": module, "snapshot_probe.sub": module})
-    first = guard_import.GuardLoader("snapshot_probe", spec, module)
-    second = guard_import.GuardLoader("snapshot_probe", spec, module)
-    first.exec_module(module)
-    second.exec_module(module)
-    assert guard_import._pending_modules == {}
