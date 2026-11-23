@@ -46,6 +46,7 @@ Planned work, in no committed order:
     - [X] [Smolvm](https://korben.info/smolvm-microvm-portable-rust.html)
     - [ ] [Cloud Hypervisor](https://github.com/cloud-hypervisor/cloud-hypervisor) (Rust-based VMM with native virtio-fs and vsock)
     - [X] ~~[Firecracker](https://firecracker-microvm.github.io/)~~ (rejected: it has no virtio-fs or 9p, only block devices, a tap network device and vsock, so `expose-ro` and `expose-rw` cannot map host directories as `qemu-microvm` and `smolvm` do; enforcing the file rules would need a disk image rebuilt and copied for every call; its isolation is already covered by `qemu-microvm` and `smolvm`)
+    - [ ] [Docker sandbox](https://docs.docker.com/ai/sandboxes/)
   - [ ] Others strategies
     - [ ] [container2wasm](https://github.com/container2wasm/container2wasm)
     - [X] ~~[Cloud morph](https://cloud.morph.so/)~~ (rejected: a hosted paid service, so the code and its data leave the machine, and the rules would be applied by a third party instead of locally; incompatible with the local SSE channel and the `.py-sandboxes` rules)
