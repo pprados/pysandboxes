@@ -2,7 +2,7 @@
 
 Console demo using the [OpenAI Agents SDK](https://openai.github.io/openai-agents-python/) (`openai-agents`): an agent with two **function tools** — `fetch_webpage` and `evaluate_expression` — driven by the model through the SDK’s **`Runner`** (tool loop until a final answer or `max_turns`).
 
-The default task **requires** both tools: fetch `https://www.google.com`, report how many words its title contains, then compute that count squared.
+The default task **requires** both tools: fetch `https://example.com`, report how many words its title contains, then compute that count squared.
 
 ## What the sandbox does here
 

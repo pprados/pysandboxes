@@ -213,7 +213,7 @@ and use the the samples [here](#with-claude-code) or [MCP client](../mcp-client/
 To use the tool `fetch_webpage`:
 ```bash
 claude
-> get and summarize the page http://www.google.com
+> get and summarize the page http://example.com
 ```
 
 To use the tool `evaluate_expression`:

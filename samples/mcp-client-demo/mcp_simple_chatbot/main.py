@@ -108,7 +108,7 @@ class LLMClient:
                 response.raise_for_status()
                 data = response.json()
                 return data["choices"][0]["message"]["content"]
-                # return '{"tool": "fetch_webpage","arguments": {"url": "http://www.google.com"}}'
+                # return '{"tool": "fetch_webpage","arguments": {"url": "http://example.com"}}'
 
         except httpx.RequestError as e:
             error_message = f"Error getting LLM response: {str(e)}"

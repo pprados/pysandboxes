@@ -217,7 +217,7 @@ def test_claude_fetch_webpage(
             "-c",
             mcp_server_config,
             "-p",
-            "get and summarize the page http://www.google.com",
+            "get and summarize the page http://example.com",
         ]
         logger.info("cmd: %s", " ".join([repr(c) if " " in c else c for c in cmd]))
         assert not process or process.returncode is None
@@ -238,7 +238,7 @@ def test_claude_fetch_webpage(
         if result.stderr:
             print("------- STDERR")
             print(result.stderr)
-        assert "google" in result.stdout.lower()
+        assert "example domain" in result.stdout.lower()
         assert re.search("connection.*error", result.stdout.lower()) is None
     finally:
         if process:

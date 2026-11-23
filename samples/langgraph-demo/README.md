@@ -4,7 +4,7 @@ Console chatbot built with **[LangGraph](https://langchain-ai.github.io/langgrap
 `StateGraph` that alternates between the model and a `ToolNode`, with **`fetch_webpage`** and
 **`evaluate_expression`** as its two tools.
 
-The default task **requires** both tools: it loads `https://www.google.com`, then computes an
+The default task **requires** both tools: it loads `https://example.com`, then computes an
 expression. The model must not answer from memory alone.
 
 ## What the sandbox does here
@@ -72,9 +72,9 @@ The CLI is a click group, so `langgraph-chat` alone only prints help. Its other 
 run a single thing and exit, each inside the sandbox:
 
 ```bash
-langgraph-chat ask "fetch https://www.google.com and count the words in its title"
+langgraph-chat ask "fetch https://example.com and count the words in its title"
 langgraph-chat calc "2*(3+4)"
-langgraph-chat fetch "https://www.google.com"
+langgraph-chat fetch "https://example.com"
 ```
 
 Options: `--model` (default `gpt-4o-mini`) and `--temperature` on `chat` and `ask`.

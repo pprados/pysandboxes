@@ -37,8 +37,8 @@ SERVER_PYTHON = SERVER_VENV / "Scripts" / "python.exe" if sys.platform == "win32
 
 BOTH_MODES = ["stdio_sandboxes_partial", "stdio_sandboxes_complete"]
 
-ALLOWED_URL = "https://www.google.com/"
-DENIED_URL = "https://example.com/"
+ALLOWED_URL = "https://example.com/"
+DENIED_URL = "https://example.org/"
 POPEN_ESCAPE = (
     f"[c for c in ().__class__.__base__.__subclasses__() if c.__name__=='Popen'][0]([{sys.executable!r},'-c','pass'])"
 )

@@ -50,7 +50,7 @@ async def drive() -> None:
     from autogen_demo.tools import evaluate_expression, fetch_webpage
 
     print(await evaluate_expression("2*(3+4)"))
-    print((await fetch_webpage("https://www.google.com/"))[:80])
+    print((await fetch_webpage("https://example.com/"))[:80])
 
 
 if is_in_sandbox():  # complete mode: python-sb already armed the profile

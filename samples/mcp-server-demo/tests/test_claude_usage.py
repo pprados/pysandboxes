@@ -35,8 +35,8 @@ if MOCK:
             cmd_line = " ".join(openargs[0])
             if "@config://version" in cmd_line:
                 return MockRunResult(stdout="1.0.0.0")
-            elif "http://www.google.com" in cmd_line:
-                return MockRunResult(stdout="The Google homepage is")
+            elif "http://example.com" in cmd_line:
+                return MockRunResult(stdout="The Example Domain page is")
             elif "/mcp_demo:analyze_data" in cmd_line:
                 return MockRunResult(stdout="113567")
             elif "use evaluate_expression" in cmd_line:
@@ -184,7 +184,7 @@ def test_claude_fetch_webpage(protocol: str, os_sandbox: str, mode: str) -> None
             # The assertion below matches English wording, so pin the language:
             # the model otherwise answers in whatever the ambient configuration
             # asks for, and a French summary fails a test about the sandbox.
-            "get and summarize the page http://www.google.com. Answer in English.",
+            "get and summarize the page http://example.com. Answer in English.",
         )
         result = run(
             cmd,
@@ -199,7 +199,7 @@ def test_claude_fetch_webpage(protocol: str, os_sandbox: str, mode: str) -> None
         if result.stderr:
             print("------- STDERR")
             print(result.stderr)
-        assert re.search("google.*homepage", result.stdout.lower())
+        assert re.search("example.*domain", result.stdout.lower())
     finally:
         if process:
             process.terminate()

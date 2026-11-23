@@ -2,7 +2,7 @@
 
 Console demo using Hugging Face [**smolagents**](https://huggingface.co/docs/smolagents/index): a **`ToolCallingAgent`** (JSON tool calls) with **`fetch_webpage`** and **`evaluate_expression`**, backed by **`LiteLLMModel`** so you can point at many providers via [LiteLLM](https://docs.litellm.ai/).
 
-The default task **requires** both tools: it loads `https://www.google.com`, counts the words in its title, then computes that count squared. The model must not answer from memory alone.
+The default task **requires** both tools: it loads `https://example.com`, counts the words in its title, then computes that count squared. The model must not answer from memory alone.
 
 ## What the sandbox does here
 

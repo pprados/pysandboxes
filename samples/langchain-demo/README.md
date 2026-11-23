@@ -2,7 +2,7 @@
 
 Console **agent loop** for LangChain 1.x: a chat model with **`fetch_webpage`** and **`evaluate_expression`** bound via `bind_tools`, iterating until the model stops requesting tools or a **maximum iteration** count is reached. This sample is the reference shape the other framework samples follow.
 
-The default task **requires** both tools: it loads `https://www.google.com`, then computes an expression. The model must not answer from memory alone.
+The default task **requires** both tools: it loads `https://example.com`, then computes an expression. The model must not answer from memory alone.
 
 ## What the sandbox does here
 

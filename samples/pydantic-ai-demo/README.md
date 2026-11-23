@@ -2,7 +2,7 @@
 
 Console **agent** using [Pydantic AI](https://ai.pydantic.dev/): a chat model with **`fetch_webpage`** and **`evaluate_expression`** registered as tools. The framework runs the **model ↔ tools** loop internally (`run_sync`); this sample caps **model requests** with **`UsageLimits(request_limit=…)`** so runs cannot spin forever.
 
-The default task **requires** both tools: it loads `https://www.google.com`, counts the words in its title, then computes that count squared. The model must not answer from memory alone.
+The default task **requires** both tools: it loads `https://example.com`, counts the words in its title, then computes that count squared. The model must not answer from memory alone.
 
 ## What the sandbox does here
 

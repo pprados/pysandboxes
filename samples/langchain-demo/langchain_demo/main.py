@@ -26,7 +26,7 @@ DEFAULT_SYSTEM = (
 )
 
 DEFAULT_USER_TASK = (
-    "Using the tools: fetch https://www.google.com with fetch_webpage, then use "
+    "Using the tools: fetch https://example.com with fetch_webpage, then use "
     "evaluate_expression to compute 2*(3+4), and report both results in one sentence."
 )
 

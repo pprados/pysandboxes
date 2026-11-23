@@ -23,7 +23,7 @@ ignore=.env
 # exceeds firejail's process and address-space limits, and the import aborts.
 env=OPENBLAS_NUM_THREADS=1
 
-net=ALLOW|TCP|www.google.com|443|OUT
+net=ALLOW|TCP|example.com|443|OUT
 
 
 # The repository root, which uv installs as an editable dependency (see

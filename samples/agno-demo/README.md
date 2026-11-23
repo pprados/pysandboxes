@@ -2,7 +2,7 @@
 
 Console demo for **[Agno](https://www.agno.com/)**: an `Agent` with **`fetch_webpage`** and **`evaluate_expression`** as tools. Agno runs the **model ↔ tool** loop internally; `tool_call_limit` caps how many tool invocations are allowed in one run.
 
-The default task **requires** both tools: it loads `https://www.google.com`, counts the words in its title, then computes that count squared. The model must not answer from memory alone.
+The default task **requires** both tools: it loads `https://example.com`, counts the words in its title, then computes that count squared. The model must not answer from memory alone.
 
 ## What the sandbox does here
 

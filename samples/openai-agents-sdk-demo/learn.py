@@ -42,7 +42,7 @@ def drive() -> None:
     from openai_agents_sdk_demo.tools import evaluate_expression_impl, fetch_webpage_impl
 
     print(evaluate_expression_impl("2*(3+4)"))
-    print(fetch_webpage_impl("https://www.google.com/")[:80])
+    print(fetch_webpage_impl("https://example.com/")[:80])
 
 
 if is_in_sandbox():  # complete mode: python-sb already armed the profile

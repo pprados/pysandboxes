@@ -83,7 +83,7 @@ Options:
 
 ## Tool-only scenario
 
-The default task asks the model to fetch `https://www.google.com`, report how many words its title contains, then compute that count squared with **`evaluate_expression`**. It should not succeed without tools.
+The default task asks the model to fetch `https://example.com`, report how many words its title contains, then compute that count squared with **`evaluate_expression`**. It should not succeed without tools.
 
 ## Security note
 

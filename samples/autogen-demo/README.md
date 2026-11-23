@@ -2,7 +2,7 @@
 
 Console demo of [Microsoft AutoGen](https://github.com/microsoft/autogen) **AgentChat** with two tools—**`fetch_webpage`** and **`evaluate_expression`**—driven by the model’s tool calls (not hard-coded script logic).
 
-The default task **requires** both tools: it asks the model to fetch `https://www.google.com`, report how many words its title contains, then compute that count squared.
+The default task **requires** both tools: it asks the model to fetch `https://example.com`, report how many words its title contains, then compute that count squared.
 
 ## What the sandbox does here
 

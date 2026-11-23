@@ -40,10 +40,10 @@ CONFIG = SAMPLE_ROOT / ".py-sandboxes"
 CONFIG_COMPLETE = SAMPLE_ROOT / ".py-sandboxes-complete"
 
 # Host the learned profile allows.
-ALLOWED_URL = "https://www.google.com/"
+ALLOWED_URL = "https://example.com/"
 # Real, resolvable host deliberately absent from net=ALLOW: a real name keeps
 # the refusal attributable to the rule instead of to an NXDOMAIN.
-DENIED_URL = "https://example.com/"
+DENIED_URL = "https://example.org/"
 
 # Reaches Popen through the subclass tree, which an emptied __builtins__ does
 # not hide. The tool is a plain eval() on purpose: whatever stops this is the

@@ -194,7 +194,7 @@ expose-ro=../..
 # Add rules (2026/10/07 at 16:48)
 net=ALLOW|TCP|ip6-localhost|0|IN
 net=ALLOW|TCP|ip6-loopback|0|IN
-net=ALLOW|TCP|www.google.com|443|OUT
+net=ALLOW|TCP|example.com|443|OUT
 
 # </learning_guard_socket>
 

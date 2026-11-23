@@ -39,7 +39,7 @@ def drive() -> None:
     from langchain_demo.tools import evaluate_expression, fetch_webpage
 
     print(evaluate_expression.invoke({"expression": "2*(3+4)"}))
-    print(fetch_webpage.invoke({"url": "https://www.google.com/"})[:80])
+    print(fetch_webpage.invoke({"url": "https://example.com/"})[:80])
 
 
 if is_in_sandbox():  # complete mode: python-sb already armed the profile

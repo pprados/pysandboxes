@@ -24,7 +24,7 @@ DEFAULT_SYSTEM_GOAL = (
 DEFAULT_BACKSTORY = "You are a careful assistant that follows tool-use rules and reports accurate results."
 
 DEFAULT_USER_TASK = (
-    "Using the tools: fetch https://www.google.com with fetch_webpage, report how many "
+    "Using the tools: fetch https://example.com with fetch_webpage, report how many "
     "words its title contains, then use evaluate_expression to compute that count squared. "
     "End with a one-sentence summary that includes both numbers."
 )

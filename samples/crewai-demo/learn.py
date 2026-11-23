@@ -42,7 +42,7 @@ def drive() -> None:
     from crewai_demo.tools import evaluate_expression, fetch_webpage
 
     print(evaluate_expression.run(expression="2*(3+4)"))
-    print(fetch_webpage.run(url="https://www.google.com/")[:80])
+    print(fetch_webpage.run(url="https://example.com/")[:80])
 
 
 if is_in_sandbox():  # complete mode: python-sb already armed the profile

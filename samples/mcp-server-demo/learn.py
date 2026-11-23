@@ -56,7 +56,7 @@ async def drive() -> None:
     async with Client(mcp) as client:
         print(sorted(tool.name for tool in await client.list_tools()))
         print(await client.call_tool("evaluate_expression", {"expression": "2*(3+4)"}))
-        page = await client.call_tool("fetch_webpage", {"url": "https://www.google.com/"})
+        page = await client.call_tool("fetch_webpage", {"url": "https://example.com/"})
         print(str(getattr(page, "data", page))[:80])
 
 

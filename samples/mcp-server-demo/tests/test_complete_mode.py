@@ -29,8 +29,8 @@ from fastmcp.client.transports import StdioTransport
 SAMPLE_ROOT = Path(__file__).parent.parent
 CONFIG = "mcp_server/.py-sandboxes-complete"
 
-ALLOWED_URL = "https://www.google.com/"
-DENIED_URL = "https://example.com/"
+ALLOWED_URL = "https://example.com/"
+DENIED_URL = "https://example.org/"
 POPEN_ESCAPE = (
     f"[c for c in ().__class__.__base__.__subclasses__() if c.__name__=='Popen'][0]([{sys.executable!r},'-c','pass'])"
 )

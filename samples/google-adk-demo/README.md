@@ -2,7 +2,7 @@
 
 Console demo of [Google Agent Development Kit (ADK)](https://google.github.io/adk-docs/) with a **tool-calling** agent: **`fetch_webpage`** and **`evaluate_expression`**.
 
-The default user task **requires** both tools: it asks the model to fetch `https://www.google.com`, report how many words its title contains, then compute that count squared.
+The default user task **requires** both tools: it asks the model to fetch `https://example.com`, report how many words its title contains, then compute that count squared.
 
 ## What the sandbox does here
 

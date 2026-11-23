@@ -39,10 +39,10 @@ CONFIG = SAMPLE_ROOT / "mcp_server" / ".py-sandboxes"
 CONFIG_COMPLETE = SAMPLE_ROOT / "mcp_server" / ".py-sandboxes-complete"
 
 # Host listed in net=ALLOW of the profile above.
-ALLOWED_URL = "https://www.google.com/"
+ALLOWED_URL = "https://example.com/"
 # Real, resolvable host deliberately absent from net=ALLOW. A real name keeps
 # the refusal attributable to the rule instead of to an NXDOMAIN.
-DENIED_URL = "https://example.com/"
+DENIED_URL = "https://example.org/"
 
 
 class ArmedKwargs(TypedDict):

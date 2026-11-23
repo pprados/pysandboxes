@@ -216,7 +216,7 @@ runcmd:
     test -f /etc/ssl/certs/ca-certificates.crt
     test -d /etc/ca-certificates
     test -d /usr/share/ca-certificates
-    python3 -c "import urllib.request; urllib.request.urlopen('https://www.google.com/', timeout=30).read(1)"
+    python3 -c "import urllib.request; urllib.request.urlopen('https://example.com/', timeout=30).read(1)"
     echo PYSANDBOXES_MICROVM_NATIVE_SSL_OK >/dev/ttyS0
     ip -4 -o address show | tee /dev/ttyS0 | grep -q '10\\.0\\.2\\.'
     echo PYSANDBOXES_MICROVM_MMIO_OK >/dev/ttyS0

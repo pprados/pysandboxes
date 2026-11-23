@@ -2,7 +2,7 @@
 
 Console demo of the [Strands Agents](https://strandsagents.com/) SDK: an `Agent` runs the built-in event loop (model → tool calls → tool results → model …) with two tools, **`fetch_webpage`** and **`evaluate_expression`**.
 
-The default user task **requires** both tools: fetch `https://www.google.com`, report how many words its title contains, then compute that count squared. Tool calls are chosen by the model via Strands’ `@tool` registration — the CLI does not invoke the tools directly.
+The default user task **requires** both tools: fetch `https://example.com`, report how many words its title contains, then compute that count squared. Tool calls are chosen by the model via Strands’ `@tool` registration — the CLI does not invoke the tools directly.
 
 ## What the sandbox does here
 

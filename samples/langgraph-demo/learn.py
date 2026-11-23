@@ -50,7 +50,7 @@ async def drive() -> None:
     from langgraph_simple_chatbot.tools import evaluate_expression, fetch_webpage
 
     print(await evaluate_expression.ainvoke({"expression": "2*(3+4)"}))
-    print((await fetch_webpage.ainvoke({"url": "https://www.google.com/"}))[:80])
+    print((await fetch_webpage.ainvoke({"url": "https://example.com/"}))[:80])
 
 
 if is_in_sandbox():  # complete mode: python-sb already armed the profile

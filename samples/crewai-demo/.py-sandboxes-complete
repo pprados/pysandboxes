@@ -23,7 +23,7 @@ env=OPENBLAS_NUM_THREADS=1
 # a thread, such as the one the eval guard starts, then fails with "can't start new thread".
 firejail.rlimit-as=600m
 
-net=ALLOW|TCP|www.google.com|443|OUT
+net=ALLOW|TCP|example.com|443|OUT
 
 
 # The repository root, which uv installs as an editable dependency (see

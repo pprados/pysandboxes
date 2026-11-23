@@ -42,7 +42,7 @@ def drive() -> None:
     from strands_agents_demo.tools import evaluate_expression, fetch_webpage
 
     print(evaluate_expression(expression="2*(3+4)"))
-    print(fetch_webpage(url="https://www.google.com/")[:80])
+    print(fetch_webpage(url="https://example.com/")[:80])
 
 
 if is_in_sandbox():  # complete mode: python-sb already armed the profile
