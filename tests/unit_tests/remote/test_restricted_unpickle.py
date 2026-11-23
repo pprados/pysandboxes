@@ -56,6 +56,13 @@ from pysandboxes.remote.tools import (
 )
 
 
+@pytest.fixture(autouse=True)
+def _decimal_stays_in_sys_modules(monkeypatch: pytest.MonkeyPatch) -> None:
+    # The unit-test fixture drops the modules loaded before it from sys.modules. pickle looks `decimal` up there
+    # to save a Decimal, and without the C `_decimal` (the setup-python 3.15 build) nothing brings it back.
+    monkeypatch.setitem(sys.modules, "decimal", decimal)
+
+
 class _Outer:
     """Host for a nested exception, to exercise dotted-qualname resolution."""
 
