@@ -15,7 +15,7 @@ on:
       python-versions:
         description: JSON list of the Python minors to rebuild
         type: string
-        default: '["3.11", "3.12", "3.13", "3.14"]'
+        default: '["3.11", "3.12", "3.13", "3.14", "3.15"]'
 
 permissions:
   contents: read
@@ -50,7 +50,7 @@ jobs:
     # One runner per Python: the QEMU images hold guest disks and boot artifacts; eight images times four would not fit on one.
     strategy:
       matrix:
-        python-version: ${{ fromJSON(inputs.python-versions || '["3.11", "3.12", "3.13", "3.14"]') }}
+        python-version: ${{ fromJSON(inputs.python-versions || '["3.11", "3.12", "3.13", "3.14", "3.15"]') }}
     env:
       VERSION: ${{ needs.verify.outputs.version }}
       IMAGE_PYTHON: ${{ matrix.python-version }}

@@ -71,10 +71,10 @@ of it:
 
 | Workflow | Suite | Versions | Executions | Fires on |
 |---|---|---|---|---|
-| [`test.yml`](../.github/workflows/test.yml) | Unit | 3.11, 3.12, 3.13, 3.14 | ~15160 | every push and pull request |
-| [`integration.yml`](../.github/workflows/integration.yml) | Integration | 3.11, 3.12, 3.13, 3.14 | ~1310 | `full-gate.yml` (nightly, release tag) or dispatch |
+| [`test.yml`](../.github/workflows/test.yml) | Unit | 3.11, 3.12, 3.13, 3.14, 3.15 | ~15160 | every push and pull request |
+| [`integration.yml`](../.github/workflows/integration.yml) | Integration | 3.11, 3.12, 3.13, 3.14, 3.15 | ~1310 | `full-gate.yml` (nightly, release tag) or dispatch |
 | [`containers.yml`](../.github/workflows/containers.yml) | Containers | 3.13 | ~60 | `full-gate.yml` (nightly, release tag) or dispatch |
-| [`samples.yml`](../.github/workflows/samples.yml) | Samples | 3.11, 3.12, 3.13, 3.14 × subprocess, landlock, bwrap, firejail, unshare, gvisor; VM lane uses qemu-microvm | ~4460 plus VM boots | `full-gate.yml` (nightly, release tag) or dispatch |
+| [`samples.yml`](../.github/workflows/samples.yml) | Samples | 3.11, 3.12, 3.13, 3.14, 3.15 × subprocess, landlock, bwrap, firejail, unshare, gvisor; VM lane uses qemu-microvm | ~4460 plus VM boots | `full-gate.yml` (nightly, release tag) or dispatch |
 | **Total** | | | **~20990** | |
 
 The samples row is not a clean multiplication: a sample whose `requires-python`
@@ -292,12 +292,12 @@ technology, so Windows runs the Python layer over `subprocess` and macOS runs it
 
 | Scenario | Linux | macOS | Windows | Interpreters |
 |---|---|---|---|---|
-| Unit | whole suite | whole suite, Linux-only modules skipped | whole suite, Linux-only modules skipped | 3.11 to 3.14 |
-| Integration, per provider | `subprocess`, `firejail`, `bwrap`, `unshare`, `landlock`, `qemu`, `qemu-microvm` (KVM; TCG on demand) | `subprocess`, `sandbox-exec` | `subprocess` | 3.11 to 3.14 |
-| OS-only network filter | `bwrap`, `unshare`, `qemu`, `qemu-microvm`, `landlock` (ABI v4), `firejail` | `sandbox-exec` (port only) | — | 3.11 to 3.14 |
-| OS-only file confinement | every Linux provider, `qemu` and `qemu-microvm` included | `sandbox-exec` | — | 3.11 to 3.14 |
+| Unit | whole suite | whole suite, Linux-only modules skipped | whole suite, Linux-only modules skipped | 3.11 to 3.15 |
+| Integration, per provider | `subprocess`, `firejail`, `bwrap`, `unshare`, `landlock`, `qemu`, `qemu-microvm` (KVM; TCG on demand) | `subprocess`, `sandbox-exec` | `subprocess` | 3.11 to 3.15 |
+| OS-only network filter | `bwrap`, `unshare`, `qemu`, `qemu-microvm`, `landlock` (ABI v4), `firejail` | `sandbox-exec` (port only) | — | 3.11 to 3.15 |
+| OS-only file confinement | every Linux provider, `qemu` and `qemu-microvm` included | `sandbox-exec` | — | 3.11 to 3.15 |
 | Containers: Docker, Podman, Kubernetes | 48 rows on a real backend, 12 on `none` | — | — | 3.13 |
-| Samples (12 demos) | fast providers plus separate qemu-microvm VM lane | `subprocess`, `sandbox-exec` (local VM; CI runs `crewai-demo` only) | `subprocess` | 3.11 to 3.14 |
+| Samples (12 demos) | fast providers plus separate qemu-microvm VM lane | `subprocess`, `sandbox-exec` (local VM; CI runs `crewai-demo` only) | `subprocess` | 3.11 to 3.15 |
 
 - **Guards.** Every integration row arms the six families described in
   [section A](#a-guard-families): `tst_usage` for files, sockets and environment,

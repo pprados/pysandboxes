@@ -15,7 +15,7 @@ does not count as a vulnerability, such as the known Python-layer weaknesses in
 
 ## Getting started
 
-Python 3.11.5 to 3.14, with [uv](https://docs.astral.sh/uv/) exclusively. Every OS provider is a Linux technology, except
+Python 3.11.5 to 3.15, with [uv](https://docs.astral.sh/uv/) exclusively. Every OS provider is a Linux technology, except
 the Seatbelt `sandbox-exec` of macOS and the `appcontainer` of Windows, so what you can run depends on your system:
 
 | Your system | What runs | Needs |

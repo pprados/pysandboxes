@@ -7,7 +7,7 @@ name: Sample Tests
 # The nightly run validates the integration branch, `develop`: GitHub only honours `schedule:` on the default
 # branch, and full-gate.yml, which holds the schedule, skips a night without a commit.
 #
-# Every interpreter the project claims is covered, 3.11 through 3.14: a sample's
+# Every interpreter the project claims is covered, 3.11 through 3.15: a sample's
 # .py-sandboxes profile is learned under one version and the set of modules the
 # interpreter loads differs between them, so a profile green on 3.13 can refuse
 # an import on 3.11. langgraph-demo declares requires-python >=3.13 and is
@@ -53,7 +53,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        python-version: ["3.11", "3.12", "3.13", "3.14"]
+        python-version: ["3.11", "3.12", "3.13", "3.14", "3.15"]
         os-sandbox: [subprocess, landlock, bwrap, firejail, unshare, gvisor]
 
     # Pins the interpreter for every uv call in the sample Makefiles, and tells

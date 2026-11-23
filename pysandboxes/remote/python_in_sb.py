@@ -27,7 +27,7 @@ from pysandboxes.learning import (
 from ..all_rules import AllRules
 from ..e import RuleApiPermissionError, SandBoxError
 from ..guard_api import is_allowed
-from ..guard_import import _judge_user_import
+from ..guard_import import _judge_user_import, framework_imports
 from ..lifecycle import arm
 from ..main_logger import config_log
 
@@ -285,7 +285,8 @@ def _python_interactive(
             )
         except (ImportError, SandBoxError) as err:
             if isinstance(err, ImportError):
-                traceback.print_exc()
+                with framework_imports():
+                    traceback.print_exc()
             else:
                 # IPython needs more than the plain REPL: threads for its history
                 # saver and the prompt_toolkit stdout proxy, and a writable profile

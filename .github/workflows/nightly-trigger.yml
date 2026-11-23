@@ -26,4 +26,4 @@ jobs:
     - name: Start the Full Gate on develop
       env:
         GH_TOKEN: ${{ github.token }}
-      run: gh workflow run full-gate.yml --repo "$GITHUB_REPOSITORY" --ref develop -f nightly=true -f 'vm-sample-python-versions=["3.11", "3.12", "3.13", "3.14"]'
+      run: gh workflow run full-gate.yml --repo "$GITHUB_REPOSITORY" --ref develop -f nightly=true -f 'vm-sample-python-versions=["3.11", "3.12", "3.13", "3.14", "3.15"]'

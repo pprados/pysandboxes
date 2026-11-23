@@ -35,7 +35,20 @@ jobs:
           - suite: kubernetes
             engine: docker
             tests: test_container_kubernetes and not smolvm
-    name: containers (${{ matrix.suite }})
+          # Python 3.15: every suite also runs on the newest interpreter, the images being built from the job's Python.
+          - suite: docker
+            engine: docker
+            python: "3.15"
+            tests: test_container_runtime and docker and not smolvm
+          - suite: podman
+            engine: podman
+            python: "3.15"
+            tests: test_container_runtime and podman and not smolvm
+          - suite: kubernetes
+            engine: docker
+            python: "3.15"
+            tests: test_container_kubernetes and not smolvm
+    name: containers (${{ matrix.suite }}${{ matrix.python && format(', {0}', matrix.python) || '' }})
 
     steps:
     - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09  # v5.1.0
@@ -67,7 +80,7 @@ jobs:
     - name: Set up Python
       uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1  # v6.3.0
       with:
-        python-version: "3.13"
+        python-version: ${{ matrix.python || '3.13' }}
 
     - name: Install Python development headers
       run: sudo apt-get install -y python3-dev

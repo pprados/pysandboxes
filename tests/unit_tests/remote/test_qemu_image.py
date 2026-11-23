@@ -168,13 +168,14 @@ class TestGetUbuntuImageUrlForPythonVersion:
     def test_unsupported_arch_returns_none(self) -> None:
         assert get_ubuntu_image_url_for_python_version(3, 12, "mips64") is None
 
-    def test_dict_has_five_entries(self) -> None:
-        assert len(PYTHON_VERSION_TO_UBUNTU_IMAGE) == 5
+    def test_dict_has_six_entries(self) -> None:
+        assert len(PYTHON_VERSION_TO_UBUNTU_IMAGE) == 6
         assert (3, 10) in PYTHON_VERSION_TO_UBUNTU_IMAGE
         assert (3, 11) in PYTHON_VERSION_TO_UBUNTU_IMAGE
         assert (3, 12) in PYTHON_VERSION_TO_UBUNTU_IMAGE
         assert (3, 13) in PYTHON_VERSION_TO_UBUNTU_IMAGE
         assert (3, 14) in PYTHON_VERSION_TO_UBUNTU_IMAGE
+        assert (3, 15) in PYTHON_VERSION_TO_UBUNTU_IMAGE
 
 
 class TestGetDownloadUrl:

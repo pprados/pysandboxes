@@ -82,7 +82,7 @@ yanking only hides it.
 | `build` | `uv build`; the wheel version must equal the tag; `twine check`. Also builds `python-sb` when it changed (below) |
 | `reuse-lookup` | Looks for a green nightly run of `full-gate.yml` (titled `Nightly`) on the same code, walking back over release and documentation-only commits (a run that is not the full nightly never counts) |
 | `full-gate` | The integration, sample, container and macOS and Windows provider suites, skipped when `reuse-lookup` found a nightly to reuse |
-| `wheel-tests` | The unit tests against the built wheel, installed in a clean venv, on Python 3.11 to 3.14 |
+| `wheel-tests` | The unit tests against the built wheel, installed in a clean venv, on Python 3.11 to 3.15 |
 | `publish-testpypi` | Waits for the approval, then uploads with Trusted Publishing and PEP 740 attestations |
 | `publish-pypi` | Final tags only: waits for the `pypi` approval, then uploads `pysandboxes` and, when due, `python-sb` |
 | `verify-published` | Downloads the wheel back from the index of the tag kind (pypi.org for a final tag, test.pypi.org otherwise) and compares its sha256 with the one built |

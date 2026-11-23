@@ -31,7 +31,7 @@ jobs:
 
     - name: Find the Pythons whose newest patch has no image
       id: refresh
-      run: .github/scripts/refresh-images.sh 3.11 3.12 3.13 3.14 >>"$GITHUB_OUTPUT"
+      run: .github/scripts/refresh-images.sh 3.11 3.12 3.13 3.14 3.15 >>"$GITHUB_OUTPUT"
 
     - name: Rebuild them from the release tag
       if: steps.refresh.outputs.minors != '[]' && !inputs.dry-run

@@ -21,7 +21,7 @@ inside a container, firejail detects "an existing sandbox" and runs the program 
 
 ## Tags
 
-The images are `linux/amd64`, published for Python 3.11, 3.12, 3.13 and 3.14. They are tagged in the manner of the
+The images are `linux/amd64`, published for Python 3.11, 3.12, 3.13, 3.14 and 3.15. They are tagged in the manner of the
 official `python` images, since each is Python with pysandboxes: `pprados/python-sb:3.14` is to `python:3.14` what
 the sandbox is to Python. The pysandboxes version carries the `sb` prefix, so that `3.13.2` is always a Python
 version, never a pysandboxes one. Each image is built from the newest patch of its Python (`python:3.13.2-slim`

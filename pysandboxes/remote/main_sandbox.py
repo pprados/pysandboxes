@@ -210,7 +210,10 @@ def run_guest(
                 # rules, and a profile that does not name it would raise *that* denial
                 # instead of the one being reported -- the reporting path erasing the
                 # failure it exists to describe.
-                traceback.print_exc(file=sys.stderr)
+                from ..guard_import import framework_imports
+
+                with framework_imports():  # Python 3.15 imports importlib modules to format an ImportError
+                    traceback.print_exc(file=sys.stderr)
                 raise
             finally:
                 _restore_guest_stderr(saved_stderr_fd)
@@ -621,6 +624,7 @@ def _start_coverage() -> Any:
 
 if __name__ == "__main__":
     # Kill this process when the parent is killed
+    from ..guard_import import framework_imports
     from ..tools import exit_status
     from .tools import set_pdeathsig
 
@@ -638,11 +642,13 @@ if __name__ == "__main__":
         generate_config_from_learning()
         rc = 0
     except RuntimeError as e:
-        logger.exception(f"Unknown exception: {e}")
+        with framework_imports():  # Python 3.15 imports importlib modules to format an ImportError
+            logger.exception(f"Unknown exception: {e}")
         print(str(e), file=sys.stderr)
         rc = 1
     except Exception as e:
-        logger.exception(f"Unknown exception: {e}")
+        with framework_imports():
+            logger.exception(f"Unknown exception: {e}")
         rc = 1
     logger.debug("main_sandbox exit with errorlevel=%s", rc)
     if measured is not None:

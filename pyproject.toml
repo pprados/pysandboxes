@@ -9,7 +9,7 @@ name = "pysandboxes"
 # tag, a build carries the fallback below rather than a number nobody chose.
 dynamic = ["version"]
 description = "Lite sandbox for python code execution"
-requires-python = ">=3.11.5,<3.15"
+requires-python = ">=3.11.5,<3.16"
 authors = [{ name = "Philippe PRADOS", email = "github@prados.fr" }]
 license = "Apache-2.0"
 readme = "README.md"
@@ -22,6 +22,7 @@ classifiers = [
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
     "Programming Language :: Python :: 3.14",
+    "Programming Language :: Python :: 3.15",
 ]
 # Every entry below is imported by pysandboxes/. A sandbox argues about
 # reducing the attack surface, so it has no business installing what it never
@@ -115,7 +116,7 @@ test = [
     "types-requests>=2.28.11.5",
     "toml>=0.10.2",
     "pyyaml>=6.0",
-    "speckit>=1.0.1",
+    "speckit>=1.0.1; python_version < '3.15'",
     "pytestarch>=4.0.1",
     "pytest-rerunfailures>=16.7",
 ]
@@ -131,7 +132,7 @@ release = [
     "twine",
 ]
 fuzz = [
-    "atheris>=3.1.0; python_version >= '3.12' and implementation_name == 'cpython' and sys_platform == 'linux' and platform_machine == 'x86_64'",
+    "atheris>=3.1.0; python_version >= '3.12' and python_version < '3.15' and implementation_name == 'cpython' and sys_platform == 'linux' and platform_machine == 'x86_64'",
 ]
 
 [tool.codespell]

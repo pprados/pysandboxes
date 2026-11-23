@@ -69,7 +69,7 @@ _CHECKSUMS_BY_HOST: dict[str, tuple[str, str]] = {
 }
 _CHECKSUM_LINE = re.compile(r"^([0-9a-fA-F]{32,})\s+\*?(.+?)\s*$")
 
-# Complete mapping Python 3.10–3.14 → Ubuntu Cloud Image (one image per version).
+# Complete mapping Python 3.10–3.15 → Ubuntu Cloud Image (one image per version).
 # See wiki/qemu.md. Format: (release_or_codename, filename_pattern).
 # Numeric keys (22.04, …) use releases/{ver}/release/; codenames use {codename}/current/.
 #
@@ -85,6 +85,7 @@ PYTHON_VERSION_TO_UBUNTU_IMAGE: dict[tuple[int, int], tuple[str, str]] = {
     (3, 12): ("24.04", "ubuntu-24.04-server-cloudimg-{arch}.img"),
     (3, 13): ("25.04", "ubuntu-25.04-server-cloudimg-{arch}.img"),
     (3, 14): ("25.04", "ubuntu-25.04-server-cloudimg-{arch}.img"),
+    (3, 15): ("25.04", "ubuntu-25.04-server-cloudimg-{arch}.img"),
 }
 UBUNTU_CLOUD_RELEASES_BASE = "https://cloud-images.ubuntu.com/releases"
 UBUNTU_CLOUD_IMAGES_ROOT = "https://cloud-images.ubuntu.com"
@@ -123,7 +124,7 @@ def get_standard_download_url(
 ) -> str | None:
     """Return the standard download URL for the given Python version and architecture.
 
-    Uses Ubuntu Cloud Image for 3.10–3.14 (see PYTHON_VERSION_TO_UBUNTU_IMAGE),
+    Uses Ubuntu Cloud Image for 3.10–3.15 (see PYTHON_VERSION_TO_UBUNTU_IMAGE),
     otherwise Debian Bookworm generic image. Returns None if the architecture
     is not supported.
     """
@@ -200,7 +201,7 @@ def get_ubuntu_image_url_for_python_version(
     minor: int,
     arch: str | None = None,
 ) -> str | None:
-    """Return the Ubuntu Cloud Image URL for the given Python version (3.10–3.14).
+    """Return the Ubuntu Cloud Image URL for the given Python version (3.10–3.15).
 
     Provides a single image per version; see PYTHON_VERSION_TO_UBUNTU_IMAGE and wiki/qemu.md.
     Returns None if the version is not in the mapping or the architecture is not supported.

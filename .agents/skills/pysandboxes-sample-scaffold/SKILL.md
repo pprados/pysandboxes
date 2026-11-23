@@ -40,7 +40,7 @@ A sample is a self-contained subproject under `samples/<name>-demo/` with its ow
 
 5. **Register the sample** in the root `Makefile`: add `<name>` (without `-demo`) to `SAMPLES`. This enables `sample-tests-<name>` and `pip-audit` for it, and therefore CI.
 
-6. **Validate** from the sample directory: `make init`, `make help`, `make validate`. Then, from the repo root, `make sample-tests-<name>`. CI runs the samples on Python 3.11 to 3.14, and `make sample-tests-matrix` runs them on every Python and every OS provider (the maintainer's check before a minor or final release).
+6. **Validate** from the sample directory: `make init`, `make help`, `make validate`. Then, from the repo root, `make sample-tests-<name>`. CI runs the samples on Python 3.11 to 3.15, and `make sample-tests-matrix` runs them on every Python and every OS provider (the maintainer's check before a minor or final release).
 
 7. **Document and commit**
    - Add one user-facing line to the open `## [0.0.0] - 202X-XX-XX` entry of `CHANGELOG.md`, under `### Added` (never date it nor add a version).

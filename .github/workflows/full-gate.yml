@@ -1,8 +1,8 @@
 # Copyright (c) 2026, Carbon-It, Philippe Prados (pprados)
 # License: Apache V2
 #
-# The full test gate: the integration suite (3.11-3.14), the samples (3.11-3.14), the container suites and the
-# macOS and Windows provider suites (3.11-3.14).
+# The full test gate: the integration suite (3.11-3.15), the samples (3.11-3.15), the container suites and the
+# macOS and Windows provider suites (3.11-3.15).
 # Nightly on develop started by nightly-trigger.yml; called by release.yml for a tag whose commit no nightly proved.
 # TCG is left out everywhere unless a dispatch sets exclude-tcg to false.
 # .github/scripts/find-nightly-gate.sh reuses a nightly by reading the names of these jobs: keep the ids
@@ -10,7 +10,7 @@
 name: Full Gate
 
 # The reuse lookup trusts this title only for the full VM sample matrix with TCG enabled.
-run-name: ${{ inputs.nightly == true && inputs.exclude-tcg != true && inputs.vm-sample-python-versions == '["3.11", "3.12", "3.13", "3.14"]' && 'Nightly full matrix' || 'Full Gate' }}
+run-name: ${{ inputs.nightly == true && inputs.exclude-tcg != true && inputs.vm-sample-python-versions == '["3.11", "3.12", "3.13", "3.14", "3.15"]' && 'Nightly full matrix' || 'Full Gate' }}
 
 on:
   workflow_dispatch:

@@ -323,6 +323,29 @@ def test_run_path_called_directly_does_not_run_its_argument(
         runpy.run_path(str(script), run_name="bypass_probe")
 
 
+def test_cprofile_runctx_called_directly_does_not_run_its_argument(_armed_with_no_eval_rule_at_all: None) -> None:
+    import cProfile
+
+    namespace: dict[str, Any] = {}
+    with user_code(), contextlib.suppress(RuleApiPermissionError):
+        cProfile.runctx("MARKER = 1", namespace, namespace)
+    assert "MARKER" not in namespace
+
+
+def test_a_pth_import_line_does_not_run_through_addpackage(
+    _armed_with_no_eval_rule_at_all: None, tmp_path: Path
+) -> None:
+    import site
+
+    (tmp_path / "bypass.pth").write_text("import sys; sys._pysb_pth_probe = 1\n", encoding="utf-8")
+    try:
+        with user_code():
+            site.addpackage(str(tmp_path), "bypass.pth", set())
+        assert not hasattr(sys, "_pysb_pth_probe")
+    finally:
+        sys.__dict__.pop("_pysb_pth_probe", None)
+
+
 def test_a_real_import_still_works_while_armed_with_no_eval_rule_at_all(
     _armed_with_no_eval_rule_at_all: None, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -393,7 +416,7 @@ def test_a_real_import_with_a_pyc_cache_still_works_while_marshal_is_armed(
         with user_code():
             module = __import__("pyc_cache_probe")
             assert module.VALUE == 2
-            cached = module.__cached__
+            cached = module.__spec__.cached  # type: ignore[union-attr]
             del sys.modules["pyc_cache_probe"]
             assert cached and os.path.exists(cached), "the first import must have written a .pyc to re-read"
             module = __import__("pyc_cache_probe")

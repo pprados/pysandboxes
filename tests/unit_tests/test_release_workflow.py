@@ -99,6 +99,7 @@ def test_the_wheel_tests_run_on_every_claimed_interpreter() -> None:
         "3.12",
         "3.13",
         "3.14",
+        "3.15",
     ]
 
 
@@ -150,7 +151,7 @@ def test_the_published_wheel_is_compared_with_the_built_artifact() -> None:
 
 IMAGES_WORKFLOW = WORKFLOW.parent / "images.yml"
 REFRESH_WORKFLOW = WORKFLOW.parent / "images-refresh.yml"
-PYTHONS = '["3.11", "3.12", "3.13", "3.14"]'
+PYTHONS = '["3.11", "3.12", "3.13", "3.14", "3.15"]'
 
 
 def _workflow(path: Path) -> dict[Any, Any]:
@@ -348,7 +349,7 @@ def test_the_trigger_starts_the_nightly_full_gate_on_develop() -> None:
     step = workflow["jobs"]["trigger"]["steps"][0]
     assert step["run"] == (
         'gh workflow run full-gate.yml --repo "$GITHUB_REPOSITORY" --ref develop -f nightly=true '
-        '-f \'vm-sample-python-versions=["3.11", "3.12", "3.13", "3.14"]\''
+        '-f \'vm-sample-python-versions=["3.11", "3.12", "3.13", "3.14", "3.15"]\''
     )
 
 
@@ -357,7 +358,7 @@ def test_only_the_full_nightly_is_titled_nightly() -> None:
     title = " ".join(_workflow(FULL_GATE_WORKFLOW)["run-name"].split())
     assert title == (
         "${{ inputs.nightly == true && inputs.exclude-tcg != true "
-        '&& inputs.vm-sample-python-versions == \'["3.11", "3.12", "3.13", "3.14"]\' '
+        '&& inputs.vm-sample-python-versions == \'["3.11", "3.12", "3.13", "3.14", "3.15"]\' '
         "&& 'Nightly full matrix' || 'Full Gate' }}"
     )
 

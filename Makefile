@@ -374,7 +374,8 @@ SAMPLES = \
 # claims. A sample whose own requires-python excludes that interpreter is
 # skipped, not failed: langgraph-demo is 3.13+, and uv cannot resolve it on
 # 3.11. sort -V puts the lower version first, so the sample runs exactly when
-# its floor is the lower of the two.
+# its floor is the lower of the two. A `<3.N` ceiling skips it the same way, for a sample whose dependencies have no
+# wheel for the newest interpreter yet.
 # pytest is run directly rather than through the sample's `tests` target, which
 # sources .env: the keys there enable the suites that call a live model and spend
 # tokens. The gate variables are also dropped from the caller's environment, and
@@ -386,10 +387,15 @@ LIVE_TEST_GATES = OPENAI_API_KEY RUN_CLAUDE_TESTS
 # sets 3, because a hosted runner sometimes starts a guest too slowly. Only the failing sample is run again.
 SAMPLE_ATTEMPTS ?= 1
 sample-tests-%:
-	@req=$$(grep -m1 requires-python samples/$*-demo/pyproject.toml | grep -oE '3\.[0-9]+'); \
+	@spec=$$(grep -m1 requires-python samples/$*-demo/pyproject.toml); \
+	req=$$(echo "$$spec" | grep -oE '>=3\.[0-9]+' | tr -d '>='); \
+	cap=$$(echo "$$spec" | grep -oE '<3\.[0-9]+' | tr -d '<'); \
 	if [ -n "$(UV_PYTHON)" ] && \
 	   [ "$$(printf '%s\n%s\n' "$$req" "$(UV_PYTHON)" | sort -V | head -1)" != "$$req" ]; then \
 		echo "skip $*-demo: requires-python >= $$req, running $(UV_PYTHON)"; \
+	elif [ -n "$(UV_PYTHON)" ] && [ -n "$$cap" ] && \
+	   [ "$$(printf '%s\n%s\n' "$$cap" "$(UV_PYTHON)" | sort -V | head -1)" = "$$cap" ]; then \
+		echo "skip $*-demo: requires-python < $$cap, running $(UV_PYTHON)"; \
 	else \
 		$(MAKE) -C samples/$*-demo init && \
 		cd samples/$*-demo && \
@@ -423,7 +429,7 @@ sample-tests:
 # which samples.yml runs too. A provider adds limits of its own that a subprocess run cannot show. `none`
 # confines nothing, so the confinement scenarios fail there by design; qemu boots a VM per sandbox.
 # Pythons outermost: each change of UV_PYTHON rebuilds the sample venvs. Serial: mcp-client's port is fixed.
-SAMPLE_PYTHONS = 3.11 3.12 3.13 3.14
+SAMPLE_PYTHONS = 3.11 3.12 3.13 3.14 3.15
 SAMPLE_PROVIDERS = subprocess landlock bwrap firejail unshare gvisor
 ## Make the samples' suites on every Python and every OS provider (run before a minor or a given final release)
 sample-tests-matrix:

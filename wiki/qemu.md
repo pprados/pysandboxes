@@ -191,7 +191,7 @@ Use the **provider image** `python-sb-qemu:latest` (built with `make build-image
 
 ## Image and Python version
 
-The default image is **Debian 12 (bookworm)** and provides Python 3.11. For **one image per supported Python version, 3.11 through 3.14**, use **Ubuntu Cloud Images** (table below).
+The default image is **Debian 12 (bookworm)** and provides Python 3.11. For **one image per supported Python version, 3.11 through 3.15**, use **Ubuntu Cloud Images** (table below).
 
 Image resolution uses environment variables (see `pysandboxes.remote.qemu_image`):
 
@@ -230,9 +230,9 @@ Verifies every image in the VM images directory that has no `.sha256` sidecar ye
 
 Nothing is ever downloaded, deleted or rewritten besides the sidecar: a mismatch is reported and the image is left exactly as it was, but is refused until verified.
 
-### Mapping: Python version → image (Ubuntu, 3.11 to 3.14)
+### Mapping: Python version → image (Ubuntu, 3.11 to 3.15)
 
-A single source covers every supported version, 3.11–3.14: **Ubuntu Cloud Images**, all under `releases/<version>/release/`. Python 3.13 and 3.14 share **25.04**.
+A single source covers every supported version, 3.11–3.15: **Ubuntu Cloud Images**, all under `releases/<version>/release/`. Python 3.13, 3.14 and 3.15 share **25.04**.
 
 Only **released** images are mapped, never a development codename. Staging mounts the host's `/lib/<triplet>` over the guest (see `qemu.ld_closure_libs` above), so the guest's own coreutils and cloud-init run against the **host's** glibc: the guest release must be no newer than the host. A codename tracks the devel series and eventually ships a glibc the host lacks (**resolute** reached **2.43**): every guest binary then dies with ``version `GLIBC_2.43' not found`` and the bootstrap never answers its ping.
 
@@ -245,6 +245,7 @@ The other direction binds too: where the host's libraries are not staged, the ho
 | 3.12   | 24.04 LTS (Noble) | `ubuntu-24.04-server-cloudimg-<arch>.img` | `https://cloud-images.ubuntu.com/releases/24.04/release/` |
 | 3.13   | 25.04 (Plucky)    | `ubuntu-25.04-server-cloudimg-<arch>.img` | `https://cloud-images.ubuntu.com/releases/25.04/release/` |
 | 3.14   | 25.04 (Plucky)    | `ubuntu-25.04-server-cloudimg-<arch>.img` | `https://cloud-images.ubuntu.com/releases/25.04/release/` |
+| 3.15   | 25.04 (Plucky)    | `ubuntu-25.04-server-cloudimg-<arch>.img` | `https://cloud-images.ubuntu.com/releases/25.04/release/` |
 
 
 Replace `<arch>` with `amd64`, `arm64` or `ppc64el` for your platform.
@@ -255,6 +256,7 @@ Replace `<arch>` with `amd64`, `arm64` or `ppc64el` for your platform.
 - Python 3.12: `https://cloud-images.ubuntu.com/releases/24.04/release/ubuntu-24.04-server-cloudimg-amd64.img`
 - Python 3.13: `https://cloud-images.ubuntu.com/releases/25.04/release/ubuntu-25.04-server-cloudimg-amd64.img`
 - Python 3.14: `https://cloud-images.ubuntu.com/releases/25.04/release/ubuntu-25.04-server-cloudimg-amd64.img`
+- Python 3.15: `https://cloud-images.ubuntu.com/releases/25.04/release/ubuntu-25.04-server-cloudimg-amd64.img`
 
 **Alternative: Debian** (project default image, 3.11 only without extra config):
 

@@ -73,7 +73,7 @@ NAME = json.__name__
 """
 
 # What the daemon may import for itself: keep in step with the list in wiki/weaknesses.md.
-# The union over 3.11-3.14: which private companion of a listed module the daemon loads afresh depends on
+# The union over 3.11-3.15: which private companion of a listed module the daemon loads afresh depends on
 # what the interpreter already loaded at startup -- _thread on 3.11 and 3.12, _socket and reprlib on 3.13.
 FRAMEWORK_IMPORTS = frozenset(
     """
@@ -83,7 +83,8 @@ FRAMEWORK_IMPORTS = frozenset(
     gettext h11 hashlib heapq hmac html http importlib inspect io ipaddress itertools json keyword locale logging
     math mimetypes multiprocessing operator os pathlib pickle platform pydantic pydantic_core pysandboxes queue
     random re reprlib secrets selectors shlex signal socket socketserver ssl starlette stat struct tempfile textwrap
-    threading time traceback types typing typing_extensions typing_inspection urllib uuid uvicorn weakref zoneinfo
+    threading time traceback types typing typing_extensions typing_inspection urllib uuid uvicorn weakref zipfile
+    zoneinfo
     """.split()
 )
 

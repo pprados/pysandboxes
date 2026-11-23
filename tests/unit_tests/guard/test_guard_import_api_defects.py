@@ -448,7 +448,7 @@ def test_a_real_import_through_find_spec_is_accepted_pyc_cache_included(
             with user_code():
                 module = importlib.import_module("ordinary_import")
                 assert module.VALUE == 1  # type: ignore[attr-defined]
-                cached = module.__cached__  # type: ignore[attr-defined]
+                cached = module.__spec__.cached  # type: ignore[union-attr]
                 del sys.modules["ordinary_import"]
                 importlib.invalidate_caches()
                 assert cached and Path(cached).exists(), "the first import must have written a .pyc to re-read"
@@ -465,6 +465,7 @@ def _zip_with_module(tmp_path: Path, name: str, body: str = "MARKER = 1\n") -> s
     return str(zip_path)
 
 
+@pytest.mark.skipif(not hasattr(zipimport.zipimporter, "load_module"), reason="load_module is removed in 3.15")
 def test_zipimporter_load_module_called_directly_is_refused_in_the_users_code(tmp_path: Path) -> None:
     """``zipimporter.load_module`` execs the module itself instead of delegating to
     ``exec_module``, so it never reached ``find_spec``'s vetting at all -- unlike every other
@@ -477,6 +478,7 @@ def test_zipimporter_load_module_called_directly_is_refused_in_the_users_code(tm
                 importer.load_module("zip_bypass")
 
 
+@pytest.mark.skipif(not hasattr(zipimport.zipimporter, "load_module"), reason="load_module is removed in 3.15")
 def test_zipimporter_load_module_still_works_outside_the_users_code(tmp_path: Path) -> None:
     """Only the user's own code is judged: framework and test-harness code that calls
     ``load_module`` directly, as this suite's own fixtures sometimes do, keeps working."""
@@ -529,3 +531,38 @@ def test_a_dotted_import_rule_is_reported(caplog: pytest.LogCaptureFixture) -> N
 
 def test_only_real_modules_are_kept() -> None:
     assert "threadpool" not in guard_import._KEPT_MODULES
+
+
+@pytest.mark.skipif(sys.version_info < (3, 15), reason="PEP 810 lazy imports start with 3.15")
+@pytest.mark.parametrize("resolved_in_users_code", [True, False])
+def test_a_lazy_import_of_a_denied_module_is_refused_wherever_it_resolves(resolved_in_users_code: bool) -> None:
+    """A `lazy import` binds a proxy and resolves on first use: the denied module must stay unreachable whichever
+    frame touches the proxy first."""
+    sys.modules.pop("colorsys", None)
+    namespace: dict[str, Any] = {}
+    source = "lazy import colorsys\ndef use():\n    return colorsys.rgb_to_hsv\n"
+    with _import_rules():  # deny-all
+        with user_code():
+            exec(compile(source, "<lazy>", "exec"), namespace)
+        try:
+            if resolved_in_users_code:
+                with user_code(), pytest.raises(RuleModuleNotFoundError):
+                    namespace["use"]()
+            else:
+                with pytest.raises(RuleModuleNotFoundError):
+                    namespace["use"]()
+        finally:
+            assert "colorsys" not in sys.modules
+
+
+@pytest.mark.skipif(sys.version_info < (3, 15), reason="PEP 810 lazy imports start with 3.15")
+def test_a_lazy_import_of_a_granted_module_still_resolves() -> None:
+    sys.modules.pop("colorsys", None)
+    namespace: dict[str, Any] = {}
+    source = "lazy import colorsys\ndef use():\n    return colorsys.rgb_to_hsv\n"
+    try:
+        with _import_rules("colorsys"), user_code():
+            exec(compile(source, "<lazy>", "exec"), namespace)
+            assert namespace["use"]() is not None
+    finally:
+        sys.modules.pop("colorsys", None)

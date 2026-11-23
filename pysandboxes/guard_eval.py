@@ -649,7 +649,7 @@ _VENDOR_SEGMENTS = ("site-packages", "dist-packages")
 # mixed-purpose file: these modules' public entry points (`code.InteractiveInterpreter.runsource`,
 # `timeit.timeit`, `runpy.run_module`) reach the actual exec/eval/compile call through several
 # private helpers apiece (`codeop.CommandCompiler.__call__` -> `_maybe_compile` ->
-# `codeop.Compile.__call__` -> `compile()`, measured on 3.11-3.14), and naming every one of
+# `codeop.Compile.__call__` -> `compile()`, measured on 3.11-3.15), and naming every one of
 # them, here and again after the next refactor, is the wrong level of detail for what is, in
 # every one of these files, a single-purpose module. Keyed the same way `_GATEWAYS` is, by
 # `_module_key()`.
@@ -662,6 +662,9 @@ _GATEWAY_FILES: frozenset[str] = frozenset(
         "doctest.py",
         "profile.py",
         "cProfile.py",
+        "profiling/tracing/__init__.py",
+        "profiling/tracing/_utils.py",
+        "profiling/sampling/_sync_coordinator.py",
         "trace.py",
         "timeit.py",
         "runpy.py",
@@ -680,7 +683,7 @@ _GATEWAY_FILES: frozenset[str] = frozenset(
 # the ones observed frozen on one interpreter would silently stop matching on a build, or a
 # future version, that freezes a different set.
 #
-# Found by an AST scan of the stdlib of every supported Python (3.11 through 3.14) for an
+# Found by an AST scan of the stdlib of every supported Python (3.11 through 3.15) for an
 # exec/eval/compile call whose argument is not a literal constant
 # (`tests/unit_tests/guard/test_guard_eval_ambient_gateways.py` re-runs the scan on the current
 # interpreter and fails when it finds one covered by neither this table, `_GATEWAY_FILES` above,
@@ -714,6 +717,8 @@ _GATEWAYS: frozenset[tuple[str, str]] = frozenset(
         ("logging/config.py", "_create_formatters"),
         ("logging/config.py", "_install_handlers"),
         ("site.py", "addpackage"),
+        ("site.py", "StartupState.process"),
+        ("site.py", "StartupState._exec_imports"),
     }
 )
 
@@ -748,6 +753,8 @@ _GATEWAY_EXCLUSIONS: dict[tuple[str, str], str] = {
     "reachable from sandboxed code at runtime",
     ("pkgutil.py", "ImpLoader.get_code"): "the deprecated imp-era compatibility loader, removed "
     "from the stdlib in 3.12",
+    ("hashlib.py", "<module>"): "execs, at import time, a stub template built from the fixed list of "
+    "algorithm names the module itself defines, not from caller-supplied text",
     ("gettext.py", "c2py"): "the plural-form expression is parsed by a small grammar first, "
     "restricted to C-style arithmetic/comparison/ternary on one name, before the validated "
     "result is embedded in the exec'd template -- the same shape of validation as namedtuple's",
