@@ -588,9 +588,10 @@ class GuardLoader(Loader):
                     # logger.debug("move original module %s", k)
                     sys.modules[k] = m  # Reinject sub modules
                     to_delete.append(k)
-            del _pending_modules[self.fullname]
+            # A name another loader already took from the snapshot is simply gone: taking it twice is no error.
+            _pending_modules.pop(self.fullname, None)
             for k in to_delete:
-                del _pending_modules[k]
+                _pending_modules.pop(k, None)
             return
 
         # logger.debug(f"exec_module({module.__name__})...")
