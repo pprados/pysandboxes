@@ -79,9 +79,6 @@ package = true
 # and a bare `uv sync` run elsewhere stripped mypy and ruff from the venv.
 default-groups = ["dev", "test", "lint"]
 exclude-newer = "7 days"
-# pyyaml 6.0.4 is the first release with Python 3.15 wheels; 6.0.3 builds from source there and crashes: drop once older
-# than 7 days (2026-11-27).
-exclude-newer-package = { pyyaml = "2026-11-21T00:00:00Z" }
 #executable-path = "~/workspace.bda/langgraph-codeagent/.venv/bin/python-sb"
 #executable-name = "python-sb"
 # dev-dependencies = ["pysandboxes"] # TODO

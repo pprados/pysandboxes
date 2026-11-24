@@ -103,10 +103,10 @@ jobs:
     - name: Install uv
       uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2  # v10.3.3
       with:
-        version: "0.11.16"
+        version: "0.13.7"
 
     - name: Check installation of uv
-      run: test "$(uv --version | cut -d' ' -f2)" = "0.11.16"
+      run: test "$(uv --version | cut -d' ' -f2)" = "0.13.7"
 
     # make validate runs provider-smoke-tests, which fails on a skipped unshare row (see test.yml).
     - name: Install the provider binaries
@@ -136,10 +136,10 @@ jobs:
     - name: Install uv
       uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2  # v10.3.3
       with:
-        version: "0.11.16"
+        version: "0.13.7"
 
     - name: Check installation of uv
-      run: test "$(uv --version | cut -d' ' -f2)" = "0.11.16"
+      run: test "$(uv --version | cut -d' ' -f2)" = "0.13.7"
 
     - name: Build
       run: uv run --locked --group release uv build --no-build-isolation
@@ -244,10 +244,10 @@ jobs:
     - name: Install uv
       uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2  # v10.3.3
       with:
-        version: "0.11.16"
+        version: "0.13.7"
 
     - name: Check installation of uv
-      run: test "$(uv --version | cut -d' ' -f2)" = "0.11.16"
+      run: test "$(uv --version | cut -d' ' -f2)" = "0.13.7"
 
     - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c  # v8.0.1
       with:

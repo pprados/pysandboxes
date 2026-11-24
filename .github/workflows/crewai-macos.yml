@@ -27,10 +27,10 @@ jobs:
     - name: Install uv
       uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2  # v10.3.3
       with:
-        version: "0.11.16"
+        version: "0.13.7"
 
     - name: Check installation of uv
-      run: test "$(uv --version | cut -d' ' -f2)" = "0.11.16"
+      run: test "$(uv --version | cut -d' ' -f2)" = "0.13.7"
 
     - name: Install CrewAI sample dependencies
       run: make -C samples/crewai-demo init

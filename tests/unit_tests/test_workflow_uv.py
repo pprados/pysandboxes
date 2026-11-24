@@ -11,7 +11,7 @@ import yaml
 
 WORKFLOWS = Path(__file__).parents[2] / ".github" / "workflows"
 ACTION = "astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2"
-UV_CHECK = 'test "$(uv --version | cut -d\' \' -f2)" = "0.11.16"'
+UV_CHECK = 'test "$(uv --version | cut -d\' \' -f2)" = "0.13.7"'
 
 
 @pytest.mark.parametrize(
@@ -39,14 +39,14 @@ def test_uv_installations_are_pinned_and_verified(filename: str, expected_instal
                 continue
             installations += 1
             assert step.get("uses") == ACTION
-            assert step.get("with", {}).get("version") == "0.11.16"
+            assert step.get("with", {}).get("version") == "0.13.7"
             assert steps[index + 1].get("run") == UV_CHECK
     assert installations == expected_installations
 
 
 @pytest.mark.parametrize(
     ("printed", "accepted"),
-    [("uv 0.11.16 (1a2b3c4d5 2026-11-01 x86_64-unknown-linux-gnu)", True), ("uv 0.13.7 (1a2b3c4d5 2026-11-01)", False)],
+    [("uv 0.13.7 (1a2b3c4d5 2026-11-01 x86_64-unknown-linux-gnu)", True), ("uv 0.11.16 (1a2b3c4d5 2026-11-01)", False)],
 )
 def test_uv_check_reads_the_version_uv_really_prints(tmp_path: Path, printed: str, accepted: bool) -> None:
     fake_uv = tmp_path / "uv"
@@ -66,6 +66,6 @@ def test_all_workflows_avoid_unpinned_uv_installers() -> None:
                 action = step.get("uses", "")
                 if action.startswith("astral-sh/setup-uv@"):
                     assert action == ACTION, path
-                    assert step.get("with", {}).get("version") == "0.11.16", path
+                    assert step.get("with", {}).get("version") == "0.13.7", path
                 run = step.get("run", "")
                 assert not re.search(r"(?:astral\.sh/uv/|\bpip\s+install\s+uv\b)", run), path
