@@ -458,7 +458,13 @@ def _run_container_runtime(
     volume_mount = f"{ROOT_DIR}:/app"
 
     if runtime == "docker":
-        prefix = "chmod -R a+rX /app && mkdir -p /app/tmp && chmod -R a+rwX /app/tmp && "
+        # What an earlier row left, root-owned, in the mounted tree (bytecode, the scratch file of tst_usage) is
+        # readable already: a chmod the user of the row (smolvm) is refused must not stop the run, and the stale
+        # scratch file is removed so that the row can write its own.
+        prefix = (
+            "chmod -R a+rX /app 2>/dev/null; mkdir -p /app/tmp && rm -f /app/tmp/test.remove; "
+            "chmod -R a+rwX /app/tmp 2>/dev/null; "
+        )
     else:
         prefix = ""
 
@@ -501,6 +507,10 @@ def _run_container_runtime(
         network_mode,
         *dns_flags,
         *add_host_flags,
+        # The tree is mounted: a root run would leave root-owned bytecode there, which the next row, run as the
+        # user (smolvm), cannot chmod.
+        "-e",
+        "PYTHONDONTWRITEBYTECODE=1",
         "-v",
         volume_mount,
         # Guest-created mapped-xattr files otherwise persist as root-owned host
