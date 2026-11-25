@@ -27,6 +27,10 @@
 
 - Python 3.15 is supported: the dynamic-code guard now covers the new `profiling` modules and the startup-file execution of `site`, and a `lazy import` of a denied module is refused when it resolves. The Docker images are published for 3.15 too.
 
+### Fixed
+
+- `bwrap`: `net-resolve=runtime` no longer fails to resolve names when `/etc/resolv.conf` is a regular file and the profile exposes `/etc`.
+
 ## [0.13.0] - 2026-11-23
 
 ### Added

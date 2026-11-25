@@ -563,7 +563,6 @@ class BWrapSSEDaemon(BaseSubProcessDaemon):
         args.extend(["--ro-bind", "/etc", "/etc"])
         for run_path in _dns_run_paths():
             args.extend(["--ro-bind-try", run_path, run_path])
-        args.extend(self._runtime_resolv_conf_args(all_rules, temp))
         for lib_dir in ("/lib", "/lib64"):
             if Path(lib_dir).is_dir():
                 args.extend(["--ro-bind", lib_dir, lib_dir])
@@ -594,6 +593,8 @@ class BWrapSSEDaemon(BaseSubProcessDaemon):
         for rule in all_rules.file_rules:
             if isinstance(rule, FSExposeRule) and rule.write:
                 args.extend([("--dev-bind" if is_special_file(Path(rule.path)) else "--bind"), rule.path, rule.path])
+        # After the file rules: a rule exposing /etc binds it again and would hide a resolv.conf bound before it.
+        args.extend(self._runtime_resolv_conf_args(all_rules, temp))
 
         # Temp dir so child can read the config pipe
         temp_str = str(temp)

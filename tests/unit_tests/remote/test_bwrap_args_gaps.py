@@ -75,6 +75,18 @@ class TestBwrapArgs:
 
         assert binds == [("/run/systemd/resolve/stub-resolv.conf", "/run/systemd/resolve/stub-resolv.conf")]
 
+    def test_the_runtime_resolv_conf_is_bound_after_a_rule_exposing_etc(self, tmp_path: Path) -> None:
+        rules = EmptyRules._replace(
+            net_resolve="runtime",
+            file_rules=(FSExposeRule(path="/etc", write=False, config=_CONFIG),),
+        )
+
+        binds = _triples(_args(tmp_path, rules), "--ro-bind")
+
+        sources = [source for source, _ in binds]
+        resolv = next(i for i, source in enumerate(sources) if source.endswith("pysb_resolv.conf"))
+        assert resolv > max(i for i, bind in enumerate(binds) if bind == ("/etc", "/etc"))
+
     def test_the_system_directories_are_bound_read_only(self, tmp_path: Path) -> None:
         binds = _triples(_args(tmp_path), "--ro-bind")
 
