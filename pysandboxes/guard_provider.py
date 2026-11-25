@@ -56,6 +56,7 @@ NET_RESOLVE_RUNTIME_PROVIDERS = (
     "firejail",
     "qemu",
     "qemu-microvm",
+    "docker-sandbox",
     "subprocess",
     "landlock",
     "sandbox-exec",

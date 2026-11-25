@@ -44,6 +44,7 @@ Planned work, in no committed order:
   - [ ] micro-VM
     - [X] [QEMU-microvm](qemu-microvm.md) (Linux x86_64; eight virtio-mmio transports)
     - [X] [Smolvm](https://korben.info/smolvm-microvm-portable-rust.html)
+    - [X] [Docker Sandboxes](docker-sandbox.md) (`sbx` micro-VM; local suites pass, hosted CI and containers do not apply)
     - [ ] [Cloud Hypervisor](https://github.com/cloud-hypervisor/cloud-hypervisor) (Rust-based VMM with native virtio-fs and vsock)
     - [X] ~~[Firecracker](https://firecracker-microvm.github.io/)~~ (rejected: it has no virtio-fs or 9p, only block devices, a tap network device and vsock, so `expose-ro` and `expose-rw` cannot map host directories as `qemu-microvm` and `smolvm` do; enforcing the file rules would need a disk image rebuilt and copied for every call; its isolation is already covered by `qemu-microvm` and `smolvm`)
     - [ ] [Docker sandbox](https://docs.docker.com/ai/sandboxes/)

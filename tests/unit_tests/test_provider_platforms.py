@@ -51,6 +51,7 @@ def test_linux_runs_every_public_provider(machine: str) -> None:
             "qemu-microvm",
             "gvisor",
             "smolvm",
+            "docker-sandbox",
         ]
 
 

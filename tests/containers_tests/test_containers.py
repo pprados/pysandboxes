@@ -71,6 +71,7 @@ all_container_worker: list[str] = [
 
 
 # firejail is excluded: inside a container it detects "an existing sandbox" and runs unconfined, even with --force
+# docker-sandbox is excluded: sbx needs the Docker account and the daemon of the host, which a container does not have
 all_os_sandbox_provider: list[str] = [
     "none",
     "landlock",

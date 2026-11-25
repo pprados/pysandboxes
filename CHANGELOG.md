@@ -13,6 +13,7 @@
 |          | ✅ sandbox-exec  |            |   |
 |          | ✅ gVisor        |            |           |
 |          | ✅ smolvm        |            |           |
+|          | ✅ docker-sandbox |            |           |
 |          | ✅ appcontainer  |            |           |
 |          | ✅ Docker¹       |            |     |
 |          | ✅ Podman¹       |            |           |
@@ -20,6 +21,12 @@
 ¹ Docker and Podman are not providers of their own: a container runs the
 `unshare` provider, with `--privileged` for Docker.
 
+
+## [0.0.0] - 202X-XX-XX
+
+### Added
+
+- `docker-sandbox` provider (`os-sandbox=docker-sandbox`): the code runs in a Docker Sandboxes micro-VM with its own kernel, with per-sandbox network rules and optional credential injection through the proxy of `sbx` (Linux, needs `sbx` and a guest template).
 
 ## [0.14.0] - 2026-11-25
 

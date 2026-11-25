@@ -56,9 +56,14 @@ def main() -> None:
             for pid in killed:
                 os.kill(pid, signal.SIGKILL)
             deadline = time.monotonic() + (600 if microvm else ANSWER_WITHIN_SECONDS)
+            # An answer counts once the watchdog has launched a new process: the sandbox killed may still hold its
+            # port for an instant (a guest outlives the host process that reaches it).
             while time.monotonic() < deadline and not result["answered"]:
                 try:
-                    result["answered"] = _echo("after") == "after"
+                    if daemon._process is not None and daemon._process.pid != first_pid:
+                        result["answered"] = _echo("after") == "after"
+                    else:
+                        time.sleep(0.2)
                 except Exception:  # noqa: BLE001 - calls fail while the watchdog starts the sandbox again
                     time.sleep(1)
             result["restarted"] = daemon._process is not None and daemon._process.pid != first_pid

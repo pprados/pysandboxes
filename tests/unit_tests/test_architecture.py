@@ -16,6 +16,7 @@ GUARDS = ("guard_wraps", "guard_envs", "guard_api", "guard_import", "guard_files
 ENTRY_POINTS = ("python_sb", "sandboxes_api")
 PROVIDERS = (
     "remote.bwrap_sse_daemon",
+    "remote.docker_sandbox_daemon",
     "remote.firejail_sse_daemon",
     "remote.landlock_daemon",
     "remote.none_daemon",

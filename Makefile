@@ -3,7 +3,7 @@ SHELL=/bin/bash
 	unit-tests provider-smoke-tests integration-tests container-tests sample-tests sample-tests-matrix all-tests gh-tests gh-all-tests \
 	spell_check spell_fix pip-audit pip-audit-all clean extra-clean help \
 	api_docs_build api_docs_clean api_docs_linkcheck \
-	build-images build-image-base build-image-landlock build-image-unshare build-image-bwrap build-image-qemu build-image-qemu-microvm build-image-gvisor build-image-smolvm build-smolvm-guest build-image-docker build-image-podman build-image-clean \
+	build-images build-image-base build-image-landlock build-image-unshare build-image-bwrap build-image-qemu build-image-qemu-microvm build-image-gvisor build-image-smolvm build-image-docker-sandbox build-smolvm-guest build-image-docker build-image-podman build-image-clean \
 	minikube-ready minikube-build-images lock validate inspector github-push-test init \
 	clean-sandbox-temps quick-demo-gif \
 	sample-tests-vm sample-tests-vm-matrix sample-tests-vm-tcg \
@@ -877,6 +877,12 @@ build-smolvm-guest:
 	done; \
 	touch .make-build-image-smolvm
 
+.make-build-image-docker-sandbox: pyproject.toml scripts/build_docker_sandbox_template.sh
+	@command -v sbx >/dev/null 2>&1 || { echo "sbx (Docker Sandboxes) not found"; exit 1; }
+	@bash -c 'mapfile -t DEPS < <(uv run python -c "import tomllib; print(chr(10).join(tomllib.load(open(\"pyproject.toml\", \"rb\"))[\"project\"][\"dependencies\"]))"); \
+	  scripts/build_docker_sandbox_template.sh $(PYTHON_VERSION) "$${DEPS[@]}"'
+	touch .make-build-image-docker-sandbox
+
 .make-build-image-gvisor: .make-build-image-base Dockerfile-gvisor
 	@for CONTAINER_CMD in $(CONTAINER_CMDS); do \
 	  if ! command -v $$CONTAINER_CMD >/dev/null 2>&1; then continue; fi; \
@@ -913,6 +919,9 @@ build-image-gvisor: .make-build-image-gvisor
 
 # Build smolvm image (FROM python-sb): python-sb-smolvm:$(PYTHON_VERSION), python-sb-smolvm:latest
 build-image-smolvm: .make-build-image-smolvm
+
+# Build the docker-sandbox guest template on the host (needs sbx and its account, no container): pysandboxes-guest:$(PYTHON_VERSION)
+build-image-docker-sandbox: .make-build-image-docker-sandbox
 
 ## Build all provider images (and base first); see dependency graph above (for minikube: make minikube-build-images)
 build-images: Dockerfile .make-dist \

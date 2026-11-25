@@ -71,6 +71,7 @@ def os_sandbox_rows(*, tcg: bool) -> tuple[str, ...]:
         "bwrap",
         "gvisor",
         "smolvm",
+        "docker-sandbox",
         "sandbox-exec",
         "appcontainer",
     ]
@@ -194,4 +195,11 @@ def provider_skip_reason(os_sandbox: str) -> str | None:
             os.environ["PYSANDBOXES_SMOLVM_IMAGE"] = str(image)
         if "PYSANDBOXES_SMOLVM_IMAGE" not in os.environ:
             return "no smolvm guest image: run `make build-image-smolvm` or set PYSANDBOXES_SMOLVM_IMAGE"
+    if os_sandbox == "docker-sandbox":
+        version = f"{sys.version_info.major}.{sys.version_info.minor}"
+        template = os.environ.get("PYSANDBOXES_DOCKER_SANDBOX_TEMPLATE", f"pysandboxes-guest:{version}")
+        listing = subprocess.run(["sbx", "template", "ls"], capture_output=True, text=True, timeout=30, check=False)
+        name, _, tag = template.partition(":")
+        if not any(name in line and tag in line for line in listing.stdout.splitlines()):
+            return f"no docker-sandbox guest template {template}: run `make build-image-docker-sandbox`"
     return None

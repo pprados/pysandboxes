@@ -72,7 +72,7 @@ The OS providers fall into four families, detailed in [OS providers](os-provider
 - **No boundary** (`none`, `subprocess`): only the Python layer protects. `none` also leaves the Python guards inactive.
 - **Kernel rules or namespaces on the host kernel** (`landlock`, `bwrap`, `unshare`, `firejail`, and `sandbox-exec` on macOS and `appcontainer` on Windows): they contain native code and direct system calls, but a kernel exploit reaches the host. `landlock`, `sandbox-exec` and `appcontainer` do not filter the remote host, and `landlock` has no UDP rule.
 - **A user-space kernel** (`gvisor`): the guest talks to Sentry, which makes a small set of host system calls.
-- **A VM with its own kernel** (`smolvm`, `qemu`, `qemu-microvm`): the host kernel is out of the guest's reach. A `qemu` or `qemu-microvm` run without KVM (TCG) carries no isolation claim.
+- **A VM with its own kernel** (`smolvm`, `docker-sandbox`, `qemu`, `qemu-microvm`): the host kernel is out of the guest's reach. A `qemu` or `qemu-microvm` run without KVM (TCG) carries no isolation claim.
 
 On Linux and WSL only the kernel-backed providers hold against compiled code. macOS and Windows can opt into `sandbox-exec` and `appcontainer`, and both default to `subprocess`. Resolution of host names in `net=` rules is chosen by `net-resolve=pinned|runtime`, see [DNS](dns.md). Residual DNS exfiltration is listed in [Weaknesses](weaknesses.md#os-provider-limitations).
 

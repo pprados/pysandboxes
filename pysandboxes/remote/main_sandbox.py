@@ -280,6 +280,7 @@ async def run_server(process_config: DaemonParameters, shared_socket: Any | None
         "bwrap",
         "gvisor",
         "smolvm",
+        "docker-sandbox",
         "qemu",
         "qemu-microvm",
         "sandbox-exec",

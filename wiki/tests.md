@@ -168,6 +168,7 @@ Twelve entries are registered in `pysandboxes/_os_sandbox.py`: eleven providers,
 | `qemu-microvm` | yes | yes | yes (KVM) | yes (2 modes) | wired | wired | wired |
 | `gvisor` | yes | yes | yes | yes | yes | yes | yes |
 | `smolvm` | yes | yes | yes (2 modes, on the address of the host) | yes (2 modes) | yes (as the user of the caller, with `/dev/kvm`) | yes (`--userns=keep-id`) | yes (device plugin, no `securityContext`) |
+| `docker-sandbox` | yes | yes | yes (own block, real destinations, py-sandbox off) | yes | **excluded** | **excluded** | **excluded** |
 | `qemu-tcg` (on demand) | yes | yes | — | yes (2 modes) | — | — | — |
 | `qemu-microvm-tcg` (on demand) | yes | yes | — | yes (2 modes) | — | — | — |
 | `sandbox-exec` | yes (macOS only) | yes (macOS only) | yes (2 modes, macOS only) | yes (2 modes, macOS only) | **excluded** | **excluded** | **excluded** |
