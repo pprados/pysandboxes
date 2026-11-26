@@ -17,9 +17,13 @@ for i in $(seq 0 255); do [ -e "/dev/loop$i" ] || mknod "/dev/loop$i" b 7 "$i"; 
 mkdir -p /app/tmp && rm -f /app/tmp/test.remove
 chmod -R a+rwX /app/tmp 2>/dev/null || true
 
+# No sbx call while the daemon creates the schema of its policy store: `sbx daemon status` opens the same SQLite file and
+# the daemon then panics with SQLITE_BUSY (one start in five when polled from the first second).
 (sbx daemon start >/tmp/sbxd.log 2>&1 &)
-for _ in $(seq 1 30); do sbx daemon status 2>&1 | grep -q running && break; sleep 1; done
-sbx daemon status 2>&1 | grep -q running || { echo "sbx daemon did not start"; tail -20 /tmp/sbxd.log; exit 1; }
+daemon_running() { [[ "$(sbx daemon status 2>&1 || true)" == *running* ]]; }
+sleep 8
+for _ in $(seq 1 30); do daemon_running && break; sleep 1; done
+daemon_running || { echo "sbx daemon did not start"; head -5 /tmp/sbxd.log | cut -c1-300; exit 1; }
 
 printf '%s' "$DOCKER_PAT" | sbx login --username "$DOCKER_USER" --password-stdin >/dev/null
 sbx --no-input policy init deny-all >/dev/null
