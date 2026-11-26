@@ -82,7 +82,8 @@ still use it in both modes.
 - **Name based.** A TLS or HTTP connection is judged by its SNI or `Host`, so a name rule is stricter than the profile's
   address rule. The `Host` header inside an undecrypted stream is not checked.
 - **UDP stays closed**, and ICMP is blocked, unless the settings of `sbx` enable UDP egress.
-- **A Docker account and daemon are prerequisites.** The provider does not run in a container or a pod.
+- **A Docker account and daemon are prerequisites.** The provider does not run in a pod. In a container it needs the
+  conditions of [In a container](#in-a-container).
 - **Every start reads the manifest of the `shell` kit from Docker Hub**, even with a local template (`sbx create` prints
   `resolving docker.io/sbx/shell:latest`). The pull limit of the Docker account then applies: a few hundred starts in
   hours end with `429 toomanyrequests`, and the launcher stops with exit code 70 and the message of `sbx`. A test run
@@ -103,3 +104,27 @@ PYSANDBOXES_FAIL_ON_SKIP=1 uv run pytest -rs tests/integration_tests/remote/test
 
 `provider_skip_reason()` skips the rows when the template is missing. Hosted CI runners are not covered: run these
 suites locally before a release, as for `smolvm`.
+
+## In a container
+
+`tests/containers_tests/test_containers.py::test_container_docker_sandbox` runs the provider in a Docker container:
+the `sbx` daemon, the login, the guest template, then `tst_usage` with and without `--py-sandbox`. Each condition below
+comes from a measured failure of `sbx`:
+
+- **`--privileged` and `/dev/kvm`.** The micro-VM needs the device, and the daemon mounts its image layers.
+- **Loop device nodes.** A container has no udev: `scripts/container_docker_sandbox.sh` creates `/dev/loop0..255`
+  before the daemon starts, or `sbx create` fails with `could not open loop device`.
+- **The glibc of the host.** `/usr/bin/sbx` and `/usr/libexec` are mounted read-only from the host and need its glibc
+  (2.43 on Ubuntu 26.04), so `Dockerfile-docker-sandbox` starts from `ubuntu:26.04`, not from `python:*-slim`.
+- **`ca-certificates`** in the image, or `sbx login` fails without a message.
+- **A Docker account.** `DOCKER_USER` and `DOCKER_PAT` (an access token, not the password) come from the environment of
+  the test; the script reads the token on stdin only. With no keychain, `sbx` stores the secret on disk in the
+  container, which is removed with it. Use a dedicated token and revoke it afterwards.
+
+```bash
+make build-container-image-docker-sandbox
+DOCKER_USER=<account> DOCKER_PAT=<token> uv run pytest -rs tests/containers_tests/test_containers.py -k docker_sandbox
+```
+
+The test is skipped without `DOCKER_USER`, `DOCKER_PAT`, `/usr/bin/sbx` or `/dev/kvm`. The template is built in every
+run (a few minutes): the state of `sbx` lives in the container.

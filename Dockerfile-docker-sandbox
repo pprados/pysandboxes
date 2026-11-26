@@ -1,0 +1,25 @@
+# docker-sandbox provider: Ubuntu 26.04, Python and the wheel. The base of the other images cannot serve: the binaries of
+# sbx are mounted from the host and need its glibc (2.43), which python:*-slim does not have.
+# Run it with scripts/container_docker_sandbox.sh (see wiki/docker-sandbox.md).
+# Build: make build-container-image-docker-sandbox  =>  python-sb-docker-sandbox:$(PYTHON_VERSION), :latest
+ARG PYTHON_VERSION=3.15
+FROM ubuntu:26.04
+ARG PYTHON_VERSION
+ARG WHEEL
+
+# ca-certificates: without them `sbx login` fails without a message.
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends ca-certificates python3-pip && \
+    pip install --no-cache-dir --break-system-packages uv && \
+    rm -rf /var/lib/apt/lists/*
+
+ENV UV_PYTHON_INSTALL_DIR=/opt/uv-python \
+    UV_LINK_MODE=copy \
+    PATH=/opt/venv/bin:$PATH
+RUN uv venv /opt/venv --python ${PYTHON_VERSION}
+
+WORKDIR /app
+COPY dist/${WHEEL} /tmp/
+RUN uv pip install --python /opt/venv/bin/python --no-cache /tmp/${WHEEL}
+
+CMD ["python-sb"]

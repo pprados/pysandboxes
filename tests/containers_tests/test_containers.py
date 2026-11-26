@@ -71,7 +71,7 @@ all_container_worker: list[str] = [
 
 
 # firejail is excluded: inside a container it detects "an existing sandbox" and runs unconfined, even with --force
-# docker-sandbox is excluded: sbx needs the Docker account and the daemon of the host, which a container does not have
+# docker-sandbox is excluded: it has its own test, test_container_docker_sandbox, which needs a Docker account
 all_os_sandbox_provider: list[str] = [
     "none",
     "landlock",
@@ -654,6 +654,68 @@ def test_container_runtime(runtime: str, os_sandbox: str, py_sandbox: bool, priv
         "For QEMU in a container, if the guest segfaults, see wiki/qemu.md (nested QEMU) and "
         "enable qemu.show_boot_console=true in the profile."
     )
+
+
+DOCKER_SANDBOX_IMAGE = "python-sb-docker-sandbox:latest"
+# The template build and two runs of tst_usage, each of them in a micro-VM.
+DOCKER_SANDBOX_TIMEOUT = int(os.environ.get("CONTAINER_RUN_TIMEOUT", "2400"))
+
+
+def test_container_docker_sandbox() -> None:
+    """The docker-sandbox provider inside a privileged container: sbx daemon, login, template, then tst_usage.
+
+    The container has to be privileged, hold /dev/kvm and the binaries of sbx mounted from the host (hence Ubuntu 26.04,
+    the glibc they need), and sbx needs the Docker account: ``DOCKER_USER`` and ``DOCKER_PAT`` (an access token) come
+    from the environment and are never written on the command line. Skipped when one of them is missing.
+    """
+    missing = [name for name in ("DOCKER_USER", "DOCKER_PAT") if not os.environ.get(name)]
+    if missing:
+        pytest.skip(f"{' and '.join(missing)} not set: sbx needs a Docker account in the container")
+    if not (Path("/usr/bin/sbx").exists() and Path("/usr/libexec").is_dir() and Path("/dev/kvm").exists()):
+        pytest.skip("/usr/bin/sbx, /usr/libexec and /dev/kvm are needed on the host")
+    try:
+        subprocess.run(["docker", "--version"], capture_output=True, check=True)
+    except (subprocess.CalledProcessError, FileNotFoundError):
+        pytest.skip("docker not available")
+
+    if subprocess.run(["docker", "image", "inspect", DOCKER_SANDBOX_IMAGE], capture_output=True).returncode != 0:
+        subprocess.run(
+            ["make", "build-container-image-docker-sandbox"], cwd=ROOT_DIR, check=True, timeout=BUILD_IMAGE_TIMEOUT
+        )
+
+    cmd = [
+        "docker",
+        "run",
+        "--rm",
+        "--privileged",
+        "--device",
+        "/dev/kvm",
+        *[arg for s in _host_dns_servers() for arg in ("--dns", s)],
+        *_add_host_flags(),
+        "-e",
+        "DOCKER_USER",
+        "-e",
+        "DOCKER_PAT",
+        "-v",
+        "/usr/bin/sbx:/usr/bin/sbx:ro",
+        "-v",
+        "/usr/libexec:/usr/libexec:ro",
+        "-v",
+        f"{ROOT_DIR}:/app",
+        "-w",
+        "/app",
+        DOCKER_SANDBOX_IMAGE,
+        "scripts/container_docker_sandbox.sh",
+    ]
+    with tempfile.TemporaryFile("w+") as log:
+        try:
+            completed = subprocess.run(
+                cmd, cwd=ROOT_DIR, stdout=log, stderr=subprocess.STDOUT, timeout=DOCKER_SANDBOX_TIMEOUT
+            )
+        finally:
+            log.seek(0)
+            tail = "".join(deque(log, maxlen=int(os.environ.get("CONTAINER_OUTPUT_TAIL_LINES", "60"))))
+    assert completed.returncode == 0, f"docker-sandbox in a container exited with {completed.returncode}:\n{tail}"
 
 
 # --- Kubernetes (logic from test-kubernetes.sh) ---

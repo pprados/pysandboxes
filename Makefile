@@ -3,7 +3,7 @@ SHELL=/bin/bash
 	unit-tests provider-smoke-tests integration-tests container-tests sample-tests sample-tests-matrix all-tests gh-tests gh-all-tests \
 	spell_check spell_fix pip-audit pip-audit-all clean extra-clean help \
 	api_docs_build api_docs_clean api_docs_linkcheck \
-	build-images build-image-base build-image-landlock build-image-unshare build-image-bwrap build-image-qemu build-image-qemu-microvm build-image-gvisor build-image-smolvm build-image-docker-sandbox build-smolvm-guest build-image-docker build-image-podman build-image-clean \
+	build-images build-image-base build-image-landlock build-image-unshare build-image-bwrap build-image-qemu build-image-qemu-microvm build-image-gvisor build-image-smolvm build-image-docker-sandbox build-container-image-docker-sandbox build-smolvm-guest build-image-docker build-image-podman build-image-clean \
 	minikube-ready minikube-build-images lock validate inspector github-push-test init \
 	clean-sandbox-temps quick-demo-gif \
 	sample-tests-vm sample-tests-vm-matrix sample-tests-vm-tcg \
@@ -883,6 +883,17 @@ build-smolvm-guest:
 	  scripts/build_docker_sandbox_template.sh $(PYTHON_VERSION) "$${DEPS[@]}"'
 	touch .make-build-image-docker-sandbox
 
+.make-build-container-image-docker-sandbox: Dockerfile-docker-sandbox .make-dist
+	@WHEEL="$$(find dist -maxdepth 1 -name '*.whl' -print -quit)"; \
+	if [ -z "$$WHEEL" ]; then echo "No wheel in dist/"; exit 1; fi; \
+	command -v docker >/dev/null 2>&1 || { echo "docker not found"; exit 1; }; \
+	echo "Building python-sb-docker-sandbox:$(PYTHON_VERSION), python-sb-docker-sandbox:latest with docker..."; \
+	docker build --build-arg PYTHON_VERSION=$(PYTHON_VERSION) --build-arg WHEEL="$$(basename $$WHEEL)" \
+	  	-t python-sb-docker-sandbox:$(PYTHON_VERSION) \
+	  	-t python-sb-docker-sandbox:latest \
+	  	-f Dockerfile-docker-sandbox . || exit 1; \
+	touch .make-build-container-image-docker-sandbox
+
 .make-build-image-gvisor: .make-build-image-base Dockerfile-gvisor
 	@for CONTAINER_CMD in $(CONTAINER_CMDS); do \
 	  if ! command -v $$CONTAINER_CMD >/dev/null 2>&1; then continue; fi; \
@@ -922,6 +933,9 @@ build-image-smolvm: .make-build-image-smolvm
 
 # Build the docker-sandbox guest template on the host (needs sbx and its account, no container): pysandboxes-guest:$(PYTHON_VERSION)
 build-image-docker-sandbox: .make-build-image-docker-sandbox
+
+# Build the image the docker-sandbox container test runs in (Ubuntu 26.04, not part of build-images: sbx and a Docker token are needed to use it)
+build-container-image-docker-sandbox: .make-build-container-image-docker-sandbox
 
 ## Build all provider images (and base first); see dependency graph above (for minikube: make minikube-build-images)
 build-images: Dockerfile .make-dist \
