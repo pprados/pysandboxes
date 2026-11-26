@@ -315,7 +315,7 @@ jobs:
         name: dist
         path: dist/
 
-    - uses: pypa/gh-action-pypi-publish@dc37677b2e1c63e2034f94d8a5b11f265b73ba33  # v1.14.2
+    - uses: pypa/gh-action-pypi-publish@7245906fb61fa33a13554f9d5fb856fe61758086  # v1.14.3
       with:
         repository-url: https://test.pypi.org/legacy/
         skip-existing: true
@@ -327,7 +327,7 @@ jobs:
         path: dist-python-sb/
 
     # test.pypi.org needs a trusted publisher for the python-sb project too (same workflow and environment).
-    - uses: pypa/gh-action-pypi-publish@dc37677b2e1c63e2034f94d8a5b11f265b73ba33  # v1.14.2
+    - uses: pypa/gh-action-pypi-publish@7245906fb61fa33a13554f9d5fb856fe61758086  # v1.14.3
       if: needs.build.outputs.python-sb == 'true'
       with:
         repository-url: https://test.pypi.org/legacy/
@@ -355,7 +355,7 @@ jobs:
         name: dist
         path: dist/
 
-    - uses: pypa/gh-action-pypi-publish@dc37677b2e1c63e2034f94d8a5b11f265b73ba33  # v1.14.2
+    - uses: pypa/gh-action-pypi-publish@7245906fb61fa33a13554f9d5fb856fe61758086  # v1.14.3
       with:
         skip-existing: true
 
@@ -365,7 +365,7 @@ jobs:
         name: python-sb
         path: dist-python-sb/
 
-    - uses: pypa/gh-action-pypi-publish@dc37677b2e1c63e2034f94d8a5b11f265b73ba33  # v1.14.2
+    - uses: pypa/gh-action-pypi-publish@7245906fb61fa33a13554f9d5fb856fe61758086  # v1.14.3
       if: needs.build.outputs.python-sb == 'true'
       with:
         packages-dir: dist-python-sb/
