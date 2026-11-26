@@ -9,6 +9,8 @@ set -euo pipefail
 : "${DOCKER_USER:?DOCKER_USER is required}"
 : "${DOCKER_PAT:?DOCKER_PAT is required}"
 PROFILE=tests/integration_tests/py-sandbox-test.profile
+# The profile substitutes TERM, and a container started without a terminal has none.
+export TERM="${TERM:-xterm-256color}"
 
 # The daemon of sbx takes a loop device for each image layer, and a container has no udev to create the nodes.
 for i in $(seq 0 255); do [ -e "/dev/loop$i" ] || mknod "/dev/loop$i" b 7 "$i"; done
