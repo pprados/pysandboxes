@@ -22,7 +22,7 @@
 `unshare` provider, with `--privileged` for Docker.
 
 
-## [0.0.0] - 202X-XX-XX
+## [0.15.0] - 2026-11-26
 
 ### Added
 
