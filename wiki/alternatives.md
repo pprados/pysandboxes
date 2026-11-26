@@ -47,7 +47,7 @@ labelled.
 
 | Solution | Kind | Boundary that holds against hostile native code | Licence |
 |---|---|---|---|
-| **PySandboxes** | Python framework | Python API patching, inside one OS provider: Landlock, bubblewrap, Firejail, unshare, QEMU (full VM or microvm), gVisor, smolvm (micro-VM), macOS Seatbelt, or a Windows AppContainer | Apache-2.0 |
+| **PySandboxes** | Python framework | Python API patching, inside one OS provider: Landlock, bubblewrap, Firejail, unshare, QEMU (full VM or microvm), gVisor, smolvm (micro-VM), Docker Sandboxes (micro-VM), macOS Seatbelt, or a Windows AppContainer | Apache-2.0 |
 | [RestrictedPython](https://github.com/zopefoundation/RestrictedPython) | Python library | None. AST rewriting at compile time, guards supplied by the host | ZPL-2.1 |
 | [smolagents](https://github.com/huggingface/smolagents) | Agent framework | None for the local AST interpreter. The remote executors delegate to Docker, E2B, Modal or Blaxel | Apache-2.0 |
 | [langchain-sandbox](https://github.com/langchain-ai/langchain-sandbox) | Python library, **archived** | Pyodide (CPython compiled to WASM) under Deno permissions | MIT |
@@ -363,9 +363,9 @@ allow rule per human approval.
   `authorized_imports` list), the only registry of 152 sensitive functions in eight categories
   (`guard_api`), and code arriving as a string (the `eval-*` sub-language: parsed, rewritten, run
   under a budget and a timeout). It is the only one granular to the function (`@sandbox`). Its results are
-  unpickled under a guard ([Transport unpickle guard](transport-unpickle-guard.md)). Eight interchangeable
-  Linux providers are available (`landlock`, `bwrap`, `firejail`, `unshare`, `qemu`, `qemu-microvm`, `gvisor`
-  and `smolvm`), plus `sandbox-exec` on macOS and AppContainer on Windows. The VM providers need `/dev/kvm`
+  unpickled under a guard ([Transport unpickle guard](transport-unpickle-guard.md)). Nine interchangeable
+  Linux providers are available (`landlock`, `bwrap`, `firejail`, `unshare`, `qemu`, `qemu-microvm`, `gvisor`,
+  `smolvm` and `docker-sandbox`), plus `sandbox-exec` on macOS and AppContainer on Windows. The VM providers need `/dev/kvm`
   for a boundary claim. It passed the Windows VM matrix as administrator and as standard user.
 - **Weaknesses**: no layer 7, no TLS interception, no credential brokering. A granted secret enters the
   sandbox in clear. There is no built-in list of private ranges or metadata addresses: the profile author has
@@ -755,9 +755,9 @@ arriving as a string as its own layer, parsed, rewritten and run under a budget 
 solution that confines one function rather than a process,
 a pod or a VM. It is one of two that write their own policy from observed behaviour; OpenShell is the other,
 with an advisor rather than a recording. Unlike most solutions, which avoid the problem by never
-unpickling, it returns real Python objects from the sandbox, and it unpickles them under a guard. And it lets the user choose among eight Linux boundaries, from Landlock with no extra binary, through namespaces
+unpickling, it returns real Python objects from the sandbox, and it unpickles them under a guard. And it lets the user choose among nine Linux boundaries, from Landlock with no extra binary, through namespaces
 (`bwrap`, `unshare`, `firejail`) and a user-space kernel (`gvisor`), up to a VM with its own kernel (`smolvm`,
-`qemu`, `qemu-microvm`), plus Seatbelt on macOS and AppContainer on Windows.
+`docker-sandbox`, `qemu`, `qemu-microvm`), plus Seatbelt on macOS and AppContainer on Windows.
 
 **What the field does better.**
 

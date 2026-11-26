@@ -98,3 +98,7 @@ verify its actual filesystem, network, process, and descriptor configuration.
 With `py-sandbox=false`, so that only the guest holds: a path no rule exposes does not exist in the guest, an `ignore=` file reads empty, a read-only mount
 refuses writes with `EROFS`, a read-write mount reaches the host, the command has no `CAP_SYS_ADMIN` and runs as the host user, and a destination outside the `net=` rules is refused by the host side of smolvm. Each is a
 test with a negative control in `tests/integration_tests/remote/test_smolvm.py`. Not held: a TCP port in a `net=` rule (see [smolvm](smolvm.md#rules)).
+
+## `docker-sandbox` against compiled code
+
+With `py-sandbox=false`, so that only the micro-VM holds: the code runs on a kernel of its own, not the one of the host, as an unprivileged user with no capability, a path no rule exposes does not exist in the guest, an `ignore=` file inside an exposed directory is hidden even to native code, a read-only mount refuses writes while a read-write one reaches the host, the environment of the host does not reach the guest, and a destination outside the `net=` rules is dropped by `sbx`. Each is a test with a negative control in `tests/integration_tests/remote/test_docker_sandbox.py`. Not held: the network filter is name based, so a connection judged by its SNI or `Host` is stricter than the address rule, the `Host` header inside an undecrypted stream is not checked, and UDP stays closed unless the settings of `sbx` enable it (see [docker-sandbox](docker-sandbox.md#limits)).

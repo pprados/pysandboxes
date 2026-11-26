@@ -54,7 +54,12 @@ available to run the same checks locally, on demand. The `smolvm` provider is th
 refuses every virtio-fs share of a guest (`restore boot volume mounts: Not supported`), so `integration.yml` deselects it.
 Before a minor or final release, run it locally with `make build-smolvm-guest`, then
 `make integration-tests INTEGRATION_TESTS="tests/integration_tests -k smolvm"` and `OS_SANDBOX=smolvm make sample-tests`
-(with `PYSANDBOXES_SMOLVM_IMAGE` set to the archive). The tag holds no open entry; the first merge into `develop`
+(with `PYSANDBOXES_SMOLVM_IMAGE` set to the archive). The `docker-sandbox` provider is the second exception: a hosted
+runner has neither `sbx` nor a Docker account, so `integration.yml` deselects it too. Before a minor or final release, run
+`make build-image-docker-sandbox`, then
+`make integration-tests INTEGRATION_TESTS="tests/integration_tests -k docker-sandbox"` and
+`OS_SANDBOX=docker-sandbox make sample-tests`, and the container test of [docker-sandbox](docker-sandbox.md#in-a-container)
+with `DOCKER_USER` and `DOCKER_PAT` set. The tag holds no open entry; the first merge into `develop`
 after the release opens a new `[0.0.0]` entry.
 
 The first final version publishes the `[0.0.0]` entry as written. From the next one on, `scripts/changelog-draft.sh`
