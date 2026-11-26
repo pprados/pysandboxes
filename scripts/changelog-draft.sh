@@ -20,7 +20,8 @@ subjects=$(git log --no-merges --format=%s ${since:+"$since..HEAD"} | grep -E "$
 
 prompt="Write the changelog of a release, for users of the library, from the current entry and the git commit \
 subjects below. Keep every user-visible point of the current entry, its wording when it is already good, and add the \
-changes the commits bring, merging duplicates. Output only Keep a Changelog sections among '### Added', \
+changes the commits bring, merging duplicates. Leave out a fix to something the current entry presents as new: no \
+user ever saw it broken. Output only Keep a Changelog sections among '### Added', \
 '### Changed', '### Fixed', '### Security', each followed by one short bullet ('- ') per change. feat is Added or \
 Changed, fix is Fixed, perf is Changed, security and build(deps) (dependencies raised for advisories) are Security. \
 No technical detail, no file or function names, no version line, no code fence, no other text."
