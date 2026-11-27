@@ -113,7 +113,7 @@ class TestPlan:
 
         assert str(tmp_path / "data") in create  # type: ignore[operator]
         assert any(arg.endswith(":ro") and arg.startswith(str(module._PACKAGE_DIR)) for arg in create)  # type: ignore[attr-defined]
-        assert create[create.index("-p") + 1] == "4321:4321"  # type: ignore[index, attr-defined]
+        assert create[create.index("-p") + 1] == "127.0.0.1:4321:4321"  # type: ignore[index, attr-defined]
 
     def test_cpus_and_memory_come_from_the_profile(self, tmp_path: Path) -> None:
         create = _plan(self._cmd(tmp_path, cpus="2", mem="1g"))["create"]

@@ -104,6 +104,10 @@ class LearnedTable:
             del self._expiry[key]
         return gone
 
+    def retry(self, key: Hashable) -> None:
+        """Put ``key`` back as already expired, so the next ``expired()`` returns it again."""
+        self._expiry[key] = self._clock()
+
 
 class Enforcer(Protocol):
     """What makes an address reachable, or not, in the sandbox network. Provided by the provider."""
@@ -348,4 +352,5 @@ class FilteringResolver:
                 try:
                     await asyncio.to_thread(self._enforcer.revoke, ip, rule)
                 except Exception:
-                    logger.warning("egress filter: revoking %s failed", ip, exc_info=True)
+                    logger.warning("egress filter: revoking %s failed, retried at the next cycle", ip, exc_info=True)
+                    self._table.retry((ip, rule))

@@ -22,6 +22,19 @@
 `unshare` provider, with `--privileged` for Docker.
 
 
+## [0.0.0] - 202X-XX-XX
+
+### Fixed
+
+- A nested `eval()`, `exec()` or `compile()` call made by evaluated code now stays under the `eval-*` profile of the evaluation that made it, instead of falling back to the default profile.
+- An `include` target that does not exist yet is protected like an existing one, so sandboxed code can no longer create a rule file the next run would load.
+- A rejected rule no longer shows the value that a `${VAR}` reference put in it, only the rule as written.
+- `os.scandir()` entries no longer answer `stat()`, `is_dir()` or `is_file()` for a symlink whose target the rules do not expose.
+- A DNS-pinned address whose firewall revoke fails is retried at the next cycle instead of staying open for the rest of the run.
+- The TCP channel to the sandbox is no longer used until the peer proves it holds the token, so another local process on the same port gets neither the token nor the call.
+- `os-sandbox=unshare` mounts the working directory read-only unless an `expose-rw` rule covers it.
+- `os-sandbox=docker-sandbox` publishes its control channel on `127.0.0.1` only, not on every network interface.
+
 ## [0.15.0] - 2026-11-26
 
 ### Added

@@ -299,7 +299,7 @@ class DockerSandboxSSEDaemon(BaseSubProcessDaemon):
             "-t",
             self._template(all_rules),
             "-p",
-            f"{self.port}:{self.port}",
+            f"127.0.0.1:{self.port}:{self.port}",
             *(["--cpus", str(params["cpus"])] if params.get("cpus") else []),
             *(["-m", str(params["mem"])] if params.get("mem") else []),
             workspace,

@@ -77,6 +77,7 @@ from .eval_runtime import (
     HELPERS,
     EvalState,
     check_format_field,
+    current_state,
     in_evaluation,
     pop_state,
     push_state,
@@ -963,6 +964,15 @@ def _learn_from(source: Any, qualname: str, mode: str, rules: EvalRules | None) 
         add_learning_rule(LearnEvalRule(key, name))
 
 
+def _rules_for_nested_call() -> EvalRules | None:
+    """Return the rules a call to `eval`/`exec`/`compile` is judged against.
+
+    A call made by evaluated code stays under the profile of the evaluation
+    that made it; only a call made outside any evaluation uses the default one.
+    """
+    return current_state().rules if in_evaluation() else _profiles.get("")
+
+
 def _wrap_eval_like(func: Callable[..., Any], *, qualname: str, mode: str) -> Callable[..., Any]:
     """Wrap `builtins.eval` or `builtins.exec`.
 
@@ -1001,7 +1011,7 @@ def _wrap_eval_like(func: Callable[..., Any], *, qualname: str, mode: str) -> Ca
             raw_locals = dict(raw_locals)
         if not is_armed() or is_ambient(frame) or guard_api.is_allowed(qualname):
             return func(source, raw_globals, raw_locals, *extra, **kwargs)
-        rules = _profiles.get("")
+        rules = _rules_for_nested_call()
         if is_learning_mode():
             # Learning observes, it never blocks: refusing here would stop the
             # application on its first eval and there would be nothing left to
@@ -1049,7 +1059,7 @@ def _wrap_compile(func: Callable[..., Any]) -> Callable[..., Any]:
         frame = sys._getframe(1)
         if not is_armed() or is_ambient(frame) or guard_api.is_allowed("builtins.compile"):
             return func(source, filename, mode, *args, **kwargs)
-        rules = _profiles.get("")
+        rules = _rules_for_nested_call()
         if rules is None or not rules.declared:
             raise RuleApiPermissionError("builtins.compile", "dynamic-code")
         if rules.namespace == "caller":

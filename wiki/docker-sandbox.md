@@ -25,7 +25,7 @@ rule exposes it. The provider is Linux only.
   path. The first read-write directory is the primary workspace of the sandbox; without one, a private empty
   directory of the run. A directory the image owns (`/usr`, `/etc`, ...) and a path that does not exist are not mounted.
   `ignore=` hides files with `mount(2)` from the root step, before the privileges are dropped: the payload cannot undo it.
-- **Channel**: the HTTP and SSE port chosen by the daemon is published by `sbx` (`-p port:port`) and the guest listens
+- **Channel**: the HTTP and SSE port chosen by the daemon is published by `sbx` (`-p 127.0.0.1:port:port`, loopback only) and the guest listens
   on `0.0.0.0`. `remote-endpoint=unix` is an error, `auto` uses TCP. The config goes from the host FIFO to the standard
   input of the payload, never to a disk.
 - **Environment**: the payload runs under `env -i` with the variables the rules grant. Its home is the one of the

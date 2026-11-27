@@ -1,0 +1,256 @@
+{
+  "version": "2.1.0",
+  "$schema": "https://json.schemastore.org/sarif-2.1.0.json",
+  "runs": [
+    {
+      "tool": {
+        "driver": {
+          "name": "cybedefend-audit",
+          "informationUri": "https://github.com/CybeDefend/cybedefend",
+          "rules": [
+            {
+              "id": "audit/local-caller-not-verified/low/pysandboxes-remote-guest-learned-py-3ea981",
+              "shortDescription": {
+                "text": "The guest iptables helper checks only the verb and chain and shares the daemon token"
+              },
+              "fullDescription": {
+                "text": "guest_learned.handle() validates only argv[0] in {-A,-D} and argv[1]=='LEARNED' and runs the remaining iptables arguments unchecked; the helper's control port uses the same token as the daemon (main_sandbox.py:441-445). It is unreachable today because netfilter.py:104-109 installs a default DROP with no ACCEPT for the guest's own control port. Not proven: no test starts the guest ruleset and tries a local connection to that port. To settle it: an integration test that loads the guest netfilter ruleset and attempts a local connection to the control port.\n\n**Where.** `pysandboxes/remote/guest_learned.py`.\n\n**Status.** A lead of the AI scanner: no test shows it yet, so it is sent as a note and cannot block a deploy.\n\n**Class of flaw.** A local service, socket or exported component acts for a caller it never identified. [CWE-923](https://cwe.mitre.org/data/definitions/923.html).",
+                "markdown": "guest_learned.handle() validates only argv[0] in {-A,-D} and argv[1]=='LEARNED' and runs the remaining iptables arguments unchecked; the helper's control port uses the same token as the daemon (main_sandbox.py:441-445). It is unreachable today because netfilter.py:104-109 installs a default DROP with no ACCEPT for the guest's own control port. Not proven: no test starts the guest ruleset and tries a local connection to that port. To settle it: an integration test that loads the guest netfilter ruleset and attempts a local connection to the control port.\n\n**Where.** `pysandboxes/remote/guest_learned.py`.\n\n**Status.** A lead of the AI scanner: no test shows it yet, so it is sent as a note and cannot block a deploy.\n\n**Class of flaw.** A local service, socket or exported component acts for a caller it never identified. [CWE-923](https://cwe.mitre.org/data/definitions/923.html)."
+              },
+              "help": {
+                "text": "What is missing. No test starts the guest ruleset and tries a local connection to that port.\n\nTo settle it. An integration test that loads the guest netfilter ruleset and attempts a local connection to the control port.\n\nUntil a test shows it, it stays a note and cannot block a deploy.",
+                "markdown": "**What is missing.** No test starts the guest ruleset and tries a local connection to that port.\n\n**To settle it.** An integration test that loads the guest netfilter ruleset and attempts a local connection to the control port.\n\nUntil a test shows it, it stays a note and cannot block a deploy."
+              },
+              "helpUri": "https://cwe.mitre.org/data/definitions/923.html",
+              "properties": {
+                "tags": [
+                  "security",
+                  "CWE-923"
+                ],
+                "security-severity": "3"
+              }
+            },
+            {
+              "id": "audit/unprotected-alternate-path/low/pysandboxes-remote-client-subprocess-sse-daemon-py-5d977f",
+              "shortDescription": {
+                "text": "The inbound rule for the daemon port accepts any source address, not only the parent"
+              },
+              "fullDescription": {
+                "text": "The host adds net=ALLOW|TCP|*|{port}|IN so namespace-isolated providers accept the parent's connection, with source * rather than the parent's address. Whether another peer can reach that port depends on each provider's network setup (slirp4netns NAT, bridge). Not proven: those provider files were reviewed in another area and no test shows a second peer connecting. To settle it: for bwrap, unshare, qemu and firejail, check which peers can reach the port and narrow the source if any can.\n\n**Where.** `pysandboxes/remote/client_subprocess_sse_daemon.py`.\n\n**Status.** A lead of the AI scanner: no test shows it yet, so it is sent as a note and cannot block a deploy.\n\n**Class of flaw.** The same action is served by a second path that skips the check. [CWE-288](https://cwe.mitre.org/data/definitions/288.html).",
+                "markdown": "The host adds net=ALLOW|TCP|*|{port}|IN so namespace-isolated providers accept the parent's connection, with source * rather than the parent's address. Whether another peer can reach that port depends on each provider's network setup (slirp4netns NAT, bridge). Not proven: those provider files were reviewed in another area and no test shows a second peer connecting. To settle it: for bwrap, unshare, qemu and firejail, check which peers can reach the port and narrow the source if any can.\n\n**Where.** `pysandboxes/remote/client_subprocess_sse_daemon.py`.\n\n**Status.** A lead of the AI scanner: no test shows it yet, so it is sent as a note and cannot block a deploy.\n\n**Class of flaw.** The same action is served by a second path that skips the check. [CWE-288](https://cwe.mitre.org/data/definitions/288.html)."
+              },
+              "help": {
+                "text": "What is missing. Those provider files were reviewed in another area and no test shows a second peer connecting.\n\nTo settle it. For bwrap, unshare, qemu and firejail, check which peers can reach the port and narrow the source if any can.\n\nUntil a test shows it, it stays a note and cannot block a deploy.",
+                "markdown": "**What is missing.** Those provider files were reviewed in another area and no test shows a second peer connecting.\n\n**To settle it.** For bwrap, unshare, qemu and firejail, check which peers can reach the port and narrow the source if any can.\n\nUntil a test shows it, it stays a note and cannot block a deploy."
+              },
+              "helpUri": "https://cwe.mitre.org/data/definitions/288.html",
+              "properties": {
+                "tags": [
+                  "security",
+                  "CWE-288",
+                  "OWASP-A07:2021",
+                  "OWASP-API9:2023"
+                ],
+                "security-severity": "3"
+              }
+            },
+            {
+              "id": "audit/argument-injection/low/pysandboxes-remote-unshare-sse-daemon-py-4ebbeb",
+              "shortDescription": {
+                "text": "A net= rule's host field is re-parsed from raw text and written into /etc/hosts with no character validation"
+              },
+              "fullDescription": {
+                "text": "_prepare_unshare_config re-splits socket_rule.config.rule on '|' after ${VAR} substitution, takes the host field as is, and unshare_setup.py writes each entry with a trailing newline, so a substituted value with a newline or '|' could add /etc/hosts lines. Connectivity is still gated by the typed iptables rules, which limits the effect. Not proven: a hand-built ConfigLine skips the real substitution path. To settle it: trace whether an environment variable reaching a net= rule can produce a ConfigLine.rule with an embedded newline, and write the proof on that path.\n\n**Where.** `pysandboxes/remote/unshare_sse_daemon.py`.\n\n**Status.** A lead of the AI scanner: no test shows it yet, so it is sent as a note and cannot block a deploy.\n\n**Class of flaw.** [CWE-88](https://cwe.mitre.org/data/definitions/88.html).",
+                "markdown": "_prepare_unshare_config re-splits socket_rule.config.rule on '|' after ${VAR} substitution, takes the host field as is, and unshare_setup.py writes each entry with a trailing newline, so a substituted value with a newline or '|' could add /etc/hosts lines. Connectivity is still gated by the typed iptables rules, which limits the effect. Not proven: a hand-built ConfigLine skips the real substitution path. To settle it: trace whether an environment variable reaching a net= rule can produce a ConfigLine.rule with an embedded newline, and write the proof on that path.\n\n**Where.** `pysandboxes/remote/unshare_sse_daemon.py`.\n\n**Status.** A lead of the AI scanner: no test shows it yet, so it is sent as a note and cannot block a deploy.\n\n**Class of flaw.** [CWE-88](https://cwe.mitre.org/data/definitions/88.html)."
+              },
+              "help": {
+                "text": "What is missing. A hand-built ConfigLine skips the real substitution path.\n\nTo settle it. Trace whether an environment variable reaching a net= rule can produce a ConfigLine.rule with an embedded newline, and write the proof on that path.\n\nUntil a test shows it, it stays a note and cannot block a deploy.",
+                "markdown": "**What is missing.** A hand-built ConfigLine skips the real substitution path.\n\n**To settle it.** Trace whether an environment variable reaching a net= rule can produce a ConfigLine.rule with an embedded newline, and write the proof on that path.\n\nUntil a test shows it, it stays a note and cannot block a deploy."
+              },
+              "helpUri": "https://cwe.mitre.org/data/definitions/88.html",
+              "properties": {
+                "tags": [
+                  "security",
+                  "CWE-88"
+                ],
+                "security-severity": "3"
+              }
+            },
+            {
+              "id": "audit/local-caller-not-verified/low/pysandboxes-remote-firejail-sse-daemon-py-04a6f5",
+              "shortDescription": {
+                "text": "The firejail runtime DNS resolver listens on the bridge address, reachable by any peer on that bridge"
+              },
+              "fullDescription": {
+                "text": "Under firejail with net-resolve=runtime, RuntimeDnsSession.start binds the host's bridge interface address instead of loopback, so another container or process on the same bridge can query it. A query only opens addresses inside this jail's namespace, so the effect is limited to disclosing which names a rule allows. Not proven: no end-to-end test with a second bridge peer. To settle it: start a second namespace on the same bridge and confirm it can reach the resolver port and tell NOERROR from NXDOMAIN.\n\n**Where.** `pysandboxes/remote/firejail_sse_daemon.py`.\n\n**Status.** A lead of the AI scanner: no test shows it yet, so it is sent as a note and cannot block a deploy.\n\n**Class of flaw.** A local service, socket or exported component acts for a caller it never identified. [CWE-923](https://cwe.mitre.org/data/definitions/923.html).",
+                "markdown": "Under firejail with net-resolve=runtime, RuntimeDnsSession.start binds the host's bridge interface address instead of loopback, so another container or process on the same bridge can query it. A query only opens addresses inside this jail's namespace, so the effect is limited to disclosing which names a rule allows. Not proven: no end-to-end test with a second bridge peer. To settle it: start a second namespace on the same bridge and confirm it can reach the resolver port and tell NOERROR from NXDOMAIN.\n\n**Where.** `pysandboxes/remote/firejail_sse_daemon.py`.\n\n**Status.** A lead of the AI scanner: no test shows it yet, so it is sent as a note and cannot block a deploy.\n\n**Class of flaw.** A local service, socket or exported component acts for a caller it never identified. [CWE-923](https://cwe.mitre.org/data/definitions/923.html)."
+              },
+              "help": {
+                "text": "What is missing. No end-to-end test with a second bridge peer.\n\nTo settle it. Start a second namespace on the same bridge and confirm it can reach the resolver port and tell NOERROR from NXDOMAIN.\n\nUntil a test shows it, it stays a note and cannot block a deploy.",
+                "markdown": "**What is missing.** No end-to-end test with a second bridge peer.\n\n**To settle it.** Start a second namespace on the same bridge and confirm it can reach the resolver port and tell NOERROR from NXDOMAIN.\n\nUntil a test shows it, it stays a note and cannot block a deploy."
+              },
+              "helpUri": "https://cwe.mitre.org/data/definitions/923.html",
+              "properties": {
+                "tags": [
+                  "security",
+                  "CWE-923"
+                ],
+                "security-severity": "3"
+              }
+            },
+            {
+              "id": "audit/race-condition/low/pysandboxes-remote-appcontainer-acl-py-12e708",
+              "shortDescription": {
+                "text": "A crashed AppContainer run can leave its ACL grants and profile in place until the next launch"
+              },
+              "fullDescription": {
+                "text": "finish_run() revokes the per-run DACL grants and deletes the profile only from the launcher's finally block (appcontainer_launcher.py:363-411). If the launcher is killed before it runs, the run's package SID keeps its rights on the Python runtime and exposed paths until a later begin_run() reaps the stale lock. Not proven: begin_run and finish_run import msvcrt, so the code cannot run on this Linux machine. To settle it: on Windows, start an appcontainer sandbox, terminate the launcher mid-run, then list the ACL of an exposed path and check that the run's SID entry is still there.\n\n**Where.** `pysandboxes/remote/appcontainer_acl.py`.\n\n**Status.** A lead of the AI scanner: no test shows it yet, so it is sent as a note and cannot block a deploy.\n\n**Class of flaw.** A check and the action it protects are not atomic. [CWE-362](https://cwe.mitre.org/data/definitions/362.html).",
+                "markdown": "finish_run() revokes the per-run DACL grants and deletes the profile only from the launcher's finally block (appcontainer_launcher.py:363-411). If the launcher is killed before it runs, the run's package SID keeps its rights on the Python runtime and exposed paths until a later begin_run() reaps the stale lock. Not proven: begin_run and finish_run import msvcrt, so the code cannot run on this Linux machine. To settle it: on Windows, start an appcontainer sandbox, terminate the launcher mid-run, then list the ACL of an exposed path and check that the run's SID entry is still there.\n\n**Where.** `pysandboxes/remote/appcontainer_acl.py`.\n\n**Status.** A lead of the AI scanner: no test shows it yet, so it is sent as a note and cannot block a deploy.\n\n**Class of flaw.** A check and the action it protects are not atomic. [CWE-362](https://cwe.mitre.org/data/definitions/362.html)."
+              },
+              "help": {
+                "text": "What is missing. Begin_run and finish_run import msvcrt, so the code cannot run on this Linux machine.\n\nTo settle it. On Windows, start an appcontainer sandbox, terminate the launcher mid-run, then list the ACL of an exposed path and check that the run's SID entry is still there.\n\nUntil a test shows it, it stays a note and cannot block a deploy.",
+                "markdown": "**What is missing.** Begin_run and finish_run import msvcrt, so the code cannot run on this Linux machine.\n\n**To settle it.** On Windows, start an appcontainer sandbox, terminate the launcher mid-run, then list the ACL of an exposed path and check that the run's SID entry is still there.\n\nUntil a test shows it, it stays a note and cannot block a deploy."
+              },
+              "helpUri": "https://cwe.mitre.org/data/definitions/362.html",
+              "properties": {
+                "tags": [
+                  "security",
+                  "CWE-362"
+                ],
+                "security-severity": "3"
+              }
+            }
+          ]
+        }
+      },
+      "results": [
+        {
+          "ruleId": "audit/local-caller-not-verified/low/pysandboxes-remote-guest-learned-py-3ea981",
+          "level": "note",
+          "message": {
+            "text": "guest_learned.handle() validates only argv[0] in {-A,-D} and argv[1]=='LEARNED' and runs the remaining iptables arguments unchecked; the helper's control port uses the same token as the daemon (main_sandbox.py:441-445). It is unreachable today because netfilter.py:104-109 installs a default DROP with no ACCEPT for the guest's own control port. Not proven: no test starts the guest ruleset and tries a local connection to that port. To settle it: an integration test that loads the guest netfilter ruleset and attempts a local connection to the control port."
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "pysandboxes/remote/guest_learned.py"
+                },
+                "region": {
+                  "startLine": 54
+                }
+              }
+            }
+          ],
+          "properties": {
+            "proven": false,
+            "title": "The guest iptables helper checks only the verb and chain and shares the daemon token",
+            "lineHash": "0d8b93d3019acb1a",
+            "contextHash": "d1dd07b5dd4a7d7d"
+          }
+        },
+        {
+          "ruleId": "audit/unprotected-alternate-path/low/pysandboxes-remote-client-subprocess-sse-daemon-py-5d977f",
+          "level": "note",
+          "message": {
+            "text": "The host adds net=ALLOW|TCP|*|{port}|IN so namespace-isolated providers accept the parent's connection, with source * rather than the parent's address. Whether another peer can reach that port depends on each provider's network setup (slirp4netns NAT, bridge). Not proven: those provider files were reviewed in another area and no test shows a second peer connecting. To settle it: for bwrap, unshare, qemu and firejail, check which peers can reach the port and narrow the source if any can."
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "pysandboxes/remote/client_subprocess_sse_daemon.py"
+                },
+                "region": {
+                  "startLine": 566
+                }
+              }
+            }
+          ],
+          "properties": {
+            "proven": false,
+            "title": "The inbound rule for the daemon port accepts any source address, not only the parent",
+            "lineHash": "61ee181163a9c44b",
+            "contextHash": "e10dd2512ac746d9"
+          }
+        },
+        {
+          "ruleId": "audit/argument-injection/low/pysandboxes-remote-unshare-sse-daemon-py-4ebbeb",
+          "level": "note",
+          "message": {
+            "text": "_prepare_unshare_config re-splits socket_rule.config.rule on '|' after ${VAR} substitution, takes the host field as is, and unshare_setup.py writes each entry with a trailing newline, so a substituted value with a newline or '|' could add /etc/hosts lines. Connectivity is still gated by the typed iptables rules, which limits the effect. Not proven: a hand-built ConfigLine skips the real substitution path. To settle it: trace whether an environment variable reaching a net= rule can produce a ConfigLine.rule with an embedded newline, and write the proof on that path."
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "pysandboxes/remote/unshare_sse_daemon.py"
+                },
+                "region": {
+                  "startLine": 294
+                }
+              }
+            }
+          ],
+          "properties": {
+            "proven": false,
+            "title": "A net= rule's host field is re-parsed from raw text and written into /etc/hosts with no character validation",
+            "lineHash": "c6ceeba11dc23425",
+            "contextHash": "2076c528d131b466"
+          }
+        },
+        {
+          "ruleId": "audit/local-caller-not-verified/low/pysandboxes-remote-firejail-sse-daemon-py-04a6f5",
+          "level": "note",
+          "message": {
+            "text": "Under firejail with net-resolve=runtime, RuntimeDnsSession.start binds the host's bridge interface address instead of loopback, so another container or process on the same bridge can query it. A query only opens addresses inside this jail's namespace, so the effect is limited to disclosing which names a rule allows. Not proven: no end-to-end test with a second bridge peer. To settle it: start a second namespace on the same bridge and confirm it can reach the resolver port and tell NOERROR from NXDOMAIN."
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "pysandboxes/remote/firejail_sse_daemon.py"
+                },
+                "region": {
+                  "startLine": 555
+                }
+              }
+            }
+          ],
+          "properties": {
+            "proven": false,
+            "title": "The firejail runtime DNS resolver listens on the bridge address, reachable by any peer on that bridge",
+            "lineHash": "6d53b77d723e43a9",
+            "contextHash": "ff9eb3938a65c889"
+          }
+        },
+        {
+          "ruleId": "audit/race-condition/low/pysandboxes-remote-appcontainer-acl-py-12e708",
+          "level": "note",
+          "message": {
+            "text": "finish_run() revokes the per-run DACL grants and deletes the profile only from the launcher's finally block (appcontainer_launcher.py:363-411). If the launcher is killed before it runs, the run's package SID keeps its rights on the Python runtime and exposed paths until a later begin_run() reaps the stale lock. Not proven: begin_run and finish_run import msvcrt, so the code cannot run on this Linux machine. To settle it: on Windows, start an appcontainer sandbox, terminate the launcher mid-run, then list the ACL of an exposed path and check that the run's SID entry is still there."
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "pysandboxes/remote/appcontainer_acl.py"
+                },
+                "region": {
+                  "startLine": 754
+                }
+              }
+            }
+          ],
+          "properties": {
+            "proven": false,
+            "title": "A crashed AppContainer run can leave its ACL grants and profile in place until the next launch",
+            "lineHash": "72ee795e812a0c0d",
+            "contextHash": "58b64fb1d2ff7ca0"
+          }
+        }
+      ],
+      "properties": {}
+    }
+  ]
+}

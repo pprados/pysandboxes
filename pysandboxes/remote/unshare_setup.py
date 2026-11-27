@@ -352,7 +352,7 @@ def main() -> None:
     # --- F. Mount current directory ---
     if config.current_dir:
         logger.debug("Mount current directory:")
-        _mount_bind(config.current_dir, config.current_dir, new_root, readonly=False)
+        _mount_bind(config.current_dir, config.current_dir, new_root, readonly=True)
 
     # --- G. User-defined mounts ---
     # Read-only first, then read-write last: a path exposed both ways ends up read-write,

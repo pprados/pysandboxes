@@ -240,6 +240,8 @@ def _parse_include(
                         includes.add(filename.absolute())
                         others.extend(_parse_include(filename.parent, includes, include_config))
                     else:
+                        # Protected all the same: sandboxed code must not create the file the next load reads.
+                        includes.add(filename)
                         logger.debug("include %s: no such file, ignored", filename)
                 except PermissionError as e:
                     # Skipping it could drop a restrictive line such as learn=false
@@ -284,7 +286,10 @@ def parse_config(
 
     # 2. Parse the rules, step by step
     envs_rules, sandbox_env, others = guard_envs.parse_rules(config, envs, errors)
-    others = substitute_config_env_vars(others, envs)  # with main envs
+    unresolved = others
+    others = substitute_config_env_vars(unresolved, envs)  # with main envs
+    # An error names the rule as written, never with the value a ${VAR} put in it.
+    as_written = {(r.path, r.ln, r.rule): u.rule for u, r in zip(unresolved, others, strict=True)}
 
     # 3. Parse others rules
     (
@@ -330,9 +335,10 @@ def parse_config(
     # 2. If some line are ignored
     if others:
         for invalide_rule in others:
+            written = as_written.get((invalide_rule.path, invalide_rule.ln, invalide_rule.rule), invalide_rule.rule)
             errors.append(
                 (
-                    f"{format_ruleref(invalide_rule)}: Invalid rule {invalide_rule.rule!r}",
+                    f"{format_ruleref(invalide_rule)}: Invalid rule {written!r}",
                     invalide_rule.path,
                     invalide_rule.ln,
                 )

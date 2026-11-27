@@ -110,6 +110,27 @@ class _DirEntry:
     def __setattr__(self, name: str, value: Any) -> None:
         setattr(self._target, name, value)
 
+    def _target_is_visible(self, follow_symlinks: bool) -> bool:
+        # Following a symlink reads its target: the path rules apply to the target as they do to os.stat().
+        if not follow_symlinks:
+            return True
+        try:
+            os.stat(self._path)
+        except FileNotFoundError:
+            return False
+        return True
+
+    def stat(self, *, follow_symlinks: bool = True) -> os.stat_result:
+        if follow_symlinks:
+            os.stat(self._path)
+        return cast(os.stat_result, self._target.stat(follow_symlinks=follow_symlinks))
+
+    def is_dir(self, *, follow_symlinks: bool = True) -> bool:
+        return self._target_is_visible(follow_symlinks) and bool(self._target.is_dir(follow_symlinks=follow_symlinks))
+
+    def is_file(self, *, follow_symlinks: bool = True) -> bool:
+        return self._target_is_visible(follow_symlinks) and bool(self._target.is_file(follow_symlinks=follow_symlinks))
+
     def __fspath__(self) -> str:
         # Implicit dunder lookups bypass ``__getattr__``, so ``os.fspath()`` cannot reach the
         # delegated attribute. Like a real ``os.DirEntry``, it must match ``.path``.

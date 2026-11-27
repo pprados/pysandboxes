@@ -54,9 +54,14 @@ class _Source:
             raise StopAsyncIteration from None
 
 
+async def _peer_is_verified(*_: Any) -> None:
+    return None
+
+
 def _run(monkeypatch: pytest.MonkeyPatch, source: _Source, retries: int, host: str | None = None) -> Any:
     _Source.attempts = 0
     monkeypatch.setattr(base_sse_daemon.sse_client, "EventSource", source)
+    monkeypatch.setattr(base_sse_daemon, "_verify_sandbox_peer", _peer_is_verified)
     monkeypatch.setattr("pysandboxes._os_sandbox.get_token", lambda: "tok")
     daemon = SSEServerDaemon("tok", port=1234)
     daemon.max_connect_retry = retries

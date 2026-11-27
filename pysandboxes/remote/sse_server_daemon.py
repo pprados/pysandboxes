@@ -267,8 +267,11 @@ def create_uvicorn_daemon(token: str, host: str, port: int) -> Server:
     app = FastAPI()
 
     @app.get("/ping")
-    async def ping() -> dict[str, str]:
-        return {"message": "OK"}
+    async def ping(nonce: str | None = None) -> dict[str, str]:
+        if nonce is None:
+            return {"message": "OK"}
+        # Proof that this server holds the token, so a client can check it before sending the token.
+        return {"message": "OK", "proof": hmac.new(token.encode(), nonce.encode(), "sha256").hexdigest()}
 
     @app.post("/rpc")
     async def rpc_endpoint(

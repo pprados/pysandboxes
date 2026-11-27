@@ -1,8 +1,10 @@
 # Copyright (c) 2026, Carbon-It, Philippe Prados (pprados)
 # License: Apache V2
 import asyncio
+import hmac
 import json
 import logging
+import secrets
 import socket
 import sys
 import threading
@@ -187,6 +189,30 @@ def _rebuild_remote_exception(payload: str, fallback_payload: str | None) -> Bas
     return _attach_remote_traceback(exception, serial_traceback)
 
 
+async def _verify_sandbox_peer(session: aiohttp.ClientSession | None, base_url: str, token: str) -> None:
+    """Check that whoever answers on a TCP port holds the sandbox token, before the token is sent to it.
+
+    Another local process can take the port between the moment it is picked and the moment the sandbox binds it.
+
+    Raises:
+        SandBoxProtocolError: The peer gave no proof, or a wrong one.
+    """
+    nonce = secrets.token_hex(16)
+    client = session if session is not None else aiohttp.ClientSession(read_bufsize=SSE_READ_BUFSIZE)
+    try:
+        async with client.get(f"{base_url}/ping", params={"nonce": nonce}) as response:
+            try:
+                proof = (await response.json(content_type=None)).get("proof", "")
+            except (ValueError, AttributeError, aiohttp.ContentTypeError):
+                proof = ""
+    finally:
+        if session is None:
+            await client.close()
+    expected = hmac.new(token.encode(), nonce.encode(), "sha256").hexdigest()
+    if not isinstance(proof, str) or not hmac.compare_digest(proof, expected):
+        raise SandBoxProtocolError("The peer on the sandbox port did not prove it holds the sandbox token.")
+
+
 class BaseSSESandbox(BaseDaemon):
     __slots__ = ("port", "host", "endpoint", "max_connect_retry", "_result_guard", "_result_data_only", "_failure")
 
@@ -253,6 +279,8 @@ class BaseSSESandbox(BaseDaemon):
                 elif self.host in ("127.0.0.1", "localhost"):
                     connector = aiohttp.TCPConnector(family=socket.AF_INET)
                     session = aiohttp.ClientSession(connector=connector, read_bufsize=SSE_READ_BUFSIZE)
+                if self.endpoint is None:
+                    await _verify_sandbox_peer(session, sandbox_server_url.removesuffix("/rpc"), token)
                 event_source_kw: dict[str, Any] = {
                     "option": {"method": "POST"},
                     "json": params,

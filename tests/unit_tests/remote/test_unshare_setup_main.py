@@ -408,7 +408,7 @@ class TestFirewall:
 
 
 class TestMounts:
-    def test_the_current_directory_is_writable_and_user_mounts_follow_their_mode(
+    def test_the_current_directory_is_read_only_and_user_mounts_follow_their_mode(
         self, harness: _Run, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
     ) -> None:
         cwd, ro, rw = tmp_path / "cwd", tmp_path / "ro", tmp_path / "rw"
@@ -426,7 +426,7 @@ class TestMounts:
         mounted = lambda src, dst: ["mount", "--rbind", str(src), f"{harness.root}{dst}"]  # noqa: E731
         readonly = lambda dst: ["mount", "-o", "remount,ro,bind,nosuid,nodev", f"{harness.root}{dst}"]  # noqa: E731
         assert mounted(cwd, cwd) in harness.mounts
-        assert readonly(cwd) not in harness.mounts
+        assert readonly(cwd) in harness.mounts
         assert mounted(ro, "/mnt/ro") in harness.mounts and readonly("/mnt/ro") in harness.mounts
         assert mounted(rw, "/mnt/rw") in harness.mounts and readonly("/mnt/rw") not in harness.mounts
         # Read-only mounts go first, read-write last: a path exposed both ways ends up read-write.
